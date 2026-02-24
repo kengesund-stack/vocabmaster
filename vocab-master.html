@@ -100,6 +100,8 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 .lang-sel-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
 .lang-sel-btn { padding:8px 4px; border:2px solid rgba(255,255,255,.08); border-radius:10px; background:var(--sf); color:var(--tx2); font-size:11px; font-weight:600; cursor:pointer; text-align:center; -webkit-appearance:none; font-family:inherit; line-height:1.4; }
 .lang-sel-btn.on { border-color:var(--ac); background:rgba(124,92,252,.12); color:var(--tx); }
+.opt-btn { padding:8px 4px; border:2px solid rgba(255,255,255,.08); border-radius:10px; background:var(--sf); color:var(--tx2); font-size:11px; font-weight:600; cursor:pointer; text-align:center; -webkit-appearance:none; font-family:inherit; line-height:1.4; }
+.opt-btn.on { border-color:var(--ac); background:rgba(124,92,252,.12); color:var(--tx); }
 
 .upload { border:2px dashed rgba(124,92,252,.3); border-radius:var(--r); padding:26px; text-align:center; cursor:pointer; margin-bottom:12px; background:rgba(124,92,252,.03); }
 .upload:active { border-color:var(--ac); background:rgba(124,92,252,.08); }
@@ -309,17 +311,17 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
       <input class="inp" id="IN-ai-name" type="text" placeholder="例: 小説から抽出">
       <div class="lbl">抽出レベル</div>
       <div class="lang-sel-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:4px">
-        <button class="lang-sel-btn on" data-level="all" id="LV-all">🔀<br>区別<br>なし</button>
-        <button class="lang-sel-btn" data-level="beginner" id="LV-beginner">🌱<br>初級</button>
-        <button class="lang-sel-btn" data-level="intermediate" id="LV-intermediate">📘<br>中級</button>
-        <button class="lang-sel-btn" data-level="advanced" id="LV-advanced">🔥<br>上級</button>
+        <button class="opt-btn on" data-level="all" id="LV-all">🔀<br>区別<br>なし</button>
+        <button class="opt-btn" data-level="beginner" id="LV-beginner">🌱<br>初級</button>
+        <button class="opt-btn" data-level="intermediate" id="LV-intermediate">📘<br>中級</button>
+        <button class="opt-btn" data-level="advanced" id="LV-advanced">🔥<br>上級</button>
       </div>
       <div id="LV-hint" style="font-size:10px;color:var(--tx2);margin-bottom:12px;line-height:1.6;padding:7px 10px;background:var(--sf);border-radius:9px"></div>
       <div class="lbl">抽出タイプ</div>
       <div style="display:flex;gap:7px;margin-bottom:12px">
-        <button class="lang-sel-btn on" data-type="words" id="TY-words" style="flex:1;padding:8px">📝<br>単語のみ</button>
-        <button class="lang-sel-btn" data-type="phrases" id="TY-phrases" style="flex:1;padding:8px">💬<br>熟語のみ</button>
-        <button class="lang-sel-btn" data-type="both" id="TY-both" style="flex:1;padding:8px">✨<br>単語＋熟語</button>
+        <button class="opt-btn on" data-type="words" id="TY-words" style="flex:1;padding:8px">📝<br>単語のみ</button>
+        <button class="opt-btn" data-type="phrases" id="TY-phrases" style="flex:1;padding:8px">💬<br>熟語のみ</button>
+        <button class="opt-btn" data-type="both" id="TY-both" style="flex:1;padding:8px">✨<br>単語＋熟語</button>
       </div>
       <div class="lbl">テキストを貼り付け</div>
       <textarea class="inp ta" id="IN-ai-text" style="height:140px" placeholder="テキストを貼り付けてください。AIが重要単語・熟語を自動抽出・翻訳します。&#10;&#10;例 (独): Das Haus ist sehr schön und die Schule liegt in der Nähe...&#10;例 (英): The enigmatic professor was known for his perspicacious observations..."></textarea>
@@ -408,12 +410,14 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
   <div class="scroll">
     <div class="set-sec">AI 設定</div>
     <div class="set-group">
-      <div class="set-row" style="cursor:default">
+      <div class="set-row" style="cursor:default;flex-direction:column;align-items:stretch;gap:8px">
         <span class="set-lbl">🔑 Anthropic APIキー</span>
-        <input type="password" class="set-inp" id="IN-apikey" placeholder="sk-ant-...">
+        <input type="password" class="inp" id="IN-apikey" placeholder="sk-ant-..." style="margin-bottom:0;font-size:13px;padding:10px 12px">
+        <button class="btn-primary" id="B-save-key" style="padding:10px;font-size:13px">💾 APIキーを保存</button>
+        <div id="KEY-status" style="font-size:11px;text-align:center;padding:2px 0"></div>
       </div>
       <div class="set-row" style="cursor:default">
-        <span style="font-size:11px;color:var(--tx2);line-height:1.5">APIキーを入力するとAI翻訳・単語抽出が使えます。キーはデバイス内にのみ保存されます。</span>
+        <span style="font-size:11px;color:var(--tx2);line-height:1.5">APIキーを入力して「保存」を押すとAI翻訳・単語抽出が使えます。キーはデバイス内にのみ保存されます。</span>
       </div>
     </div>
     <div class="set-sec">学習設定</div>
@@ -648,7 +652,7 @@ function getLevelDef(lang,level){
 
 function setLevel(level){
   selLevel=level;
-  document.querySelectorAll('[data-level]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-level')===level);});
+  document.querySelectorAll('.opt-btn[data-level]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-level')===level);});
   updateLevelHint();
 }
 
@@ -661,13 +665,22 @@ function updateLevelHint(){
 
 function setType(type){
   selType=type;
-  document.querySelectorAll('[data-type]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-type')===type);});
+  document.querySelectorAll('.opt-btn[data-type]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-type')===type);});
 }
 
 function aiExtract(){
   var txt=el('IN-ai-text').value.trim();
   if(!txt||txt.length<20){toast('もう少し長いテキストを入力してください');return;}
-  G.cfg.key?aiExtractAPI(txt):offlineExtract(txt);
+  /* APIキーをその場で入力欄から直接取得（保存済みでなくても動く） */
+  var keyFromInput=(el('IN-apikey')||{}).value||'';
+  if(keyFromInput&&!G.cfg.key){G.cfg.key=keyFromInput;save();}
+  if(G.cfg.key){
+    aiExtractAPI(txt);
+  } else {
+    if(confirm('APIキーが設定されていません。\n設定画面でAPIキーを入力するとAI翻訳が使えます。\nオフライン抽出（訳なし）で続けますか？')){
+      offlineExtract(txt);
+    }
+  }
 }
 
 function apiCall(body,ok,ng){
@@ -710,7 +723,6 @@ function aiExtractAPI(txt){
     loaded();
     try{
       var raw=d.content[0].text;
-      /* バッククォートや余分な文字を除去してJSONを取り出す */
       raw=raw.replace(/```json|```/g,'').trim();
       var m=raw.match(/\{[\s\S]*\}/);
       if(!m)throw new Error('JSON not found');
@@ -719,10 +731,20 @@ function aiExtractAPI(txt){
       if(!words.length)throw new Error('empty');
       prvShow(words);
     }catch(e){
-      toast('AI抽出エラー。オフラインで再試行します');
-      offlineExtract(el('IN-ai-text').value);
+      toast('❌ AI抽出エラー: '+e.message);
     }
-  },function(e){loaded();toast('エラー: '+e.message.slice(0,40));offlineExtract(el('IN-ai-text').value);});
+  },function(e){
+    loaded();
+    /* APIキーが間違っている可能性 */
+    var msg=e.message||'';
+    if(msg.indexOf('401')>=0||msg.indexOf('authentication')>=0||msg.toLowerCase().indexOf('invalid')>=0){
+      toast('❌ APIキーが無効です。設定画面で確認してください');
+    } else if(msg.indexOf('通信')>=0){
+      toast('❌ 通信エラー。インターネット接続を確認してください');
+    } else {
+      toast('❌ エラー: '+msg.slice(0,50));
+    }
+  });
 }
 
 function offlineExtract(txt){
@@ -950,10 +972,19 @@ function qResult(){
 }
 
 /* SETTINGS */
+function updateKeyStatus(){
+  var s=el('KEY-status');if(!s)return;
+  if(G.cfg.key){
+    s.innerHTML='<span style="color:var(--gn)">✅ APIキー設定済み（sk-ant-...'+G.cfg.key.slice(-4)+'）</span>';
+  } else {
+    s.innerHTML='<span style="color:var(--or)">⚠️ APIキー未設定</span>';
+  }
+}
 function settingsLoad(){
   el('IN-apikey').value=G.cfg.key||'';
   el('SEL-size').value=G.cfg.size||20;
   el('TG-rev').classList.toggle('on',!!G.cfg.rev);
+  updateKeyStatus();
 }
 
 /* BIND */
@@ -977,12 +1008,12 @@ function bind(){
   el('SG-ai').addEventListener('click',function(){segSwitch('ai');});
 
   /* 抽出タイプボタン */
-  document.querySelectorAll('[data-type]').forEach(function(b){
+  document.querySelectorAll('.opt-btn[data-type]').forEach(function(b){
     b.addEventListener('click',function(){setType(this.getAttribute('data-type'));});
   });
 
   /* レベル選択ボタン */
-  document.querySelectorAll('[data-level]').forEach(function(b){
+  document.querySelectorAll('.opt-btn[data-level]').forEach(function(b){
     b.addEventListener('click',function(){setLevel(this.getAttribute('data-level'));});
   });
 
@@ -1018,7 +1049,14 @@ function bind(){
   el('B-res-weak').addEventListener('click',function(){quizStart('weak');});
 
   el('B-set-back').addEventListener('click',function(){go('s-home');});
-  el('IN-apikey').addEventListener('input',function(){G.cfg.key=this.value;save();});
+  el('B-save-key').addEventListener('click',function(){
+    var key=(el('IN-apikey').value||'').trim();
+    if(!key){toast('❌ APIキーを入力してください');return;}
+    if(!key.startsWith('sk-ant-')){toast('❌ APIキーの形式が正しくありません（sk-ant-で始まるキー）');return;}
+    G.cfg.key=key;save();
+    updateKeyStatus();
+    toast('✅ APIキーを保存しました');
+  });
   el('SEL-size').addEventListener('change',function(){G.cfg.size=parseInt(this.value);save();});
   el('TG-rev').addEventListener('click',function(){G.cfg.rev=!G.cfg.rev;this.classList.toggle('on',G.cfg.rev);save();});
   el('ROW-rev').addEventListener('click',function(e){if(e.target!==el('TG-rev'))el('TG-rev').click();});
