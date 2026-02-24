@@ -70,6 +70,10 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 
 .list-card { background:var(--sf); border-radius:var(--r); padding:13px; margin-bottom:7px; display:flex; align-items:center; gap:11px; border:none; cursor:pointer; width:100%; text-align:left; -webkit-appearance:none; font-family:inherit; }
 .list-card:active { background:var(--sf2); }
+.lc-prog-wrap { padding:0 13px 10px; }
+.lc-prog-bar { height:4px; background:rgba(255,255,255,.1); border-radius:2px; overflow:hidden; }
+.lc-prog-fill { height:100%; border-radius:2px; transition:width .4s ease; }
+.lc-prog-txt { font-size:10px; color:var(--tx2); margin-top:4px; display:flex; justify-content:space-between; }
 
 /* スワイプ削除 */
 .swipe-wrap { position:relative; overflow:hidden; border-radius:var(--r); margin-bottom:7px; }
@@ -269,12 +273,19 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
       <button class="act-card" id="B-quiz-all"><span class="act-ic">⚡</span><div class="act-title">全単語クイズ</div><div class="act-sub">4択形式で練習</div></button>
       <button class="act-card" id="B-go-list"><span class="act-ic">📚</span><div class="act-title">単語一覧</div><div class="act-sub">管理・編集</div></button>
       <button class="act-card" id="B-quiz-weak"><span class="act-ic">🎯</span><div class="act-title">苦手単語</div><div class="act-sub">間違えた単語を特訓</div></button>
+      <button class="act-card" id="B-study-list" style="border:1.5px solid rgba(124,92,252,.4)"><span class="act-ic">📖</span><div class="act-title">予習→クイズ</div><div class="act-sub">リストを選んで予習から</div></button>
+      <button class="act-card" id="B-test-list" style="border:1.5px solid rgba(252,92,125,.4)"><span class="act-ic">📝</span><div class="act-title">テスト形式</div><div class="act-sub">予習なし・採点のみ</div></button>
     </div>
     <div class="sec-hdr">
       <div class="sec-title">単語リスト</div>
       <button class="btn-text" id="B-new-list">＋ 新規</button>
     </div>
     <div id="H-lists"></div>
+    <div style="margin:18px 0 8px">
+      <button id="B-report" style="width:100%;padding:13px;background:var(--sf);border:1.5px solid rgba(92,248,252,.3);border-radius:var(--r);color:var(--ac3);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;-webkit-appearance:none;display:flex;align-items:center;justify-content:center;gap:8px">
+        <span>📊</span><span>学習報告書を作成</span>
+      </button>
+    </div>
     <div style="height:14px"></div>
   </div>
   <div class="tabbar">
@@ -444,7 +455,10 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
   <div class="qz-hdr">
     <button class="btn btn-back" id="B-quiz-exit">✕</button>
     <div class="qz-prog"><div class="qz-fill" id="QZ-fill" style="width:0%"></div></div>
-    <div class="qz-cnt" id="QZ-cnt">0/0</div>
+    <div style="display:flex;align-items:center;gap:7px">
+      <div id="QZ-mode-badge" style="display:none;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(252,92,125,.2);color:var(--ac2)">📝 テスト</div>
+      <div class="qz-cnt" id="QZ-cnt">0/0</div>
+    </div>
   </div>
   <div class="qz-body">
     <div class="qz-card">
@@ -592,7 +606,7 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],cfg:{size:20,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:''},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],logs:[],cfg:{size:20,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:''},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 function save(){sSet(G);}
 
@@ -600,6 +614,7 @@ function save(){sSet(G);}
 function lvl(w){var s=w.s;if(!s)return 0;if(s.i>=60)return 5;if(s.i>=30)return 4;if(s.i>=14)return 3;if(s.i>=7)return 2;if(s.i>=3)return 1;return 0;}
 function due(w){if(!w.s||!w.s.d)return true;return new Date(w.s.d)<=new Date();}
 function answer(w,ok){
+  if(Q.testMode)return; /* テストモードはSRS更新しない */
   if(!w.s)w.s={i:1,e:EASE0,d:null,k:0,l:0};
   var s=w.s;
   if(ok){s.k=(s.k||0)+1;if(s.k<=1)s.i=1;else if(s.k===2)s.i=3;else s.i=Math.round(s.i*s.e);s.e=Math.min(3.0,s.e+0.1);}
@@ -650,14 +665,26 @@ function homeListsRender(){
     var ws=G.words.filter(function(w){return w.lid===lst.id;});
     var d=ws.filter(due).length;
     var l=LANGS[lst.lang||'en'];
+    var cursor=lst.cursor||0;
+    var total=ws.length;
+    var pct=total>0?Math.min(100,Math.round(cursor/total*100)):0;
+    var progClr=pct>=100?'var(--gn)':pct>=60?'var(--ac3)':pct>=30?'var(--ac)':'var(--ac2)';
+    var nextN=Math.min(parseInt(G.cfg.size)||20, total-cursor);
+    var progLabel=pct>=100?'✅ 全単語完了！':'次回: '+cursor+'〜'+(cursor+nextN)+'番目 ('+pct+'%)';
     h+='<div class="swipe-wrap" data-lid="'+esc(lst.id)+'">'+
       '<div class="swipe-del-bg"><span>🗑️</span>削除</div>'+
       '<div class="swipe-inner">'+
-        '<button class="list-card" data-lid="'+esc(lst.id)+'">'+
+        '<button class="list-card" data-lid="'+esc(lst.id)+'" style="padding-bottom:8px">'+
           '<div class="list-ic" style="background:'+lst.clr+'20">'+(l?l.flag:'📗')+'</div>'+
-          '<div class="list-inf"><div class="list-name">'+esc(lst.name)+langBadge(lst.lang)+'</div>'+
-          '<div class="list-meta">'+ws.length+'単語'+(d?' · 復習'+d+'件':'')+'</div></div>'+
-          (d?'<div class="list-badge">'+d+'</div>':'')+'</button>'+
+          '<div class="list-inf">'+
+            '<div class="list-name">'+esc(lst.name)+langBadge(lst.lang)+'</div>'+
+            '<div class="list-meta">'+ws.length+'単語'+(d?' · 復習'+d+'件':'')+'</div>'+
+            '<div style="margin-top:7px">'+
+              '<div class="lc-prog-bar"><div class="lc-prog-fill" style="width:'+pct+'%;background:'+progClr+'"></div></div>'+
+              '<div class="lc-prog-txt"><span>'+progLabel+'</span><span style="font-weight:600;color:'+progClr+'">'+pct+'%</span></div>'+
+            '</div>'+
+          '</div>'+
+          (d?'<div class="list-badge" style="align-self:flex-start">'+d+'</div>':'')+'</button>'+
       '</div>'+
     '</div>';
   });
@@ -1212,40 +1239,67 @@ function listMenu(lid){
   var ws=G.words.filter(function(w){return w.lid===lid;});
   var d=ws.filter(due).length;
   var l=LANGS[lst.lang||'en'];
+  var cursor=lst.cursor||0;
+  var total=ws.length;
+  if(cursor>=total)cursor=0; /* 全完了していたらリセット済み扱い */
+  var size=Math.min(parseInt(G.cfg.size)||20, total);
+  var nextEnd=Math.min(cursor+size, total);
+  var pct=total>0?Math.min(100,Math.round(cursor/total*100)):0;
+  var progressInfo=total>0?'進捗 '+pct+'% ('+cursor+'/'+total+'単語完了)':'';
   el('modal-ct').innerHTML=
     '<div class="modal-tl">'+(l?l.flag+' ':'')+esc(lst.name)+'</div>'+
-    '<div style="font-size:12px;color:var(--tx2);margin-bottom:16px">'+ws.length+'単語'+(d?' · 復習'+d+'件':'')+'</div>'+
+    '<div style="font-size:12px;color:var(--tx2);margin-bottom:8px">'+ws.length+'単語'+(d?' · 復習'+d+'件':'')+'</div>'+
+    (total>0?'<div style="margin-bottom:14px"><div style="height:5px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:'+pct+'%;background:'+(pct>=100?'var(--gn)':pct>=60?'var(--ac3)':'var(--ac)')+';border-radius:3px;transition:width .3s"></div></div><div style="font-size:11px;color:var(--tx2)">'+progressInfo+(cursor<total?' · 次回: '+cursor+'〜'+nextEnd+'番目':' · 全単語完了！')+'</div></div>':'')+
     '<button class="btn-primary" id="LM-flash" style="margin-bottom:8px">📖 予習してからクイズ</button>'+
-    '<button class="btn-sec" id="LM-quiz" style="margin-top:0;margin-bottom:8px">⚡ すぐクイズ</button>'+
+    '<button class="btn-sec" id="LM-quiz" style="margin-top:0;margin-bottom:8px">⚡ すぐクイズ（続きから）</button>'+
+    '<button class="btn-sec" id="LM-quiz-reset" style="margin-top:0;margin-bottom:8px">🔁 最初からクイズ</button>'+
     '<button class="btn-sec" id="LM-due" style="margin-top:0;margin-bottom:8px'+(d?'':';opacity:.4;pointer-events:none')+'">📅 復習単語のみ（'+d+'件）</button>'+
     '<button class="btn-sec" id="LM-list" style="margin-top:0">📚 単語一覧を見る</button>';
   el('modal-bg').classList.add('on');
+
+  /* カーソル位置からpoolを作る共通関数 */
+  function makePool(fromCursor){
+    var cur=fromCursor?0:(lst.cursor||0);
+    if(cur>=total)cur=0;
+    var slice=ws.slice(cur, cur+size);
+    if(slice.length<2&&total>=2){cur=0;slice=ws.slice(0,size);}
+    return {pool:slice, nextCursor:Math.min(cur+slice.length, total)};
+  }
+
   el('LM-flash').addEventListener('click',function(){
     el('modal-bg').classList.remove('on');
-    var pool=shuffle(ws.slice()).slice(0, Math.min(ws.length, parseInt(G.cfg.size)||20));
-    flashStart(pool,'list',lid);
+    var r=makePool(false);
+    /* カーソルをflashStartに渡し、クイズ完了時に進める */
+    Q._pendingCursor={lid:lid, next:r.nextCursor};
+    flashStart(r.pool,'list',lid);
   });
   el('LM-quiz').addEventListener('click',function(){
     el('modal-bg').classList.remove('on');
-    var pool=shuffle(ws.slice()).slice(0, Math.min(ws.length, parseInt(G.cfg.size)||20));
-    if(pool.length<2){toast('クイズには最低2単語必要です');return;}
-    Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:''};
+    var r=makePool(false);
+    if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
+    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:false};
+    Q._pendingCursor={lid:lid, next:r.nextCursor};
+    go('s-quiz');qRender();
+  });
+  el('LM-quiz-reset').addEventListener('click',function(){
+    el('modal-bg').classList.remove('on');
+    var r=makePool(true);
+    if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
+    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:false};
+    Q._pendingCursor={lid:lid, next:r.nextCursor};
     go('s-quiz');qRender();
   });
   el('LM-due').addEventListener('click',function(){
     if(!d)return;
     el('modal-bg').classList.remove('on');
-    /* このリストの復習単語のみ */
     var pool=ws.filter(due);
     if(pool.length<2){toast('復習単語が少なすぎます（最低2単語）');return;}
-    var size=Math.min(pool.length,parseInt(G.cfg.size)||20);
     var qs=shuffle(pool).slice(0,size);
-    Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:''};
+    Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:false};
     go('s-quiz');qRender();
   });
   el('LM-list').addEventListener('click',function(){
     el('modal-bg').classList.remove('on');
-    /* リスト絞り込みで一覧へ */
     go('s-list');
     var sel=el('SEL-list');
     listFilterRebuild();
@@ -1484,16 +1538,264 @@ function flBindButtons(){
   el('FL-to-quiz').addEventListener('click',function(){
     flStopAuto();
     if(window.speechSynthesis)window.speechSynthesis.cancel();
-    /* 予習と同じ単語セット・同じ順番でクイズを開始 */
     var pool=FL.words.slice();
     if(pool.length<2){toast('クイズには最低2単語必要です');return;}
-    Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:''};
+    var pending=Q._pendingCursor; /* 予習前にセットされたカーソルを引き継ぐ */
+    Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:false};
+    if(pending)Q._pendingCursor=pending;
     go('s-quiz');qRender();
   });
 }
 
 /* QUIZ */
-var Q={words:[],q:[],i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:''};
+var Q={words:[],q:[],i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:false};
+/* ============================================================
+   学習報告書
+   ============================================================ */
+function showReportModal(){
+  var html='<div class="modal-tl">📊 学習報告書を作成</div>';
+  html+='<div style="font-size:12px;color:var(--tx2);margin-bottom:14px">期間を選択してください</div>';
+  var periods=[
+    {id:'day',label:'📅 日次報告書',sub:'本日の学習記録'},
+    {id:'week',label:'📆 週次報告書',sub:'過去7日間の記録'},
+    {id:'month',label:'🗓️ 月次報告書',sub:'過去30日間の記録'}
+  ];
+  periods.forEach(function(p){
+    html+='<button class="rpt-btn" data-period="'+p.id+'" style="display:flex;align-items:center;gap:12px;width:100%;background:var(--sf2);border:none;border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer;font-family:inherit;text-align:left;-webkit-appearance:none;">'+
+      '<div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--tx)">'+p.label+'</div>'+
+      '<div style="font-size:11px;color:var(--tx2);margin-top:3px">'+p.sub+'</div></div>'+
+      '<div style="font-size:18px;color:var(--tx2)">›</div></button>';
+  });
+  el('modal-ct').innerHTML=html;
+  el('modal-bg').classList.add('on');
+  el('modal-ct').querySelectorAll('.rpt-btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      el('modal-bg').classList.remove('on');
+      generateReport(this.getAttribute('data-period'));
+    });
+  });
+}
+
+function generateReport(period){
+  if(!G.logs)G.logs=[];
+  var now=new Date();
+  var cutoff=new Date(now);
+  var periodLabel='';
+  if(period==='day'){cutoff.setHours(0,0,0,0);periodLabel='日次報告書（'+fmtDate(now)+'）';}
+  else if(period==='week'){cutoff.setDate(now.getDate()-6);cutoff.setHours(0,0,0,0);periodLabel='週次報告書（'+fmtDate(cutoff)+'〜'+fmtDate(now)+'）';}
+  else{cutoff.setDate(now.getDate()-29);cutoff.setHours(0,0,0,0);periodLabel='月次報告書（'+fmtDate(cutoff)+'〜'+fmtDate(now)+'）';}
+
+  var logs=G.logs.filter(function(l){return new Date(l.ts)>=cutoff;});
+
+  /* 集計 */
+  var totalSessions=logs.length;
+  var totalQ=logs.reduce(function(s,l){return s+l.total;},0);
+  var totalOk=logs.reduce(function(s,l){return s+l.ok;},0);
+  var totalNg=logs.reduce(function(s,l){return s+l.ng;},0);
+  var avgAcc=totalQ?Math.round(totalOk/totalQ*100):0;
+
+  /* 日別集計 */
+  var dayMap={};
+  logs.forEach(function(l){
+    var d=l.ts.slice(0,10);
+    if(!dayMap[d])dayMap[d]={ok:0,ng:0,total:0,sessions:0};
+    dayMap[d].ok+=l.ok; dayMap[d].ng+=l.ng; dayMap[d].total+=l.total; dayMap[d].sessions++;
+  });
+
+  /* 間違えた単語の集計（回数順） */
+  var missMap={};
+  logs.forEach(function(l){
+    (l.miss||[]).forEach(function(w){
+      if(!missMap[w.id])missMap[w.id]={word:w.word,meaning:w.meaning,lang:w.lang,count:0};
+      missMap[w.id].count++;
+    });
+  });
+  var missArr=Object.values(missMap).sort(function(a,b){return b.count-a.count;});
+
+  /* 復習予定単語 */
+  var dueWords=G.words.filter(function(w){return w.s&&w.s.d;}).map(function(w){
+    var lst=G.lists.find(function(l){return l.id===w.lid;})||{name:'不明'};
+    return {word:w.word,meaning:w.meaning||'',lang:w.lang||'en',dueDate:new Date(w.s.d),listName:lst.name,interval:w.s.i||1,missCount:w.s.l||0};
+  }).sort(function(a,b){return a.dueDate-b.dueDate;}).slice(0,30);
+
+  /* 正答率推移（日別） */
+  var dayKeys=Object.keys(dayMap).sort();
+
+  /* HTML生成 */
+  var h=buildReportHTML(periodLabel, now, totalSessions, totalQ, totalOk, totalNg, avgAcc, dayKeys, dayMap, missArr, dueWords, period);
+
+  /* 別ウィンドウで開いて印刷 */
+  var w=window.open('','_blank','width=900,height=700');
+  if(!w){toast('ポップアップをブロックされました。ブラウザの設定を確認してください');return;}
+  w.document.write(h);
+  w.document.close();
+}
+
+function fmtDate(d){
+  return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日';
+}
+function fmtDateShort(s){
+  var d=new Date(s);return (d.getMonth()+1)+'/'+d.getDate();
+}
+
+function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, dayKeys, dayMap, missArr, dueWords, period){
+  /* 日別テーブル行 */
+  var dayRows='';
+  dayKeys.forEach(function(d){
+    var r=dayMap[d];
+    var a=r.total?Math.round(r.ok/r.total*100):0;
+    var bar=a>=80?'#4cff91':a>=60?'#ffd700':'#fc5c7d';
+    dayRows+='<tr><td>'+d.replace(/-/g,'/')+'</td><td>'+r.sessions+'</td><td>'+r.total+'</td><td>'+r.ok+'</td><td>'+r.ng+'</td><td><span style="color:'+bar+';font-weight:700">'+a+'%</span></td></tr>';
+  });
+  if(!dayRows)dayRows='<tr><td colspan="6" style="text-align:center;color:#888">この期間の記録はありません</td></tr>';
+
+  /* 間違い単語テーブル */
+  var missRows='';
+  if(missArr.length){
+    missArr.forEach(function(w,i){
+      var langNames={en:'英語',de:'ドイツ語',fr:'フランス語',es:'スペイン語',it:'イタリア語'};
+      missRows+='<tr><td>'+(i+1)+'</td><td>'+escHtml(w.word)+'</td><td>'+escHtml(w.meaning)+'</td><td>'+(langNames[w.lang]||w.lang)+'</td><td style="color:#fc5c7d;font-weight:700">'+w.count+'回</td></tr>';
+    });
+  } else {
+    missRows='<tr><td colspan="5" style="text-align:center;color:#888">間違いはありませんでした🎉</td></tr>';
+  }
+
+  /* 復習予定テーブル */
+  var dueRows='';
+  if(dueWords.length){
+    dueWords.forEach(function(w){
+      var d=w.dueDate;
+      var today=new Date();today.setHours(0,0,0,0);
+      var diff=Math.round((d-today)/(1000*60*60*24));
+      var when=diff<=0?'<span style="color:#fc5c7d;font-weight:700">今日</span>':diff===1?'<span style="color:#ffd700">明日</span>':'<span>'+diff+'日後</span>';
+      dueRows+='<tr><td>'+escHtml(w.word)+'</td><td>'+escHtml(w.meaning)+'</td><td>'+escHtml(w.listName)+'</td><td>'+when+'</td><td>'+w.interval+'日</td><td style="color:'+(w.missCount>2?'#fc5c7d':w.missCount>0?'#ffd700':'#4cff91')+';font-weight:600">'+w.missCount+'回</td></tr>';
+    });
+  } else {
+    dueRows='<tr><td colspan="6" style="text-align:center;color:#888">復習予定の単語はありません</td></tr>';
+  }
+
+  /* 正答率グラフ（SVG棒グラフ） */
+  var chartSVG='';
+  if(dayKeys.length>0){
+    var bw=Math.min(40, Math.floor(560/dayKeys.length)-4);
+    var bars=''; var labels='';
+    dayKeys.forEach(function(d,i){
+      var r=dayMap[d];
+      var a=r.total?Math.round(r.ok/r.total*100):0;
+      var h2=Math.round(a*1.2);
+      var x=i*(bw+4)+30;
+      var clr=a>=80?'#4cff91':a>=60?'#ffd700':'#fc5c7d';
+      bars+='<rect x="'+x+'" y="'+(120-h2)+'" width="'+bw+'" height="'+h2+'" fill="'+clr+'" rx="3"/>';
+      bars+='<text x="'+(x+bw/2)+'" y="'+(115-h2)+'" text-anchor="middle" font-size="9" fill="#ccc">'+a+'%</text>';
+      labels+='<text x="'+(x+bw/2)+'" y="136" text-anchor="middle" font-size="8" fill="#888">'+fmtDateShort(d)+'</text>';
+    });
+    chartSVG='<div style="margin:18px 0"><svg viewBox="0 0 '+(dayKeys.length*(bw+4)+60)+' 145" style="width:100%;max-height:160px">'+
+      '<line x1="25" y1="0" x2="25" y2="120" stroke="#444" stroke-width="1"/>'+
+      '<line x1="25" y1="120" x2="'+(dayKeys.length*(bw+4)+50)+'" y2="120" stroke="#444" stroke-width="1"/>'+
+      '<text x="20" y="5" text-anchor="end" font-size="8" fill="#888">100</text>'+
+      '<text x="20" y="61" text-anchor="end" font-size="8" fill="#888">50</text>'+
+      '<line x1="25" y1="60" x2="'+(dayKeys.length*(bw+4)+50)+'" y2="60" stroke="#333" stroke-width="1" stroke-dasharray="3,3"/>'+
+      bars+labels+'</svg></div>';
+  }
+
+  return '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">'+
+    '<title>'+escHtml(title)+'</title>'+
+    '<style>'+
+    '@page{size:A4;margin:15mm 15mm 20mm 15mm}'+
+    'body{font-family:"Hiragino Sans","Yu Gothic","Meiryo",sans-serif;font-size:11pt;color:#1a1a2e;background:#fff;margin:0;padding:0}'+
+    '.page{max-width:180mm;margin:0 auto;padding:0}'+
+    'h1{font-size:18pt;color:#1a1a2e;border-bottom:3px solid #7c5cfc;padding-bottom:8px;margin-bottom:6px}'+
+    '.subtitle{color:#666;font-size:10pt;margin-bottom:20px}'+
+    '.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px}'+
+    '.summary-box{background:#f8f8ff;border:1px solid #e0e0f0;border-radius:8px;padding:12px;text-align:center}'+
+    '.summary-n{font-size:22pt;font-weight:700;color:#7c5cfc}'+
+    '.summary-l{font-size:9pt;color:#666;margin-top:4px}'+
+    'h2{font-size:13pt;color:#1a1a2e;border-left:4px solid #7c5cfc;padding-left:10px;margin:22px 0 10px}'+
+    'table{width:100%;border-collapse:collapse;font-size:9.5pt;margin-bottom:8px}'+
+    'th{background:#7c5cfc;color:#fff;padding:7px 8px;text-align:left;font-weight:600}'+
+    'td{padding:6px 8px;border-bottom:1px solid #eee}'+
+    'tr:nth-child(even) td{background:#f8f8ff}'+
+    '.footer{margin-top:20px;padding-top:12px;border-top:1px solid #ddd;font-size:8pt;color:#999;text-align:center}'+
+    '.no-print{display:flex;gap:10px;justify-content:center;margin:20px 0;padding:16px;background:#f0f0ff;border-radius:8px}'+
+    '.btn-print{padding:10px 24px;background:#7c5cfc;color:#fff;border:none;border-radius:8px;font-size:12pt;font-weight:600;cursor:pointer;font-family:inherit}'+
+    '.btn-close{padding:10px 24px;background:#888;color:#fff;border:none;border-radius:8px;font-size:12pt;cursor:pointer;font-family:inherit}'+
+    '@media print{.no-print{display:none!important}body{color:#000}th{background:#7c5cfc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}'+
+    '</style></head><body>'+
+    '<div class="no-print">'+
+      '<button class="btn-print" onclick="window.print()">🖨️ 印刷 / PDF保存</button>'+
+      '<button class="btn-close" onclick="window.close()">✕ 閉じる</button>'+
+    '</div>'+
+    '<div class="page">'+
+    '<h1>📊 VocabMaster 学習報告書</h1>'+
+    '<div class="subtitle">'+escHtml(title)+' &nbsp;｜&nbsp; 作成日時：'+fmtDate(now)+' '+now.getHours()+'時'+now.getMinutes()+'分</div>'+
+    '<div class="summary-grid">'+
+      '<div class="summary-box"><div class="summary-n">'+sessions+'</div><div class="summary-l">セッション数</div></div>'+
+      '<div class="summary-box"><div class="summary-n">'+totalQ+'</div><div class="summary-l">総出題数</div></div>'+
+      '<div class="summary-box"><div class="summary-n" style="color:#4cff91">'+ok+'</div><div class="summary-l">正解数</div></div>'+
+      '<div class="summary-box"><div class="summary-n" style="color:#'+(acc>=80?'4cff91':acc>=60?'ffd700':'fc5c7d')+'">'+acc+'%</div><div class="summary-l">平均正答率</div></div>'+
+    '</div>'+
+    (period!=='day'?'<h2>正答率の推移</h2>'+chartSVG:'')+
+    '<h2>日別学習記録</h2>'+
+    '<table><tr><th>日付</th><th>セッション</th><th>出題数</th><th>正解</th><th>不正解</th><th>正答率</th></tr>'+dayRows+'</table>'+
+    '<h2>間違えた単語一覧（多い順）</h2>'+
+    '<table><tr><th>#</th><th>単語</th><th>意味</th><th>言語</th><th>間違い回数</th></tr>'+missRows+'</table>'+
+    '<h2>復習スケジュール（直近30単語）</h2>'+
+    '<table><tr><th>単語</th><th>意味</th><th>リスト</th><th>復習タイミング</th><th>復習間隔</th><th>累積ミス</th></tr>'+dueRows+'</table>'+
+    '<div class="footer">VocabMaster — 学習報告書 ｜ 出力日時: '+fmtDate(now)+'</div>'+
+    '</div></body></html>';
+}
+
+function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+/* リスト選択モーダル（予習→クイズ / テスト形式） */
+function showListSelectModal(mode){
+  if(!G.lists.length){toast('単語リストがありません');return;}
+  var isStudy=(mode==='study');
+  var title=isStudy?'📖 予習→クイズ：リストを選択':'📝 テスト形式：リストを選択';
+  var sub=isStudy?'予習（フラッシュカード）の後に同じ単語でクイズ':'予習なし・SRS更新なし・採点のみ';
+  var html='<div class="modal-tl">'+title+'</div>';
+  html+='<div style="font-size:11px;color:var(--tx2);margin-bottom:12px">'+sub+'</div>';
+  G.lists.forEach(function(lst){
+    var l=LANGS[lst.lang||'en'];
+    var ws=G.words.filter(function(w){return w.lid===lst.id;});
+    var cnt=ws.length;
+    var cursor=lst.cursor||0; if(cursor>=cnt)cursor=0;
+    var pct=cnt>0?Math.min(100,Math.round(cursor/cnt*100)):0;
+    var progClr=pct>=100?'#4cff91':pct>=60?'#5cf8fc':'#7c5cfc';
+    html+='<button class="list-sel-btn" data-lid="'+esc(lst.id)+'" style="display:flex;align-items:center;gap:10px;width:100%;background:var(--sf2);border:none;border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;font-family:inherit;text-align:left;-webkit-appearance:none;">'+
+      '<div style="width:36px;height:36px;border-radius:9px;background:'+lst.clr+'20;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'+(l?l.flag:'📗')+'</div>'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:14px;font-weight:600;color:var(--tx)">'+esc(lst.name)+langBadge(lst.lang)+'</div>'+
+        '<div style="font-size:11px;color:var(--tx2);margin-top:2px">'+cnt+'単語 · 進捗 '+pct+'%</div>'+
+        '<div style="height:3px;background:rgba(255,255,255,.1);border-radius:2px;margin-top:5px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+progClr+';border-radius:2px"></div></div>'+
+      '</div>'+
+      '<div style="font-size:18px;color:var(--tx2)">›</div></button>';
+  });
+  el('modal-ct').innerHTML=html;
+  el('modal-bg').classList.add('on');
+  el('modal-ct').querySelectorAll('.list-sel-btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      var lid=this.getAttribute('data-lid');
+      var lst=G.lists.find(function(l){return l.id===lid;});
+      var ws=G.words.filter(function(w){return w.lid===lid;});
+      if(ws.length<2){toast('クイズには最低2単語必要です');return;}
+      el('modal-bg').classList.remove('on');
+      var size=Math.min(parseInt(G.cfg.size)||20, ws.length);
+      var cursor=lst.cursor||0; if(cursor>=ws.length)cursor=0;
+      var pool=ws.slice(cursor, cursor+size);
+      if(pool.length<2){cursor=0; pool=ws.slice(0,size);}
+      var nextCursor=Math.min(cursor+pool.length, ws.length);
+      if(isStudy){
+        Q._pendingCursor={lid:lid, next:nextCursor};
+        flashStart(pool,'list',lid);
+      } else {
+        Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:true};
+        go('s-quiz');qRender();
+      }
+    });
+  });
+}
+
 function quizStart(mode,lid){
   var pool=[];
   if(mode==='due')pool=getDue();
@@ -1503,7 +1805,7 @@ function quizStart(mode,lid){
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
   var size=Math.min(pool.length,parseInt(G.cfg.size)||20);
   var ws=shuffle(pool).slice(0,size);
-  Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:''};
+  Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:false};
   go('s-quiz');qRender();
 }
 
@@ -1512,6 +1814,7 @@ function qRender(){
   var tot=Q.q.length,cur=Q.i+1;
   el('QZ-fill').style.width=(cur/tot*100)+'%';
   el('QZ-cnt').textContent=cur+'/'+tot;
+  el('QZ-mode-badge').style.display=Q.testMode?'inline-block':'none';
   var rev=G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
   var l=LANGS[q.lang||'en'];
   el('QZ-badge').textContent=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
@@ -1559,7 +1862,7 @@ function qSelect(i){
   var q=Q.q[Q.i];answer(q,ok);
   ok?Q.ok++:(Q.ng++,Q.miss.push(q));
   el('FB-tx').innerHTML=ok?'<span style="color:var(--gn)">✓ 正解！</span>':'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca);
-  el('FB-dt').textContent=ok?'次回: '+(q.s&&q.s.i||1)+'日後':'1日後に再復習';
+  el('FB-dt').textContent=Q.testMode?'':(ok?'次回: '+(q.s&&q.s.i||1)+'日後':'1日後に再復習');
   el('FB').classList.add('on');
   /* 自動進行 — 正解時のみ（不正解は手動で確認させる） */
   if(ok&&G.cfg.autonext){
@@ -1593,8 +1896,36 @@ function qResult(){
   if(acc>=90){em='🏆';tl='完璧です！';}else if(acc>=70){em='🎉';tl='よくできました！';}else if(acc>=50){em='📚';tl='もう少しです！';}else{em='💪';tl='練習あるのみ！';}
   el('R-em').textContent=em;el('R-tl').textContent=tl;
   el('R-sub').textContent=tot+'問中'+Q.ok+'問正解 · 正解率'+acc+'%';
+
+  /* カーソルを進める（リストクイズのみ） */
+  if(Q._pendingCursor&&!Q.testMode){
+    var pc=Q._pendingCursor;
+    var lst=G.lists.find(function(l){return l.id===pc.lid;});
+    if(lst){
+      var wsLen=G.words.filter(function(w){return w.lid===pc.lid;}).length;
+      lst.cursor=pc.next>=wsLen?0:pc.next; /* 最後まで行ったらリセット */
+      var completed=(pc.next>=wsLen);
+      if(completed){
+        em='🎊';tl='このリスト完了！';
+        el('R-em').textContent=em;el('R-tl').textContent=tl;
+        el('R-sub').textContent='全単語を学習しました！次回は最初からスタートします';
+      }
+    }
+  }
+
+  /* セッションログを保存 */
+  if(!G.logs)G.logs=[];
+  G.logs.push({
+    ts: new Date().toISOString(),
+    ok: Q.ok, ng: Q.ng, acc: acc, total: tot,
+    testMode: !!Q.testMode,
+    miss: Q.miss.map(function(w){return{id:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',lid:w.lid};}),
+    words: Q.words.map(function(w){return w.id;})
+  });
+  if(G.logs.length>365)G.logs=G.logs.slice(-365);
   var today=new Date().toDateString();
-  if(G.stats.lastDay!==today){var yest=new Date(Date.now()-86400000).toDateString();G.stats.streak=(G.stats.lastDay===yest)?(G.stats.streak||0)+1:1;G.stats.lastDay=today;save();}
+  if(G.stats.lastDay!==today){var yest=new Date(Date.now()-86400000).toDateString();G.stats.streak=(G.stats.lastDay===yest)?(G.stats.streak||0)+1:1;G.stats.lastDay=today;}
+  save();
   go('s-result');
 }
 
@@ -1636,6 +1967,9 @@ function bind(){
   el('B-quiz-all').addEventListener('click',function(){quizStart('all');});
   el('B-go-list').addEventListener('click',function(){go('s-list');});
   el('B-quiz-weak').addEventListener('click',function(){quizStart('weak');});
+  el('B-study-list').addEventListener('click',function(){showListSelectModal('study');});
+  el('B-test-list').addEventListener('click',function(){showListSelectModal('test');});
+  el('B-report').addEventListener('click',function(){showReportModal();});
   el('B-new-list').addEventListener('click',function(){go('s-add');});
 
   el('B-add-back').addEventListener('click',function(){go('s-home');});
