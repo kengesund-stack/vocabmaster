@@ -548,7 +548,15 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         </div>
       </div>
       <div class="set-row" style="cursor:default">
-        <span style="font-size:11px;color:var(--tx2);line-height:1.6">読み上げ完了後に設定秒数待って次のカードへ進みます。</span>
+        <span class="set-lbl">🎵 読み上げ中の音楽音量</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="number" id="IN-duck-vol" min="0" max="80" step="5" value="15"
+            style="width:58px;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:14px;font-weight:600;padding:5px 8px;text-align:center;outline:none;-webkit-appearance:none;-webkit-user-select:text;user-select:text;">
+          <span style="font-size:13px;color:var(--tx2)">%</span>
+        </div>
+      </div>
+      <div class="set-row" style="cursor:default">
+        <span style="font-size:11px;color:var(--tx2);line-height:1.6">読み上げ中の音楽ボリュームを下げます。0%で無音、100%で変化なし。</span>
       </div>
     </div>
     <div class="set-sec">データ</div>
@@ -584,7 +592,7 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],cfg:{size:20,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',key:''},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],cfg:{size:20,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:''},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 function save(){sSet(G);}
 
@@ -1271,6 +1279,28 @@ function mkCard(l,v){return'<div style="background:var(--sf2);border-radius:9px;
 
 /* ---------- SPEECH ---------- */
 var LANG_VOICE={en:'en-US',de:'de-DE',fr:'fr-FR',es:'es-ES',it:'it-IT'};
+
+/* ---- 音楽ダッキング ---- */
+var DUCK_VOL=0.15; /* 読み上げ中の音楽音量 */
+var _duckActive=0; /* ネスト対応カウンター */
+function duckStart(){
+  _duckActive++;
+  if(_duckActive>1)return;
+  document.querySelectorAll('audio,video').forEach(function(m){
+    if(!m.paused&&!m._preVol){m._preVol=m.volume;m.volume=Math.min(m.volume,DUCK_VOL);}
+  });
+}
+function duckEnd(){
+  _duckActive=Math.max(0,_duckActive-1);
+  if(_duckActive>0)return;
+  setTimeout(function(){ /* 少し待ってから戻す（次の読み上げが来た場合対策） */
+    if(_duckActive>0)return;
+    document.querySelectorAll('audio,video').forEach(function(m){
+      if(m._preVol!=null){m.volume=m._preVol;delete m._preVol;}
+    });
+  },300);
+}
+
 function speak(text, lang){
   if(!window.speechSynthesis)return;
   window.speechSynthesis.cancel();
@@ -1278,7 +1308,9 @@ function speak(text, lang){
   u.lang=LANG_VOICE[lang||'en']||'en-US';
   u.rate=0.9;
   u.pitch=1.0;
-  /* iOSはvoicesのロードが遅れるため少し待つ */
+  u.onstart=function(){duckStart();};
+  u.onend=function(){duckEnd();};
+  u.onerror=function(){duckEnd();};
   setTimeout(function(){window.speechSynthesis.speak(u);},100);
 }
 
@@ -1315,8 +1347,9 @@ function sqNext(){
   var u=new SpeechSynthesisUtterance(item.text);
   u.lang=LANG_VOICE[item.lang||'en']||'en-US';
   u.rate=0.9;
-  u.onend=function(){SQ.busy=false;item.cb();sqNext();};
-  u.onerror=function(){SQ.busy=false;item.cb();sqNext();};
+  u.onstart=function(){duckStart();};
+  u.onend=function(){duckEnd();SQ.busy=false;item.cb();sqNext();};
+  u.onerror=function(){duckEnd();SQ.busy=false;item.cb();sqNext();};
   setTimeout(function(){
     window.speechSynthesis.speak(u);
     setTimeout(function(){if(window.speechSynthesis.paused)window.speechSynthesis.resume();},200);
@@ -1355,8 +1388,9 @@ function flRender(){
       }
       var u=new SpeechSynthesisUtterance(text);
       u.lang=lang; u.rate=0.9;
-      u.onend=function(){if(FL.token===token)next();};
-      u.onerror=function(){if(FL.token===token)next();};
+      u.onstart=function(){duckStart();};
+      u.onend=function(){duckEnd();if(FL.token===token)next();};
+      u.onerror=function(){duckEnd();if(FL.token===token)next();};
       window.speechSynthesis.speak(u);
     }
 
@@ -1584,6 +1618,7 @@ function settingsLoad(){
   el('IN-flash-sec').value=G.cfg.flashSec||2;
   var sm=G.cfg.spkMode||'both';
   ['both','foreign','ja'].forEach(function(m){el('SPK-'+m).classList.toggle('on',sm===m);});
+  el('IN-duck-vol').value=G.cfg.duckVol!=null?G.cfg.duckVol:15;
   updateKeyStatus();
 }
 
@@ -1694,6 +1729,14 @@ function bind(){
     if(v<2)v=2; if(v>15)v=15;
     G.cfg.flashSec=v; save();
   });
+  el('IN-duck-vol').addEventListener('input',function(){
+    var v=parseInt(this.value);
+    if(isNaN(v))v=15;
+    if(v<0)v=0; if(v>100)v=100;
+    G.cfg.duckVol=v; save();
+    DUCK_VOL=v/100;
+  });
+  DUCK_VOL=(G.cfg.duckVol!=null?G.cfg.duckVol:15)/100;
   el('TG-flashauto').addEventListener('click',function(){G.cfg.flashAuto=!this.classList.contains('on');this.classList.toggle('on',G.cfg.flashAuto);save();});
   el('ROW-flashauto').addEventListener('click',function(e){if(e.target!==el('TG-flashauto'))el('TG-flashauto').click();});
   ['both','foreign','ja'].forEach(function(m){
