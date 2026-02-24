@@ -1217,7 +1217,13 @@ function listMenu(lid){
     var pool=shuffle(ws.slice()).slice(0, Math.min(ws.length, parseInt(G.cfg.size)||20));
     flashStart(pool,'list',lid);
   });
-  el('LM-quiz').addEventListener('click',function(){el('modal-bg').classList.remove('on');quizStart('list',lid);});
+  el('LM-quiz').addEventListener('click',function(){
+    el('modal-bg').classList.remove('on');
+    var pool=shuffle(ws.slice()).slice(0, Math.min(ws.length, parseInt(G.cfg.size)||20));
+    if(pool.length<2){toast('クイズには最低2単語必要です');return;}
+    Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:''};
+    go('s-quiz');qRender();
+  });
   el('LM-due').addEventListener('click',function(){
     if(!d)return;
     el('modal-bg').classList.remove('on');
@@ -1444,7 +1450,11 @@ function flBindButtons(){
   el('FL-to-quiz').addEventListener('click',function(){
     flStopAuto();
     if(window.speechSynthesis)window.speechSynthesis.cancel();
-    quizStart(FL.quizMode, FL.quizLid);
+    /* 予習と同じ単語セット・同じ順番でクイズを開始 */
+    var pool=FL.words.slice();
+    if(pool.length<2){toast('クイズには最低2単語必要です');return;}
+    Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:''};
+    go('s-quiz');qRender();
   });
 }
 
