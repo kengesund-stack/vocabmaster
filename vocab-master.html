@@ -911,46 +911,44 @@ function extractPdf(file){
 }
 
 function fileAiExtract(text, fname){
-  /* AI抽出タブと同じロジックを使う — selLevel/selTypeをfileのものに一時差し替え */
   var savedLevel=selLevel, savedType=selType;
   selLevel=fileSelLevel; selType=fileSelType;
-  var ni=el('IN-file-name');
-  if(ni&&ni.value&&!el('IN-ai-name').value){/* ファイル名をAIタブにもセット */}
-  /* AI抽出へ */
   if(!G.cfg.key){toast('AIでの抽出にはAPIキーが必要です（設定画面で入力）');selLevel=savedLevel;selType=savedType;return;}
   var ln=langName(selLang);
   var def=getLevelDef(selLang,fileSelLevel);
   var typeCond={words:'単語のみ（2語以上の熟語・イディオムは含めない）',phrases:'熟語・イディオム・慣用句のみ（2語以上のフレーズ）',both:'単語と熟語・イディオム・慣用句の両方'};
   var articleRule={en:'',de:'名詞には必ず定冠詞を付けてください（例: der Mann, die Frau, das Kind）。動詞は不定詞形、形容詞は原形で記載してください。',fr:'名詞には必ず定冠詞を付けてください（例: le livre, la maison）。動詞は不定詞形、形容詞は男性単数形で記載してください。',es:'名詞には必ず定冠詞を付けてください（例: el libro, la casa）。動詞は不定詞形、形容詞は男性単数形で記載してください。',it:'名詞には必ず定冠詞を付けてください（例: il libro, la casa）。動詞は不定詞形、形容詞は男性単数形で記載してください。'};
   var articleInstr=articleRule[selLang]||'';
-  loading('AIが抽出中...');
-  var prompt=
-    '以下の'+ln+'テキストから、「'+def.cond+'」に該当する'+typeCond[fileSelType]+'をできるだけ多く抽出し、それぞれ日本語訳をつけてください。\n'+
-    (articleInstr?articleInstr+'\n':'')+
-    '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
-    '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
-    '{"words":[{"word":"der Mann","meaning":"男性、男"},{"word":"gehen","meaning":"行く"}]}\n\n'+
-    'テキスト:\n'+text.slice(0,20000);
-  apiCall({
-    model:'claude-haiku-4-5-20251001',max_tokens:20000,
-    messages:[{role:'user',content:prompt}]
-  },function(d){
-    loaded();selLevel=savedLevel;selType=savedType;
-    try{
-      var raw=d.content[0].text.replace(/```json|```/g,'').trim();
-      var m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('JSON not found');
-      var words=(JSON.parse(m[0]).words||[]).filter(function(w){return w.word&&w.word.trim();});
-      if(!words.length)throw new Error('empty');
+  function makePrompt(chunk){
+    return '以下の'+ln+'テキストから、「'+def.cond+'」に該当する'+typeCond[fileSelType]+'をできるだけ多く抽出し、それぞれ日本語訳をつけてください。\n'+
+      (articleInstr?articleInstr+'\n':'')+
+      '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
+      '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
+      '{"words":[{"word":"primate","meaning":"霊長類"},{"word":"be put upon","meaning":"利用される"}]}\n\n'+
+      'テキスト:\n'+chunk;
+  }
+  var chunks=splitChunks(text, 80000);
+  loading('AIが抽出中... (1/'+chunks.length+'パート)');
+  apiCallChunked(chunks, makePrompt, 'claude-haiku-4-5-20251001',
+    function(allWords){
+      loaded();selLevel=savedLevel;selType=savedType;
+      var seen={};
+      var words=allWords.filter(function(w){
+        var k=w.word.toLowerCase().trim();
+        if(seen[k])return false; seen[k]=true; return true;
+      });
+      if(!words.length){toast('❌ 単語が抽出できませんでした');return;}
+      toast('✅ '+words.length+'語を抽出しました'+(chunks.length>1?' ('+chunks.length+'パート処理)':''));
       prvShow(words);
-      /* リスト名をファイル名から自動設定 */
       var ni2=el('IN-file-name');var ni3=el('IN-ai-name');
       if(ni2&&ni2.value&&ni3&&!ni3.value)ni3.value=ni2.value;
-    }catch(e){toast('❌ AI抽出エラー: '+e.message);}
-  },function(e){
-    loaded();selLevel=savedLevel;selType=savedType;
-    var msg=e.message||'';
-    toast(msg.indexOf('401')>=0?'❌ APIキーが無効です':'❌ エラー: '+msg.slice(0,50));
-  });
+    },
+    function(e){
+      loaded();selLevel=savedLevel;selType=savedType;
+      var msg=e.message||'';
+      toast(msg.indexOf('401')>=0?'❌ APIキーが無効です':'❌ エラー: '+msg.slice(0,50));
+    }
+  );
 }
 
 function csvParse(txt,fname){
@@ -1077,9 +1075,100 @@ function apiCall(body,ok,ng){
   xhr.send(JSON.stringify(body));
 }
 
+/* テキストを指定文字数でチャンク分割（単語区切りを尊重） */
+function splitChunks(text, chunkSize){
+  var chunks=[];
+  var pos=0;
+  while(pos<text.length){
+    var end=Math.min(pos+chunkSize, text.length);
+    /* 行末か空白で切る */
+    if(end<text.length){
+      var nl=text.lastIndexOf('\n',end);
+      var sp=text.lastIndexOf(' ',end);
+      var cut=nl>pos+chunkSize/2?nl:sp>pos+chunkSize/2?sp:end;
+      end=cut>pos?cut:end;
+    }
+    chunks.push(text.slice(pos,end).trim());
+    pos=end;
+  }
+  return chunks.filter(function(c){return c.length>0;});
+}
+
+/* 複数チャンクを順次APIに送り、結果をマージして返す */
+function apiCallChunked(chunks, makePrompt, model, okAll, ngAll){
+  var allWords=[];
+  var idx=0;
+  function next(){
+    if(idx>=chunks.length){okAll(allWords);return;}
+    var chunk=chunks[idx];
+    idx++;
+    loading('AIが抽出中... ('+idx+'/'+chunks.length+'パート)');
+    var body={
+      model:model,
+      max_tokens:16000,
+      messages:[{role:'user',content:makePrompt(chunk)}]
+    };
+    apiCall(body,function(d){
+      try{
+        var raw=(d.content[0].text||'').replace(/```json|```/g,'').trim();
+        var m=raw.match(/\{[\s\S]*\}/);
+        if(m){
+          var words=(JSON.parse(m[0]).words||[]).filter(function(w){return w.word&&w.word.trim();});
+          allWords=allWords.concat(words);
+        }
+      }catch(e){/* パートのパース失敗は無視して続行 */}
+      next();
+    },function(e){ngAll(e);});
+  }
+  next();
+}
+
 function langName(lang){return LANGS[lang]?LANGS[lang].name:'英語';}
 
 function aiExtractAPI(txt){
+  /* ── スラッシュ区切りの単語リスト形式を検出 ── */
+  var slashCount=(txt.match(/ \/ /g)||[]).length;
+  var lineCount=txt.split('\n').filter(function(l){return l.trim();}).length;
+  var isWordList= slashCount > 20 && slashCount > lineCount * 0.5;
+
+  if(isWordList){
+    loading('単語リストを解析中...');
+    var rawWords=[];
+    txt.split('\n').forEach(function(line){
+      line=line.trim();
+      if(!line) return;
+      if(/[\u3000-\u9fff]/.test(line)) return;
+      line.split('/').forEach(function(w){
+        w=w.trim().replace(/^\(|\)$/g,'');
+        if(w && w.length>0 && w.length<60) rawWords.push(w);
+      });
+    });
+    var seen={};
+    var words=rawWords.filter(function(w){
+      var k=w.toLowerCase();
+      if(seen[k])return false; seen[k]=true; return true;
+    }).map(function(w){return{word:w, meaning:''};});
+
+    if(!words.length){loaded();toast('\u274c 単語が見つかりません');return;}
+    loaded();
+
+    if(G.cfg.key){
+      translateInChunks(words, selLang, function(translated){
+        var ni=el('IN-ai-name');
+        if(ni&&!ni.value)ni.value=(LANGS[selLang]?LANGS[selLang].name:'')+'_AI抽出';
+        toast('\u2705 '+translated.length+'語を読み込みました');
+        prvShow(translated);
+      });
+    } else {
+      var ni=el('IN-ai-name');
+      if(ni&&!ni.value)ni.value=(LANGS[selLang]?LANGS[selLang].name:'')+'_抽出';
+      toast('\u2705 '+words.length+'語を読み込みました（翻訳はAPIキーが必要）');
+      prvShow(words);
+    }
+    return;
+  }
+
+  /* ── 通常テキストからのAI抽出 ── */
   var ln=langName(selLang);
   var def=getLevelDef(selLang,selLevel);
   var levelLabel={all:'',beginner:'初級_',intermediate:'中級_',advanced:'上級_'};
@@ -1089,57 +1178,112 @@ function aiExtractAPI(txt){
     phrases:'熟語・イディオム・慣用句のみ（2語以上のフレーズ）',
     both:'単語と熟語・イディオム・慣用句の両方'
   };
-  /* 言語ごとの冠詞ルール */
   var articleRule={
     en:'',
     de:'名詞には必ず定冠詞を付けてください（例: der Mann, die Frau, das Kind）。動詞は不定詞形（例: gehen, haben）、形容詞は原形で記載してください。',
-    fr:'名詞には必ず定冠詞を付けてください（例: le livre, la maison, l\'école）。動詞は不定詞形（例: aller, avoir）、形容詞は男性単数形で記載してください。',
+    fr:"名詞には必ず定冠詞を付けてください（例: le livre, la maison, l\'école）。動詞は不定詞形（例: aller, avoir）、形容詞は男性単数形で記載してください。",
     es:'名詞には必ず定冠詞を付けてください（例: el libro, la casa）。動詞は不定詞形（例: ir, tener）、形容詞は男性単数形で記載してください。',
     it:'名詞には必ず定冠詞を付けてください（例: il libro, la casa, lo studente）。動詞は不定詞形（例: andare, avere）、形容詞は男性単数形で記載してください。'
   };
   var articleInstr=articleRule[selLang]||'';
   var ni=el('IN-ai-name');
   if(ni&&!ni.value)ni.value=(LANGS[selLang]?LANGS[selLang].name:'')+'_'+(levelLabel[selLevel]||'')+(typeLabel[selType]||'')+'AI抽出';
-  loading('AIが抽出中...');
-  var prompt=
-    '以下の'+ln+'テキストから、'+
-    '「'+def.cond+'」に該当する'+typeCond[selType]+'をできるだけ多く抽出し、それぞれ日本語訳をつけてください。\n'+
-    (articleInstr?articleInstr+'\n':'')+
-    '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
-    '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
-    '{"words":[{"word":"der Mann","meaning":"男性、男"},{"word":"gehen","meaning":"行く"}]}\n\n'+
-    'テキスト:\n'+txt.slice(0,20000);
-  apiCall({
-    model:'claude-haiku-4-5-20251001',max_tokens:20000,
-    messages:[{role:'user',content:prompt}]
-  },function(d){
-    loaded();
-    try{
-      var raw=d.content[0].text;
-      raw=raw.replace(/```json|```/g,'').trim();
-      var m=raw.match(/\{[\s\S]*\}/);
-      if(!m)throw new Error('JSON not found');
-      var parsed=JSON.parse(m[0]);
-      var words=(parsed.words||[]).filter(function(w){return w.word&&w.word.trim();});
-      if(!words.length)throw new Error('empty');
+
+  function makePrompt(chunk){
+    return '以下の'+ln+'テキストから、'+
+      '「'+def.cond+'」に該当する'+typeCond[selType]+'をできるだけ多く抽出し、それぞれ日本語訳をつけてください。\n'+
+      (articleInstr?articleInstr+'\n':'')+
+      '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
+      '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
+      '{"words":[{"word":"primate","meaning":"霊長類"},{"word":"be put upon","meaning":"利用される、こき使われる"}]}\n\n'+
+      'テキスト:\n'+chunk;
+  }
+
+  var chunks=splitChunks(txt, 80000);
+  loading('AIが抽出中... (1/'+chunks.length+'パート)');
+  apiCallChunked(chunks, makePrompt, 'claude-haiku-4-5-20251001',
+    function(allWords){
+      loaded();
+      var seen={};
+      var words=allWords.filter(function(w){
+        var k=w.word.toLowerCase().trim();
+        if(seen[k])return false;
+        seen[k]=true;return true;
+      });
+      if(!words.length){toast('\u274c 単語が抽出できませんでした');return;}
+      toast('\u2705 '+words.length+'語を抽出しました'+(chunks.length>1?' ('+chunks.length+'パート処理)':''));
       prvShow(words);
-    }catch(e){
-      toast('❌ AI抽出エラー: '+e.message);
+    },
+    function(e){
+      loaded();
+      var msg=e.message||'';
+      if(msg.indexOf('401')>=0||msg.indexOf('authentication')>=0||msg.toLowerCase().indexOf('invalid')>=0){
+        toast('\u274c APIキーが無効です。設定画面で確認してください');
+      } else if(msg.indexOf('\u901a\u4fe1')>=0){
+        toast('\u274c 通信エラー。ネットワークを確認してください');
+      } else {
+        toast('\u274c AIエラー: '+msg.slice(0,60));
+      }
     }
-  },function(e){
-    loaded();
-    /* APIキーが間違っている可能性 */
-    var msg=e.message||'';
-    if(msg.indexOf('401')>=0||msg.indexOf('authentication')>=0||msg.toLowerCase().indexOf('invalid')>=0){
-      toast('❌ APIキーが無効です。設定画面で確認してください');
-    } else if(msg.indexOf('通信')>=0){
-      toast('❌ 通信エラー。インターネット接続を確認してください');
-    } else {
-      toast('❌ エラー: '+msg.slice(0,50));
-    }
-  });
+  );
 }
 
+/* 単語リストを150語ずつ分割してAI翻訳 */
+function translateInChunks(words, lang, callback){
+  var ln=langName(lang);
+  var chunkSize=150;
+  var total=words.length;
+  var idx=0;
+  var result=words.slice();
+
+  function nextChunk(){
+    if(idx>=total){callback(result);return;}
+    var chunk=result.slice(idx, idx+chunkSize);
+    var noMeaning=chunk.filter(function(w){return !w.meaning;});
+    if(!noMeaning.length){idx+=chunkSize;nextChunk();return;}
+
+    loading('翻訳中... ('+Math.min(idx+chunkSize,total)+'/'+total+'語)');
+    var wordList=noMeaning.map(function(w){return w.word;}).join(' / ');
+    var prompt=
+      '以下の'+ln+'の単語・熟語すべてに日本語訳をつけてください。\n'+
+      '必ずすべての項目を含めてください。訳がわからない場合でも推測して記入してください。\n'+
+      'JSONのみで返してください（```不要）: {"translations":{"abandon":"捨てる","be put upon":"こき使われる"}}\n\n'+
+      '単語リスト: '+wordList;
+
+    apiCall({
+      model:'claude-haiku-4-5-20251001',
+      max_tokens:16000,
+      messages:[{role:'user',content:prompt}]
+    },function(d){
+      try{
+        var raw=(d.content[0].text||'').replace(/```json|```/g,'').trim();
+        var m=raw.match(/\{[\s\S]*\}/);
+        if(m){
+          var tr=JSON.parse(m[0]).translations||{};
+          for(var i=idx;i<Math.min(idx+chunkSize,total);i++){
+            var w=result[i];
+            if(!w.meaning){
+              var meaning=tr[w.word]||tr[w.word.toLowerCase()]||'';
+              if(!meaning){
+                var wn=w.word.replace(/\s+/g,' ').trim();
+                Object.keys(tr).forEach(function(k){
+                  if(!meaning&&k.replace(/\s+/g,' ').trim().toLowerCase()===wn.toLowerCase())meaning=tr[k];
+                });
+              }
+              if(meaning)w.meaning=meaning;
+            }
+          }
+        }
+      }catch(e){}
+      idx+=chunkSize;
+      nextChunk();
+    },function(){
+      idx+=chunkSize;
+      nextChunk();
+    });
+  }
+  nextChunk();
+}
 function offlineExtract(txt){
   var common={the:1,be:1,is:1,are:1,was:1,were:1,have:1,has:1,had:1,do:1,does:1,did:1,will:1,would:1,shall:1,should:1,may:1,might:1,must:1,can:1,could:1,a:1,an:1,in:1,on:1,at:1,to:1,for:1,of:1,and:1,or:1,but:1,not:1,this:1,that:1,with:1,from:1,by:1,as:1,up:1,out:1,if:1,about:1,who:1,what:1,which:1,all:1,when:1,so:1,no:1,just:1,into:1,over:1,after:1,also:1,than:1,only:1,they:1,their:1,you:1,we:1,he:1,she:1,me:1,my:1,us:1,him:1,it:1,i:1,
     der:1,die:1,das:1,ein:1,eine:1,und:1,oder:1,aber:1,nicht:1,ist:1,sind:1,war:1,hat:1,haben:1,mit:1,von:1,aus:1,bei:1,nach:1,zum:1,zur:1,dem:1,den:1,des:1,
