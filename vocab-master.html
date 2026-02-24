@@ -1186,38 +1186,54 @@ function speak(text, lang){
 }
 
 /* ---------- FLASHCARD ---------- */
-var FL={words:[],i:0,playing:false,timer:null,quizPool:null,quizMode:null,quizLid:null};
+var FL={words:[],i:0,playing:false,timer:null,quizPool:null,quizMode:null,quizLid:null,token:0};
 
 function flashStart(words, quizMode, quizLid){
   if(!words||!words.length){toast('単語がありません');return;}
-  FL.words=words; FL.i=0; FL.playing=false; FL.timer=null;
+  sqClear();
+  FL.words=words; FL.i=0; FL.playing=false; FL.timer=null; FL.token=0;
   FL.quizMode=quizMode; FL.quizLid=quizLid;
   go('s-flash');
   flRender();
-  /* 設定で自動再生がオンなら即スタート */
-  if(G.cfg.flashAuto){
-    setTimeout(flStartAuto, 500);
-  }
+  if(G.cfg.flashAuto){setTimeout(flStartAuto,500);}
 }
 
-function speakWithCb(text, lang, cb){
-  if(!window.speechSynthesis){setTimeout(cb,0);return;}
-  window.speechSynthesis.cancel();
-  var u=new SpeechSynthesisUtterance(text);
-  u.lang=LANG_VOICE[lang||'en']||'en-US';
+/* ---- 読み上げキュー（iOS対応） ---- */
+var SQ={queue:[],busy:false};
+function sqClear(){
+  SQ.queue=[];SQ.busy=false;
+  try{window.speechSynthesis.cancel();}catch(e){}
+}
+function sqSpeak(text,lang,cb){
+  cb=cb||function(){};
+  if(!text||!text.trim()){cb();return;} /* 空文字はスキップしてcbだけ呼ぶ */
+  SQ.queue.push({text:text,lang:lang,cb:cb});
+  if(!SQ.busy)sqNext();
+}
+function sqNext(){
+  if(!SQ.queue.length){SQ.busy=false;return;}
+  SQ.busy=true;
+  var item=SQ.queue.shift();
+  if(!window.speechSynthesis){item.cb();SQ.busy=false;sqNext();return;}
+  var u=new SpeechSynthesisUtterance(item.text);
+  u.lang=LANG_VOICE[item.lang||'en']||'en-US';
   u.rate=0.9;
-  u.onend=cb; u.onerror=cb;
-  setTimeout(function(){window.speechSynthesis.speak(u);},100);
+  u.onend=function(){SQ.busy=false;item.cb();};
+  u.onerror=function(){SQ.busy=false;item.cb();};
+  setTimeout(function(){
+    window.speechSynthesis.speak(u);
+    setTimeout(function(){if(window.speechSynthesis.paused)window.speechSynthesis.resume();},200);
+  },80);
 }
 
-function speakJa(text){
-  speakWithCb(text,'ja',function(){});
-}
+function speakWithCb(text,lang,cb){sqSpeak(text,lang,cb);}
+function speakJa(text){sqSpeak(text,'ja',function(){});}
 
 function flRender(){
+  var token=++FL.token;
   var w=FL.words[FL.i];
   if(!w)return;
-  var tot=FL.words.length, cur=FL.i+1;
+  var tot=FL.words.length,cur=FL.i+1;
   el('FL-fill').style.width=(cur/tot*100)+'%';
   el('FL-cnt').textContent=cur+'/'+tot;
   var l=LANGS[w.lang||'en'];
@@ -1225,61 +1241,70 @@ function flRender(){
   var card=el('FL-card');
   card.classList.add('flip');
   setTimeout(function(){
+    if(FL.token!==token)return;
     el('FL-word').textContent=w.word;
     el('FL-meaning').textContent='';
     card.classList.remove('flip');
-    /* ① 外国語を読み上げ → 完了後に和訳へ */
-    speakWithCb(w.word, w.lang||'en', function(){
+    /* ① 外国語を読み上げ */
+    sqSpeak(w.word, w.lang||'en', function(){
+      if(FL.token!==token)return;
+      /* ② 800ms後に和訳表示 → 日本語読み上げ */
       setTimeout(function(){
+        if(FL.token!==token)return;
         el('FL-meaning').textContent=w.meaning||'';
-        if(w.meaning){
-          /* ② 日本語を読み上げ → 完了後に設定間隔だけ待って次へ */
-          speakWithCb(w.meaning, 'ja', function(){
-            if(!FL.playing)return;
-            FL.timer=setTimeout(function(){
-              if(!FL.playing)return;
-              if(FL.i<FL.words.length-1){FL.i++;flRender();}
-              else{flStopAuto();toast('予習完了！クイズで確認しよう');}
-            },(G.cfg.flashSec||2)*1000);
-          });
-        } else {
-          /* 和訳なしは外国語完了後の間隔だけ待って次へ */
+        sqSpeak(w.meaning||'', 'ja', function(){
+          if(FL.token!==token)return;
+          /* ③ 両方完了後、設定秒数待って次へ（自動再生中のみ） */
           if(!FL.playing)return;
           FL.timer=setTimeout(function(){
-            if(!FL.playing)return;
+            if(!FL.playing||FL.token!==token)return;
             if(FL.i<FL.words.length-1){FL.i++;flRender();}
             else{flStopAuto();toast('予習完了！クイズで確認しよう');}
           },(G.cfg.flashSec||2)*1000);
-        }
-      },800); /* 外国語読み上げ完了→和訳表示までの間 */
+        });
+      },800);
     });
   },200);
 }
 
 function flNext(){
-  flStopAuto();
+  FL.token++;sqClear();
+  if(FL.timer){clearTimeout(FL.timer);FL.timer=null;}
   if(FL.i<FL.words.length-1){FL.i++;flRender();}
   else{toast('最後の単語です');}
 }
 function flPrev(){
-  flStopAuto();
+  FL.token++;sqClear();
+  if(FL.timer){clearTimeout(FL.timer);FL.timer=null;}
   if(FL.i>0){FL.i--;flRender();}
+  else{toast('最初の単語です');}
 }
 function flToggleAuto(){
   if(FL.playing){flStopAuto();}
-  else{flStartAuto();}
-}
-function flStartAuto(){
-  FL.playing=true;
-  el('FL-play').textContent='⏸';
-  /* タイマーはflRender内で読み上げ完了後にセット */
-  flRender();
+  else{
+    FL.playing=true;
+    el('FL-play').textContent='⏸';
+    /* 読み上げ中でなければ現在のカードから再開 */
+    if(!SQ.busy&&!FL.timer){flRender();}
+  }
 }
 function flStopAuto(){
   FL.playing=false;
   el('FL-play').textContent='▶';
   if(FL.timer){clearTimeout(FL.timer);FL.timer=null;}
-  if(window.speechSynthesis)window.speechSynthesis.cancel();
+}
+
+function flashStart(words, quizMode, quizLid){
+  if(!words||!words.length){toast('単語がありません');return;}
+  sqClear();
+  FL.words=words; FL.i=0; FL.playing=false; FL.timer=null; FL.token=0;
+  FL.quizMode=quizMode; FL.quizLid=quizLid;
+  go('s-flash');
+  if(G.cfg.flashAuto){
+    FL.playing=true;
+    el('FL-play').textContent='⏸';
+  }
+  flRender(); /* 常に1回だけ呼ぶ */
 }
 
 function flBindButtons(){
