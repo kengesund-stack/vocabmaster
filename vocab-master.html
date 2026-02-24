@@ -653,10 +653,9 @@ function updateLevelHint(){
   h.textContent=def.hint;
 }
 
-function setLang(lang){
+function aiExtract(){
   var txt=el('IN-ai-text').value.trim();
   if(!txt||txt.length<20){toast('もう少し長いテキストを入力してください');return;}
-  var ni=el('IN-ai-name');if(ni&&!ni.value)ni.value=(LANGS[selLang]?LANGS[selLang].name:'')+' AI抽出';
   G.cfg.key?aiExtractAPI(txt):offlineExtract(txt);
 }
 
