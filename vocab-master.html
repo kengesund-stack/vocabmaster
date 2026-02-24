@@ -307,6 +307,14 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     <div id="TP-ai" style="display:none">
       <div class="lbl">リスト名</div>
       <input class="inp" id="IN-ai-name" type="text" placeholder="例: 小説から抽出">
+      <div class="lbl">抽出レベル</div>
+      <div class="lang-sel-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:4px">
+        <button class="lang-sel-btn on" data-level="all" id="LV-all">🔀<br>区別<br>なし</button>
+        <button class="lang-sel-btn" data-level="beginner" id="LV-beginner">🌱<br>初級</button>
+        <button class="lang-sel-btn" data-level="intermediate" id="LV-intermediate">📘<br>中級</button>
+        <button class="lang-sel-btn" data-level="advanced" id="LV-advanced">🔥<br>上級</button>
+      </div>
+      <div id="LV-hint" style="font-size:10px;color:var(--tx2);margin-bottom:12px;line-height:1.6;padding:7px 10px;background:var(--sf);border-radius:9px"></div>
       <div class="lbl">テキストを貼り付け</div>
       <textarea class="inp ta" id="IN-ai-text" style="height:150px" placeholder="テキストを貼り付けてください。AIが重要単語を自動抽出・翻訳します。&#10;&#10;例 (独): Das Haus ist sehr schön und die Schule liegt in der Nähe...&#10;例 (英): The enigmatic professor was known for his perspicacious observations..."></textarea>
       <div class="hint">✨ AIが重要単語を抽出し日本語訳を付与します。APIキーなしでもオフライン抽出が使えます。</div>
@@ -512,7 +520,7 @@ function homeListsRender(){
 }
 
 /* ADD */
-var addMode='paste', prevWords=[], selLang='en';
+var addMode='paste', prevWords=[], selLang='en', selLevel='all';
 
 function segSwitch(mode){
   addMode=mode;
@@ -523,6 +531,7 @@ function segSwitch(mode){
 function setLang(lang){
   selLang=lang;
   document.querySelectorAll('.lang-sel-btn').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-lang')===lang);});
+  updateLevelHint();
   /* プレースホルダー更新 */
   var ph={en:'例:\nabandon\nabsolute,絶対的な',de:'例:\nHaus\nSchule,学校\narbeiten\nschön,美しい',fr:'例:\nmaison\nécole,学校\ntravail,仕事',es:'例:\ncasa\nescuela,学校\ntrabajo,仕事',it:'例:\ncasa\nscuola,学校\nlavoro,仕事'};
   var ta=el('IN-paste-text');if(ta)ta.placeholder=ph[lang]||ph.en;
@@ -592,7 +601,59 @@ function xlsxRead(file){
   document.head.appendChild(s);
 }
 
-function aiExtract(){
+/* 言語×レベル別の検定基準 */
+var LEVEL_DEF={
+  en:{
+    all:  {hint:'レベル区別なし — 学習価値のある単語を幅広く抽出',cond:'基本的すぎる単語（冠詞・前置詞・be動詞など）は除き、学習価値のある単語'},
+    beginner:{hint:'初級 — 英検5級・4級・3級レベルの単語',cond:'英検3〜5級レベル（中学英語相当）の基本的な単語。日常生活の簡単な表現'},
+    intermediate:{hint:'中級 — 英検準2級・2級レベルの単語',cond:'英検準2級・2級レベル（高校英語相当）の単語。日常・社会的な話題に使われる語彙'},
+    advanced:{hint:'上級 — 英検準1級・1級以上レベルの単語',cond:'英検準1級・1級以上レベルの高度な単語。学術・専門・難解な語彙'}
+  },
+  de:{
+    all:  {hint:'レベル区別なし — 学習価値のある単語を幅広く抽出',cond:'基本的すぎる単語（冠詞・前置詞・助動詞など）は除き、学習価値のある単語'},
+    beginner:{hint:'初級 — 独検5級・4級・3級レベルの単語',cond:'独検3〜5級レベルの基本的なドイツ語単語。日常生活の簡単な表現'},
+    intermediate:{hint:'中級 — 独検2級レベルの単語',cond:'独検2級レベルのドイツ語単語。社会・文化・仕事などのテーマに使われる語彙'},
+    advanced:{hint:'上級 — 独検1級以上レベルの単語',cond:'独検1級以上レベルの高度なドイツ語単語。学術・専門・文学的な語彙'}
+  },
+  fr:{
+    all:  {hint:'レベル区別なし — 学習価値のある単語を幅広く抽出',cond:'基本的すぎる単語（冠詞・前置詞・être/avoirなど）は除き、学習価値のある単語'},
+    beginner:{hint:'初級 — 仏検5級・4級・3級レベルの単語',cond:'仏検3〜5級レベルの基本的なフランス語単語。日常生活の簡単な表現'},
+    intermediate:{hint:'中級 — 仏検2級レベルの単語',cond:'仏検2級レベルのフランス語単語。社会・文化・時事などに使われる語彙'},
+    advanced:{hint:'上級 — 仏検1級以上レベルの単語',cond:'仏検1級以上レベルの高度なフランス語単語。学術・文学・専門的な語彙'}
+  },
+  es:{
+    all:  {hint:'レベル区別なし — 学習価値のある単語を幅広く抽出',cond:'基本的すぎる単語（冠詞・前置詞・ser/estarなど）は除き、学習価値のある単語'},
+    beginner:{hint:'初級 — スペイン語検定6級・5級・4級レベルの単語',cond:'スペイン語検定4〜6級レベルの基本的な単語。日常生活の簡単な表現'},
+    intermediate:{hint:'中級 — スペイン語検定3級・2級レベルの単語',cond:'スペイン語検定2〜3級レベルの単語。社会・文化・仕事などに使われる語彙'},
+    advanced:{hint:'上級 — スペイン語検定1級以上レベルの単語',cond:'スペイン語検定1級以上レベルの高度な単語。学術・専門・文学的な語彙'}
+  },
+  it:{
+    all:  {hint:'レベル区別なし — 学習価値のある単語を幅広く抽出',cond:'基本的すぎる単語（冠詞・前置詞・essere/avereなど）は除き、学習価値のある単語'},
+    beginner:{hint:'初級 — イタリア語検定（伊検）5級・4級・3級レベルの単語',cond:'イタリア語検定3〜5級レベルの基本的な単語。日常生活の簡単な表現'},
+    intermediate:{hint:'中級 — イタリア語検定2級レベルの単語',cond:'イタリア語検定2級レベルの単語。社会・文化・仕事などに使われる語彙'},
+    advanced:{hint:'上級 — イタリア語検定1級以上レベルの単語',cond:'イタリア語検定1級以上レベルの高度な単語。学術・専門・文学的な語彙'}
+  }
+};
+
+function getLevelDef(lang,level){
+  var ld=LEVEL_DEF[lang]||LEVEL_DEF.en;
+  return ld[level]||ld.all;
+}
+
+function setLevel(level){
+  selLevel=level;
+  document.querySelectorAll('[data-level]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-level')===level);});
+  updateLevelHint();
+}
+
+function updateLevelHint(){
+  var h=el('LV-hint');
+  if(!h)return;
+  var def=getLevelDef(selLang,selLevel);
+  h.textContent=def.hint;
+}
+
+function setLang(lang){
   var txt=el('IN-ai-text').value.trim();
   if(!txt||txt.length<20){toast('もう少し長いテキストを入力してください');return;}
   var ni=el('IN-ai-name');if(ni&&!ni.value)ni.value=(LANGS[selLang]?LANGS[selLang].name:'')+' AI抽出';
@@ -614,10 +675,14 @@ function langName(lang){return LANGS[lang]?LANGS[lang].name:'英語';}
 
 function aiExtractAPI(txt){
   var ln=langName(selLang);
+  var def=getLevelDef(selLang,selLevel);
+  var levelLabel={all:'',beginner:'初級_',intermediate:'中級_',advanced:'上級_'};
+  var ni=el('IN-ai-name');
+  if(ni&&!ni.value)ni.value=(LANGS[selLang]?LANGS[selLang].name:'')+'_'+(levelLabel[selLevel]||'')+'AI抽出';
   loading('AIが単語を抽出中...');
   apiCall({
     model:'claude-haiku-4-5-20251001',max_tokens:2048,
-    messages:[{role:'user',content:'以下の'+ln+'テキストから学習価値のある単語を20〜30個抽出し、日本語訳をつけてください。基本的すぎる単語は除いてください。JSONのみで返してください: {"words":[{"word":"Haus","meaning":"家"},...]}\\n\\nテキスト:\\n'+txt.slice(0,3000)}]
+    messages:[{role:'user',content:'以下の'+ln+'テキストから「'+def.cond+'」を20〜30個抽出し、日本語訳をつけてください。JSONのみで返してください: {"words":[{"word":"Haus","meaning":"家"},...]}\\n\\nテキスト:\\n'+txt.slice(0,3000)}]
   },function(d){
     loaded();
     try{var m=d.content[0].text.match(/\{[\s\S]*\}/);if(!m)throw 0;prvShow(JSON.parse(m[0]).words||[]);}
@@ -876,6 +941,11 @@ function bind(){
   el('SG-file').addEventListener('click',function(){segSwitch('file');});
   el('SG-ai').addEventListener('click',function(){segSwitch('ai');});
 
+  /* レベル選択ボタン */
+  document.querySelectorAll('[data-level]').forEach(function(b){
+    b.addEventListener('click',function(){setLevel(this.getAttribute('data-level'));});
+  });
+
   /* 言語選択ボタン */
   document.querySelectorAll('.lang-sel-btn').forEach(function(b){
     b.addEventListener('click',function(){setLang(this.getAttribute('data-lang'));});
@@ -952,7 +1022,7 @@ function loadSample(){
   save();
 }
 
-window.onload=function(){bind();loadSample();homeRefresh();};
+window.onload=function(){bind();loadSample();homeRefresh();updateLevelHint();};
 </script>
 </body>
 </html>
