@@ -532,7 +532,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         </div>
       </div>
       <div class="set-row" style="cursor:default">
-        <span style="font-size:11px;color:var(--tx2);line-height:1.6">外国語読み上げ → 1.5秒後に和訳表示・読み上げ → 残り時間後に次のカードへ。<br>自動再生オンにすると予習画面を開いた瞬間から自動で始まります。</span>
+        <span style="font-size:11px;color:var(--tx2);line-height:1.6">外国語読み上げ完了 → 0.8秒後に和訳表示・読み上げ → <b>日本語読み上げ完了後</b>に設定秒数待って次のカードへ。<br>自動再生オンにすると予習画面を開いた瞬間から自動で始まります。</span>
       </div>
     </div>
     <div class="set-sec">データ</div>
@@ -1200,6 +1200,20 @@ function flashStart(words, quizMode, quizLid){
   }
 }
 
+function speakWithCb(text, lang, cb){
+  if(!window.speechSynthesis){setTimeout(cb,0);return;}
+  window.speechSynthesis.cancel();
+  var u=new SpeechSynthesisUtterance(text);
+  u.lang=LANG_VOICE[lang||'en']||'en-US';
+  u.rate=0.9;
+  u.onend=cb; u.onerror=cb;
+  setTimeout(function(){window.speechSynthesis.speak(u);},100);
+}
+
+function speakJa(text){
+  speakWithCb(text,'ja',function(){});
+}
+
 function flRender(){
   var w=FL.words[FL.i];
   if(!w)return;
@@ -1208,29 +1222,38 @@ function flRender(){
   el('FL-cnt').textContent=cur+'/'+tot;
   var l=LANGS[w.lang||'en'];
   el('FL-lang').textContent=l?l.flag+' '+l.name:'';
-  /* カードアニメーション */
   var card=el('FL-card');
   card.classList.add('flip');
   setTimeout(function(){
     el('FL-word').textContent=w.word;
     el('FL-meaning').textContent='';
     card.classList.remove('flip');
-    /* 外国語を読み上げ */
-    speak(w.word, w.lang||'en');
-    /* 1.8秒後に和訳を表示＋読み上げ */
-    setTimeout(function(){
-      el('FL-meaning').textContent=w.meaning||'';
-      if(w.meaning) speakJa(w.meaning);
-    }, 1800);
-  }, 200);
-}
-
-function speakJa(text){
-  if(!window.speechSynthesis)return;
-  window.speechSynthesis.cancel();
-  var u=new SpeechSynthesisUtterance(text);
-  u.lang='ja-JP'; u.rate=0.9;
-  setTimeout(function(){window.speechSynthesis.speak(u);},100);
+    /* ① 外国語を読み上げ → 完了後に和訳へ */
+    speakWithCb(w.word, w.lang||'en', function(){
+      setTimeout(function(){
+        el('FL-meaning').textContent=w.meaning||'';
+        if(w.meaning){
+          /* ② 日本語を読み上げ → 完了後に設定間隔だけ待って次へ */
+          speakWithCb(w.meaning, 'ja', function(){
+            if(!FL.playing)return;
+            FL.timer=setTimeout(function(){
+              if(!FL.playing)return;
+              if(FL.i<FL.words.length-1){FL.i++;flRender();}
+              else{flStopAuto();toast('予習完了！クイズで確認しよう');}
+            },(G.cfg.flashSec||2)*1000);
+          });
+        } else {
+          /* 和訳なしは外国語完了後の間隔だけ待って次へ */
+          if(!FL.playing)return;
+          FL.timer=setTimeout(function(){
+            if(!FL.playing)return;
+            if(FL.i<FL.words.length-1){FL.i++;flRender();}
+            else{flStopAuto();toast('予習完了！クイズで確認しよう');}
+          },(G.cfg.flashSec||2)*1000);
+        }
+      },800); /* 外国語読み上げ完了→和訳表示までの間 */
+    });
+  },200);
 }
 
 function flNext(){
@@ -1249,16 +1272,14 @@ function flToggleAuto(){
 function flStartAuto(){
   FL.playing=true;
   el('FL-play').textContent='⏸';
-  var interval=(G.cfg.flashSec||4)*1000;
-  FL.timer=setInterval(function(){
-    if(FL.i<FL.words.length-1){FL.i++;flRender();}
-    else{flStopAuto();toast('予習完了！クイズで確認しよう');}
-  },interval);
+  /* タイマーはflRender内で読み上げ完了後にセット */
+  flRender();
 }
 function flStopAuto(){
   FL.playing=false;
   el('FL-play').textContent='▶';
-  if(FL.timer){clearInterval(FL.timer);FL.timer=null;}
+  if(FL.timer){clearTimeout(FL.timer);FL.timer=null;}
+  if(window.speechSynthesis)window.speechSynthesis.cancel();
 }
 
 function flBindButtons(){
