@@ -209,6 +209,26 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 
 .toast { position:fixed; top:calc(var(--st) + 12px); left:16px; right:16px; background:var(--sf3); border:1px solid rgba(255,255,255,.1); border-radius:11px; padding:10px 14px; font-size:13px; font-weight:500; text-align:center; z-index:200; transform:translateY(-70px); opacity:0; transition:all .25s ease; pointer-events:none; }
 .toast.on { transform:translateY(0); opacity:1; }
+
+/* ---- FLASHCARD ---- */
+#s-flash { background:radial-gradient(ellipse at 50% 0%,rgba(92,248,252,.08) 0%,transparent 55%),var(--bg); }
+.fl-hdr { display:flex; align-items:center; padding:12px 16px; padding-top:calc(var(--st) + 12px); gap:11px; flex-shrink:0; }
+.fl-prog { flex:1; height:5px; background:var(--sf2); border-radius:3px; overflow:hidden; }
+.fl-fill { height:100%; background:linear-gradient(90deg,var(--ac3),var(--ac)); border-radius:3px; transition:width .35s ease; }
+.fl-cnt { font-size:12px; color:var(--tx2); font-weight:500; white-space:nowrap; }
+.fl-body { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; gap:16px; }
+.fl-card { width:100%; max-width:360px; background:var(--sf); border-radius:22px; padding:36px 24px; text-align:center; min-height:220px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; box-shadow:0 4px 32px rgba(0,0,0,.4); transition:transform .2s ease,opacity .2s ease; }
+.fl-card.flip { transform:scale(.93); opacity:.4; }
+.fl-lang { font-size:11px; font-weight:700; color:var(--tx2); text-transform:uppercase; letter-spacing:.08em; }
+.fl-word { font-size:32px; font-weight:700; line-height:1.2; word-break:break-word; }
+.fl-meaning { font-size:22px; color:var(--ac3); font-weight:600; }
+.fl-spk { background:rgba(92,248,252,.12); border:none; border-radius:20px; padding:6px 18px; color:var(--ac3); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; -webkit-appearance:none; }
+.fl-controls { display:flex; align-items:center; gap:18px; flex-shrink:0; padding-bottom:calc(var(--sb) + 16px); }
+.fl-ctrl-btn { width:52px; height:52px; border-radius:50%; background:var(--sf2); border:none; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--tx); -webkit-appearance:none; }
+.fl-ctrl-btn:active { background:var(--sf3); }
+.fl-play-btn { width:64px; height:64px; border-radius:50%; background:linear-gradient(135deg,var(--ac3),var(--ac)); border:none; font-size:24px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; -webkit-appearance:none; box-shadow:0 4px 16px rgba(124,92,252,.4); }
+.fl-play-btn:active { opacity:.85; }
+
 ::-webkit-scrollbar { display:none; }
 </style>
 </head>
@@ -367,6 +387,29 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
   </div>
 </div>
 
+<!-- FLASHCARD -->
+<div class="scr" id="s-flash">
+  <div class="fl-hdr">
+    <button class="btn btn-back" id="B-flash-exit">✕</button>
+    <div class="fl-prog"><div class="fl-fill" id="FL-fill" style="width:0%"></div></div>
+    <div class="fl-cnt" id="FL-cnt">1/0</div>
+  </div>
+  <div class="fl-body">
+    <div class="fl-card" id="FL-card">
+      <div class="fl-lang" id="FL-lang">英語</div>
+      <div class="fl-word" id="FL-word">word</div>
+      <div class="fl-meaning" id="FL-meaning"></div>
+      <button class="fl-spk" id="FL-spk">🔊 発音</button>
+    </div>
+  </div>
+  <div class="fl-controls">
+    <button class="fl-ctrl-btn" id="FL-prev">‹‹</button>
+    <button class="fl-play-btn" id="FL-play">▶</button>
+    <button class="fl-ctrl-btn" id="FL-next">››</button>
+  </div>
+  <button class="btn-primary" id="FL-to-quiz" style="margin:0 16px calc(var(--sb) + 16px);flex-shrink:0">⚡ このままクイズへ</button>
+</div>
+
 <!-- QUIZ -->
 <div class="scr" id="s-quiz">
   <div class="qz-hdr">
@@ -487,7 +530,7 @@ function getDue(){return G.words.filter(due);}
 function getWeak(){return G.words.filter(function(w){return w.s&&(w.s.l||0)>0;}).sort(function(a,b){return(b.s.l||0)-(a.s.l||0);});}
 
 /* NAV */
-var SCREENS=['s-home','s-add','s-list','s-quiz','s-result','s-settings'];
+var SCREENS=['s-home','s-add','s-list','s-flash','s-quiz','s-result','s-settings'];
 var TABMAP={'s-home':'T-home','s-add':'T-add','s-list':'T-list','s-settings':'T-settings'};
 function go(id){
   SCREENS.forEach(function(s){el(s).classList.remove('on');});
@@ -867,10 +910,16 @@ function listMenu(lid){
   el('modal-ct').innerHTML=
     '<div class="modal-tl">'+(l?l.flag+' ':'')+esc(lst.name)+'</div>'+
     '<div style="font-size:12px;color:var(--tx2);margin-bottom:16px">'+ws.length+'単語'+(d?' · 復習'+d+'件':'')+'</div>'+
-    '<button class="btn-primary" id="LM-quiz" style="margin-bottom:8px">⚡ このリストをクイズ</button>'+
+    '<button class="btn-primary" id="LM-flash" style="margin-bottom:8px">📖 予習してからクイズ</button>'+
+    '<button class="btn-sec" id="LM-quiz" style="margin-top:0;margin-bottom:8px">⚡ すぐクイズ</button>'+
     '<button class="btn-sec" id="LM-due" style="margin-top:0;margin-bottom:8px'+(d?'':';opacity:.4;pointer-events:none')+'">📅 復習単語のみ（'+d+'件）</button>'+
     '<button class="btn-sec" id="LM-list" style="margin-top:0">📚 単語一覧を見る</button>';
   el('modal-bg').classList.add('on');
+  el('LM-flash').addEventListener('click',function(){
+    el('modal-bg').classList.remove('on');
+    var pool=shuffle(ws.slice()).slice(0, Math.min(ws.length, parseInt(G.cfg.size)||20));
+    flashStart(pool,'list',lid);
+  });
   el('LM-quiz').addEventListener('click',function(){el('modal-bg').classList.remove('on');quizStart('list',lid);});
   el('LM-due').addEventListener('click',function(){
     if(!d)return;
@@ -928,6 +977,99 @@ function speak(text, lang){
   u.pitch=1.0;
   /* iOSはvoicesのロードが遅れるため少し待つ */
   setTimeout(function(){window.speechSynthesis.speak(u);},100);
+}
+
+/* ---------- FLASHCARD ---------- */
+var FL={words:[],i:0,playing:false,timer:null,quizPool:null,quizMode:null,quizLid:null};
+
+function flashStart(words, quizMode, quizLid){
+  if(!words||!words.length){toast('単語がありません');return;}
+  FL.words=words; FL.i=0; FL.playing=false; FL.timer=null;
+  FL.quizMode=quizMode; FL.quizLid=quizLid;
+  go('s-flash');
+  flRender();
+}
+
+function flRender(){
+  var w=FL.words[FL.i];
+  if(!w)return;
+  var tot=FL.words.length, cur=FL.i+1;
+  el('FL-fill').style.width=(cur/tot*100)+'%';
+  el('FL-cnt').textContent=cur+'/'+tot;
+  var l=LANGS[w.lang||'en'];
+  el('FL-lang').textContent=l?l.flag+' '+l.name:'';
+  /* カードアニメーション */
+  var card=el('FL-card');
+  card.classList.add('flip');
+  setTimeout(function(){
+    el('FL-word').textContent=w.word;
+    el('FL-meaning').textContent='';
+    card.classList.remove('flip');
+    /* 外国語を読み上げ */
+    speak(w.word, w.lang||'en');
+    /* 1.8秒後に和訳を表示＋読み上げ */
+    setTimeout(function(){
+      el('FL-meaning').textContent=w.meaning||'';
+      if(w.meaning) speakJa(w.meaning);
+    }, 1800);
+  }, 200);
+}
+
+function speakJa(text){
+  if(!window.speechSynthesis)return;
+  window.speechSynthesis.cancel();
+  var u=new SpeechSynthesisUtterance(text);
+  u.lang='ja-JP'; u.rate=0.9;
+  setTimeout(function(){window.speechSynthesis.speak(u);},100);
+}
+
+function flNext(){
+  flStopAuto();
+  if(FL.i<FL.words.length-1){FL.i++;flRender();}
+  else{toast('最後の単語です');}
+}
+function flPrev(){
+  flStopAuto();
+  if(FL.i>0){FL.i--;flRender();}
+}
+function flToggleAuto(){
+  if(FL.playing){flStopAuto();}
+  else{flStartAuto();}
+}
+function flStartAuto(){
+  FL.playing=true;
+  el('FL-play').textContent='⏸';
+  /* 外国語1.8秒 + 和訳1.5秒 + 間0.7秒 = 計4秒で次へ */
+  FL.timer=setInterval(function(){
+    if(FL.i<FL.words.length-1){FL.i++;flRender();}
+    else{flStopAuto();toast('予習完了！クイズで確認しよう');}
+  },4000);
+}
+function flStopAuto(){
+  FL.playing=false;
+  el('FL-play').textContent='▶';
+  if(FL.timer){clearInterval(FL.timer);FL.timer=null;}
+}
+
+function flBindButtons(){
+  el('B-flash-exit').addEventListener('click',function(){
+    flStopAuto();
+    if(window.speechSynthesis)window.speechSynthesis.cancel();
+    go('s-home');
+  });
+  el('FL-prev').addEventListener('click',flPrev);
+  el('FL-next').addEventListener('click',flNext);
+  el('FL-play').addEventListener('click',flToggleAuto);
+  el('FL-spk').addEventListener('click',function(){
+    var w=FL.words[FL.i];if(!w)return;
+    speak(w.word,w.lang||'en');
+    if(w.meaning)setTimeout(function(){speakJa(w.meaning);},1800);
+  });
+  el('FL-to-quiz').addEventListener('click',function(){
+    flStopAuto();
+    if(window.speechSynthesis)window.speechSynthesis.cancel();
+    quizStart(FL.quizMode, FL.quizLid);
+  });
 }
 
 /* QUIZ */
@@ -1035,6 +1177,7 @@ function settingsLoad(){
 
 /* BIND */
 function bind(){
+  flBindButtons();
   el('T-home').addEventListener('click',function(){go('s-home');});
   el('T-add').addEventListener('click',function(){go('s-add');});
   el('T-list').addEventListener('click',function(){go('s-list');});
