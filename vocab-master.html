@@ -378,6 +378,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     <div class="qz-card">
       <div class="qz-badge" id="QZ-badge">日本語を選べ</div>
       <div class="qz-word" id="QZ-word">word</div>
+      <button id="B-speak" style="margin-top:10px;background:rgba(124,92,252,.15);border:none;border-radius:20px;padding:6px 16px;color:var(--ac);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:none">🔊 発音</button>
     </div>
     <div class="choices" id="QZ-choices"></div>
   </div>
@@ -424,11 +425,17 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     <div class="set-group">
       <div class="set-row" style="cursor:default">
         <span class="set-lbl">📊 1セッション問題数</span>
-        <select class="sel" id="SEL-size"><option value="10">10問</option><option value="20" selected>20問</option><option value="30">30問</option><option value="50">50問</option></select>
+        <input type="number" id="SEL-size" min="1" max="200" value="20"
+          style="width:64px;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:14px;font-weight:600;padding:5px 8px;text-align:center;outline:none;-webkit-appearance:none;-webkit-user-select:text;user-select:text;">
+        <span style="font-size:13px;color:var(--tx2)">問</span>
       </div>
       <div class="set-row" id="ROW-rev">
         <span class="set-lbl">🔄 逆クイズ（日→外国語）混在</span>
         <button class="toggle" id="TG-rev"></button>
+      </div>
+      <div class="set-row" id="ROW-speak">
+        <span class="set-lbl">🔊 クイズ時に自動読み上げ</span>
+        <button class="toggle" id="TG-speak"></button>
       </div>
     </div>
     <div class="set-sec">データ</div>
@@ -461,7 +468,7 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],cfg:{size:20,rev:false,key:''},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],cfg:{size:20,rev:false,speak:true,key:''},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 function save(){sSet(G);}
 
@@ -707,15 +714,25 @@ function aiExtractAPI(txt){
     phrases:'熟語・イディオム・慣用句のみ（2語以上のフレーズ）',
     both:'単語と熟語・イディオム・慣用句の両方'
   };
+  /* 言語ごとの冠詞ルール */
+  var articleRule={
+    en:'',
+    de:'名詞には必ず定冠詞を付けてください（例: der Mann, die Frau, das Kind）。動詞は不定詞形（例: gehen, haben）、形容詞は原形で記載してください。',
+    fr:'名詞には必ず定冠詞を付けてください（例: le livre, la maison, l\'école）。動詞は不定詞形（例: aller, avoir）、形容詞は男性単数形で記載してください。',
+    es:'名詞には必ず定冠詞を付けてください（例: el libro, la casa）。動詞は不定詞形（例: ir, tener）、形容詞は男性単数形で記載してください。',
+    it:'名詞には必ず定冠詞を付けてください（例: il libro, la casa, lo studente）。動詞は不定詞形（例: andare, avere）、形容詞は男性単数形で記載してください。'
+  };
+  var articleInstr=articleRule[selLang]||'';
   var ni=el('IN-ai-name');
   if(ni&&!ni.value)ni.value=(LANGS[selLang]?LANGS[selLang].name:'')+'_'+(levelLabel[selLevel]||'')+(typeLabel[selType]||'')+'AI抽出';
   loading('AIが抽出中...');
   var prompt=
     '以下の'+ln+'テキストから、'+
     '「'+def.cond+'」に該当する'+typeCond[selType]+'を20〜30個抽出し、それぞれ日本語訳をつけてください。\n'+
+    (articleInstr?articleInstr+'\n':'')+
     '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
     '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
-    '{"words":[{"word":"give up","meaning":"諦める"},{"word":"abandon","meaning":"捨てる"}]}\n\n'+
+    '{"words":[{"word":"der Mann","meaning":"男性、男"},{"word":"gehen","meaning":"行く"}]}\n\n'+
     'テキスト:\n'+txt.slice(0,3000);
   apiCall({
     model:'claude-haiku-4-5-20251001',max_tokens:3000,
@@ -900,6 +917,19 @@ function wordDetail(wid){
 }
 function mkCard(l,v){return'<div style="background:var(--sf2);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--tx2);margin-bottom:3px">'+l+'</div><div style="font-size:14px;font-weight:600">'+v+'</div></div>';}
 
+/* ---------- SPEECH ---------- */
+var LANG_VOICE={en:'en-US',de:'de-DE',fr:'fr-FR',es:'es-ES',it:'it-IT'};
+function speak(text, lang){
+  if(!window.speechSynthesis)return;
+  window.speechSynthesis.cancel();
+  var u=new SpeechSynthesisUtterance(text);
+  u.lang=LANG_VOICE[lang||'en']||'en-US';
+  u.rate=0.9;
+  u.pitch=1.0;
+  /* iOSはvoicesのロードが遅れるため少し待つ */
+  setTimeout(function(){window.speechSynthesis.speak(u);},100);
+}
+
 /* QUIZ */
 var Q={words:[],q:[],i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:''};
 function quizStart(mode,lid){
@@ -923,10 +953,24 @@ function qRender(){
   var rev=G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
   var l=LANGS[q.lang||'en'];
   el('QZ-badge').textContent=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
-  el('QZ-word').textContent=rev?(q.meaning||q.word):q.word;
+  var displayWord=rev?(q.meaning||q.word):q.word;
+  el('QZ-word').textContent=displayWord;
   Q.done=false;
+
+  /* 発音ボタン — 外国語が表示されているときだけ表示 */
+  var spk=el('B-speak');
+  var isForLang=!rev;
+  if(isForLang&&window.speechSynthesis){
+    spk.style.display='inline-block';
+    spk.onclick=function(){speak(q.word, q.lang||'en');};
+    /* 自動読み上げがオンのとき */
+    if(G.cfg.speak!==false){speak(q.word, q.lang||'en');}
+  } else {
+    spk.style.display='none';
+    if(window.speechSynthesis)window.speechSynthesis.cancel();
+  }
+
   var ca=rev?q.word:(q.meaning||'（訳なし）');
-  /* 同じ言語の単語から選択肢を作る（可能な限り） */
   var sameLang=G.words.filter(function(w){return w.id!==q.id&&(w.lang||'en')===(q.lang||'en');});
   var others=sameLang.length>=3?sameLang:G.words.filter(function(w){return w.id!==q.id;});
   var dist=shuffle(others).slice(0,3).map(function(w){return rev?w.word:(w.meaning||w.word);});
@@ -985,6 +1029,7 @@ function settingsLoad(){
   el('IN-apikey').value=G.cfg.key||'';
   el('SEL-size').value=G.cfg.size||20;
   el('TG-rev').classList.toggle('on',!!G.cfg.rev);
+  el('TG-speak').classList.toggle('on',G.cfg.speak!==false);
   updateKeyStatus();
 }
 
@@ -1044,7 +1089,10 @@ function bind(){
   el('SEL-list').addEventListener('change',listRender);
   el('IN-search').addEventListener('input',listRender);
 
-  el('B-quiz-exit').addEventListener('click',function(){el('FB').classList.remove('on');go('s-home');});
+  el('B-quiz-exit').addEventListener('click',function(){
+    if(window.speechSynthesis)window.speechSynthesis.cancel();
+    el('FB').classList.remove('on');go('s-home');
+  });
   el('B-next').addEventListener('click',qNext);
   el('B-res-home').addEventListener('click',function(){go('s-home');});
   el('B-res-weak').addEventListener('click',function(){quizStart('weak');});
@@ -1058,9 +1106,16 @@ function bind(){
     updateKeyStatus();
     toast('✅ APIキーを保存しました');
   });
-  el('SEL-size').addEventListener('change',function(){G.cfg.size=parseInt(this.value);save();});
+  el('SEL-size').addEventListener('input',function(){
+    var v=parseInt(this.value)||20;
+    if(v<1)v=1;
+    if(v>200)v=200;
+    G.cfg.size=v;save();
+  });
   el('TG-rev').addEventListener('click',function(){G.cfg.rev=!G.cfg.rev;this.classList.toggle('on',G.cfg.rev);save();});
   el('ROW-rev').addEventListener('click',function(e){if(e.target!==el('TG-rev'))el('TG-rev').click();});
+  el('TG-speak').addEventListener('click',function(){G.cfg.speak=!this.classList.contains('on');this.classList.toggle('on',G.cfg.speak);save();});
+  el('ROW-speak').addEventListener('click',function(e){if(e.target!==el('TG-speak'))el('TG-speak').click();});
 
   el('B-export').addEventListener('click',function(){
     var b=new Blob([JSON.stringify(G,null,2)],{type:'application/json'});
