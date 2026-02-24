@@ -70,6 +70,14 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 
 .list-card { background:var(--sf); border-radius:var(--r); padding:13px; margin-bottom:7px; display:flex; align-items:center; gap:11px; border:none; cursor:pointer; width:100%; text-align:left; -webkit-appearance:none; font-family:inherit; }
 .list-card:active { background:var(--sf2); }
+
+/* スワイプ削除 */
+.swipe-wrap { position:relative; overflow:hidden; border-radius:var(--r); margin-bottom:7px; }
+.swipe-del-bg { position:absolute; right:0; top:0; bottom:0; width:90px; background:var(--rd); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:2px; color:#fff; font-size:11px; font-weight:700; border-radius:var(--r); }
+.swipe-del-bg span { font-size:20px; }
+.swipe-inner { position:relative; transition:transform .2s ease; touch-action:pan-y; will-change:transform; }
+.swipe-inner.swiped { transform:translateX(-90px); }
+.swipe-inner .list-card { margin-bottom:0; border-radius:var(--r); }
 .list-ic { width:40px; height:40px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
 .list-inf { flex:1; min-width:0; }
 .list-name { font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -634,14 +642,89 @@ function homeListsRender(){
     var ws=G.words.filter(function(w){return w.lid===lst.id;});
     var d=ws.filter(due).length;
     var l=LANGS[lst.lang||'en'];
-    h+='<button class="list-card" data-lid="'+esc(lst.id)+'">'+
-      '<div class="list-ic" style="background:'+lst.clr+'20">'+(l?l.flag:'📗')+'</div>'+
-      '<div class="list-inf"><div class="list-name">'+esc(lst.name)+langBadge(lst.lang)+'</div>'+
-      '<div class="list-meta">'+ws.length+'単語'+(d?' · 復習'+d+'件':'')+'</div></div>'+
-      (d?'<div class="list-badge">'+d+'</div>':'')+'</button>';
+    h+='<div class="swipe-wrap" data-lid="'+esc(lst.id)+'">'+
+      '<div class="swipe-del-bg"><span>🗑️</span>削除</div>'+
+      '<div class="swipe-inner">'+
+        '<button class="list-card" data-lid="'+esc(lst.id)+'">'+
+          '<div class="list-ic" style="background:'+lst.clr+'20">'+(l?l.flag:'📗')+'</div>'+
+          '<div class="list-inf"><div class="list-name">'+esc(lst.name)+langBadge(lst.lang)+'</div>'+
+          '<div class="list-meta">'+ws.length+'単語'+(d?' · 復習'+d+'件':'')+'</div></div>'+
+          (d?'<div class="list-badge">'+d+'</div>':'')+'</button>'+
+      '</div>'+
+    '</div>';
   });
   c.innerHTML=h;
-  c.querySelectorAll('.list-card').forEach(function(b){b.addEventListener('click',function(){listMenu(this.getAttribute('data-lid'));});});
+
+  /* タップでlistMenu */
+  c.querySelectorAll('.list-card').forEach(function(b){
+    b.addEventListener('click',function(){
+      var inner=this.closest('.swipe-inner');
+      if(inner&&inner.classList.contains('swiped')){
+        /* スワイプ中はタップを無効化してリセット */
+        inner.classList.remove('swiped');return;
+      }
+      listMenu(this.getAttribute('data-lid'));
+    });
+  });
+
+  /* スワイプ削除 */
+  c.querySelectorAll('.swipe-wrap').forEach(function(wrap){
+    var inner=wrap.querySelector('.swipe-inner');
+    var startX,startY,dx,isDragging=false,isSwipe=false;
+
+    inner.addEventListener('touchstart',function(e){
+      startX=e.touches[0].clientX;
+      startY=e.touches[0].clientY;
+      dx=0; isDragging=true; isSwipe=false;
+      inner.style.transition='none';
+    },{passive:true});
+
+    inner.addEventListener('touchmove',function(e){
+      if(!isDragging)return;
+      dx=e.touches[0].clientX-startX;
+      var dy=e.touches[0].clientY-startY;
+      if(!isSwipe&&Math.abs(dy)>Math.abs(dx)){isDragging=false;return;}
+      if(Math.abs(dx)>8)isSwipe=true;
+      if(!isSwipe)return;
+      var already=inner.classList.contains('swiped')?-90:0;
+      var tx=Math.min(0,Math.max(-90,already+dx));
+      inner.style.transform='translateX('+tx+'px)';
+    },{passive:true});
+
+    inner.addEventListener('touchend',function(){
+      if(!isDragging){inner.style.transition='';return;}
+      isDragging=false;
+      inner.style.transition='transform .2s ease';
+      var already=inner.classList.contains('swiped')?-90:0;
+      var total=already+dx;
+      if(total<-40){
+        /* 削除ゾーン表示 */
+        inner.style.transform='translateX(-90px)';
+        inner.classList.add('swiped');
+      } else {
+        inner.style.transform='';
+        inner.classList.remove('swiped');
+      }
+    });
+  });
+
+  /* 削除ボタン（赤いゾーンをタップ） */
+  c.querySelectorAll('.swipe-del-bg').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var lid=this.closest('.swipe-wrap').getAttribute('data-lid');
+      deleteList(lid);
+    });
+  });
+}
+
+function deleteList(lid){
+  var lst=G.lists.find(function(l){return l.id===lid;});
+  if(!lst)return;
+  var cnt=G.words.filter(function(w){return w.lid===lid;}).length;
+  if(!confirm('「'+lst.name+'」（'+cnt+'単語）を削除しますか？\nこの操作は取り消せません。'))return;
+  G.lists=G.lists.filter(function(l){return l.id!==lid;});
+  G.words=G.words.filter(function(w){return w.lid!==lid;});
+  save();homeRefresh();toast('🗑️ 削除しました');
 }
 
 /* ADD */
