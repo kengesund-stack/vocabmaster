@@ -519,8 +519,12 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     </div>
     <div class="set-sec">予習設定</div>
     <div class="set-group">
+      <div class="set-row" id="ROW-flashauto">
+        <span class="set-lbl">▶️ 予習カードを自動再生</span>
+        <button class="toggle" id="TG-flashauto"></button>
+      </div>
       <div class="set-row" style="cursor:default">
-        <span class="set-lbl">📖 予習カード自動切替間隔</span>
+        <span class="set-lbl">⏱️ カード切替間隔</span>
         <div style="display:flex;align-items:center;gap:6px">
           <input type="number" id="IN-flash-sec" min="2" max="15" step="0.5" value="4"
             style="width:58px;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:14px;font-weight:600;padding:5px 8px;text-align:center;outline:none;-webkit-appearance:none;-webkit-user-select:text;user-select:text;">
@@ -528,7 +532,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         </div>
       </div>
       <div class="set-row" style="cursor:default">
-        <span style="font-size:11px;color:var(--tx2);line-height:1.5">外国語読み上げ → 1.5秒後に和訳表示・読み上げ → 残り時間後に次のカードへ</span>
+        <span style="font-size:11px;color:var(--tx2);line-height:1.6">外国語読み上げ → 1.5秒後に和訳表示・読み上げ → 残り時間後に次のカードへ。<br>自動再生オンにすると予習画面を開いた瞬間から自動で始まります。</span>
       </div>
     </div>
     <div class="set-sec">データ</div>
@@ -561,7 +565,7 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],cfg:{size:20,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:4,key:''},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],cfg:{size:20,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:4,flashAuto:false,key:''},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 function save(){sSet(G);}
 
@@ -1187,6 +1191,10 @@ function flashStart(words, quizMode, quizLid){
   FL.quizMode=quizMode; FL.quizLid=quizLid;
   go('s-flash');
   flRender();
+  /* 設定で自動再生がオンなら即スタート */
+  if(G.cfg.flashAuto){
+    setTimeout(flStartAuto, 500);
+  }
 }
 
 function flRender(){
@@ -1393,6 +1401,7 @@ function settingsLoad(){
   el('TG-speak').classList.toggle('on',G.cfg.speak!==false);
   el('TG-autonext').classList.toggle('on',!!G.cfg.autonext);
   el('IN-autonext-sec').value=G.cfg.autonextSec||1.5;
+  el('TG-flashauto').classList.toggle('on',!!G.cfg.flashAuto);
   el('IN-flash-sec').value=G.cfg.flashSec||4;
   updateKeyStatus();
 }
@@ -1504,6 +1513,8 @@ function bind(){
     if(v<2)v=2; if(v>15)v=15;
     G.cfg.flashSec=v; save();
   });
+  el('TG-flashauto').addEventListener('click',function(){G.cfg.flashAuto=!this.classList.contains('on');this.classList.toggle('on',G.cfg.flashAuto);save();});
+  el('ROW-flashauto').addEventListener('click',function(e){if(e.target!==el('TG-flashauto'))el('TG-flashauto').click();});
 
   el('B-export').addEventListener('click',function(){
     var b=new Blob([JSON.stringify(G,null,2)],{type:'application/json'});
