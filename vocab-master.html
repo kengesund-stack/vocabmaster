@@ -9,514 +9,215 @@
 <title>VocabMaster</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
-
 :root {
-  --bg: #0a0a0f;
-  --sf: #12121a;
-  --sf2: #1a1a26;
-  --sf3: #22222f;
-  --ac: #7c5cfc;
-  --ac2: #fc5c7d;
-  --ac3: #5cf8fc;
-  --tx: #f0f0f8;
-  --tx2: #9090aa;
-  --gn: #4cff91;
-  --rd: #ff4c6a;
-  --or: #ff9c4c;
-  --gd: #ffd700;
-  --r: 14px;
-  --st: env(safe-area-inset-top, 0px);
-  --sb: env(safe-area-inset-bottom, 0px);
+  --bg:#0a0a0f; --sf:#12121a; --sf2:#1a1a26; --sf3:#22222f;
+  --ac:#7c5cfc; --ac2:#fc5c7d; --ac3:#5cf8fc;
+  --tx:#f0f0f8; --tx2:#9090aa;
+  --gn:#4cff91; --rd:#ff4c6a; --or:#ff9c4c; --gd:#ffd700;
+  --r:14px;
+  --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
 }
+html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--tx); font-family:-apple-system,Helvetica,Arial,sans-serif; -webkit-user-select:none; user-select:none; }
+#app { width:100%; height:100%; overflow:hidden; position:relative; }
 
-html, body {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: var(--bg);
-  color: var(--tx);
-  font-family: -apple-system, Helvetica, Arial, sans-serif;
-  -webkit-user-select: none;
-  user-select: none;
-}
+.scr { display:none; position:absolute; top:0; left:0; width:100%; height:100%; flex-direction:column; background:var(--bg); }
+.scr.on { display:flex; }
 
-#app {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  position: relative;
-}
+.scroll { flex:1; overflow-y:scroll; overflow-x:hidden; -webkit-overflow-scrolling:touch; padding:14px 18px; }
 
-/* ---- SCREENS ---- */
-.scr {
-  display: none;
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  flex-direction: column;
-  background: var(--bg);
-}
-.scr.on { display: flex; }
+.tabbar { display:flex; background:var(--sf); border-top:1px solid rgba(255,255,255,.07); padding-bottom:var(--sb); flex-shrink:0; }
+.tab { flex:1; display:flex; flex-direction:column; align-items:center; padding:8px 0; background:none; border:none; color:var(--tx2); cursor:pointer; font-family:inherit; }
+.tab.on { color:var(--ac); }
+.tab-ic { font-size:20px; }
+.tab-lb { font-size:10px; margin-top:2px; }
 
-/* ---- SCROLL AREA ---- */
-.scroll {
-  flex: 1;
-  overflow-y: scroll;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  padding: 14px 18px;
-}
+.hdr { display:flex; align-items:center; padding:12px 16px; padding-top:calc(var(--st) + 12px); gap:10px; background:var(--bg); border-bottom:1px solid rgba(255,255,255,.06); flex-shrink:0; }
+.hdr-title { font-size:16px; font-weight:600; flex:1; }
 
-/* ---- TAB BAR ---- */
-.tabbar {
-  display: flex;
-  background: var(--sf);
-  border-top: 1px solid rgba(255,255,255,0.07);
-  padding-bottom: var(--sb);
-  flex-shrink: 0;
-}
-.tab {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 0;
-  background: none;
-  border: none;
-  color: var(--tx2);
-  cursor: pointer;
-  font-family: inherit;
-}
-.tab.on { color: var(--ac); }
-.tab-ic { font-size: 20px; }
-.tab-lb { font-size: 10px; margin-top: 2px; }
+#s-home { background:radial-gradient(ellipse at 20% 10%,rgba(124,92,252,.15) 0%,transparent 55%),radial-gradient(ellipse at 80% 90%,rgba(252,92,125,.1) 0%,transparent 55%),var(--bg); }
+.home-top { display:flex; justify-content:space-between; align-items:center; padding:12px 18px 0; padding-top:calc(var(--st) + 12px); flex-shrink:0; }
+.logo { font-size:24px; font-weight:900; letter-spacing:-1px; background:linear-gradient(135deg,var(--ac),var(--ac2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
 
-/* ---- HEADER ---- */
-.hdr {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  padding-top: calc(var(--st) + 12px);
-  gap: 10px;
-  background: var(--bg);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  flex-shrink: 0;
-}
-.hdr-title { font-size: 16px; font-weight: 600; flex: 1; }
+.btn { display:flex; align-items:center; justify-content:center; background:none; border:none; cursor:pointer; font-family:inherit; -webkit-appearance:none; }
+.btn-ic { width:38px; height:38px; border-radius:10px; background:var(--sf2); font-size:17px; color:var(--tx2); }
+.btn-back { width:34px; height:34px; border-radius:9px; background:var(--sf2); font-size:17px; color:var(--tx); flex-shrink:0; }
+.btn-primary { width:100%; padding:14px; background:linear-gradient(135deg,var(--ac),var(--ac2)); border-radius:var(--r); color:#fff; font-size:15px; font-weight:600; -webkit-appearance:none; border:none; cursor:pointer; font-family:inherit; }
+.btn-primary:active { opacity:.8; }
+.btn-sec { width:100%; padding:13px; background:var(--sf2); border:1px solid rgba(255,255,255,.1); border-radius:var(--r); color:var(--tx); font-size:14px; font-weight:500; margin-top:8px; -webkit-appearance:none; border-radius:var(--r); cursor:pointer; font-family:inherit; }
+.btn-sec:active { background:var(--sf3); }
+.btn-text { background:none; border:none; color:var(--ac); font-size:13px; font-weight:500; cursor:pointer; -webkit-appearance:none; font-family:inherit; }
 
-/* ---- HOME ---- */
-#s-home {
-  background:
-    radial-gradient(ellipse at 20% 10%, rgba(124,92,252,.15) 0%, transparent 55%),
-    radial-gradient(ellipse at 80% 90%, rgba(252,92,125,.1) 0%, transparent 55%),
-    var(--bg);
-}
-.home-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 18px 0;
-  padding-top: calc(var(--st) + 12px);
-  flex-shrink: 0;
-}
-.logo {
-  font-size: 24px;
-  font-weight: 900;
-  letter-spacing: -1px;
-  background: linear-gradient(135deg, var(--ac), var(--ac2));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+.stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:14px; }
+.stat { background:var(--sf); border-radius:var(--r); padding:11px; text-align:center; }
+.stat-n { font-size:22px; font-weight:700; }
+.stat-l { font-size:10px; color:var(--tx2); margin-top:2px; }
 
-/* ---- BUTTONS ---- */
-.btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  -webkit-appearance: none;
-}
-.btn-ic {
-  width: 38px; height: 38px;
-  border-radius: 10px;
-  background: var(--sf2);
-  font-size: 17px;
-  color: var(--tx2);
-}
-.btn-back {
-  width: 34px; height: 34px;
-  border-radius: 9px;
-  background: var(--sf2);
-  font-size: 17px;
-  color: var(--tx);
-  flex-shrink: 0;
-}
-.btn-primary {
-  width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, var(--ac), var(--ac2));
-  border-radius: var(--r);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-  -webkit-appearance: none;
-}
-.btn-primary:active { opacity: .8; }
-.btn-sec {
-  width: 100%;
-  padding: 13px;
-  background: var(--sf2);
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: var(--r);
-  color: var(--tx);
-  font-size: 14px;
-  font-weight: 500;
-  margin-top: 8px;
-  -webkit-appearance: none;
-}
-.btn-sec:active { background: var(--sf3); }
-.btn-text {
-  background: none;
-  border: none;
-  color: var(--ac);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  -webkit-appearance: none;
-}
+.due-btn { width:100%; background:linear-gradient(135deg,var(--ac),var(--ac2)); border-radius:var(--r); padding:15px 17px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; border:none; cursor:pointer; -webkit-appearance:none; text-align:left; font-family:inherit; }
+.due-btn:active { opacity:.85; }
+.due-txt h3 { font-size:16px; font-weight:600; color:#fff; }
+.due-txt p { font-size:11px; color:rgba(255,255,255,.75); margin-top:2px; }
+.due-n { font-size:36px; font-weight:700; color:#fff; line-height:1; }
 
-/* ---- STATS ---- */
-.stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-.stat { background: var(--sf); border-radius: var(--r); padding: 11px; text-align: center; }
-.stat-n { font-size: 22px; font-weight: 700; }
-.stat-l { font-size: 10px; color: var(--tx2); margin-top: 2px; }
+.act-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:18px; }
+.act-card { background:var(--sf); border-radius:var(--r); padding:14px; border:none; cursor:pointer; text-align:left; width:100%; -webkit-appearance:none; font-family:inherit; }
+.act-card:active { background:var(--sf2); }
+.act-ic { font-size:24px; margin-bottom:5px; display:block; }
+.act-title { font-size:13px; font-weight:600; color:var(--tx); }
+.act-sub { font-size:11px; color:var(--tx2); margin-top:2px; }
 
-/* ---- DUE BANNER ---- */
-.due-btn {
-  width: 100%;
-  background: linear-gradient(135deg, var(--ac), var(--ac2));
-  border-radius: var(--r);
-  padding: 15px 17px;
-  margin-bottom: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border: none;
-  cursor: pointer;
-  -webkit-appearance: none;
-  text-align: left;
-}
-.due-btn:active { opacity: .85; }
-.due-txt h3 { font-size: 16px; font-weight: 600; color: #fff; }
-.due-txt p { font-size: 11px; color: rgba(255,255,255,.75); margin-top: 2px; }
-.due-n { font-size: 36px; font-weight: 700; color: #fff; line-height: 1; }
+.sec-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:9px; }
+.sec-title { font-size:12px; font-weight:600; color:var(--tx2); text-transform:uppercase; letter-spacing:.08em; }
 
-/* ---- ACTION GRID ---- */
-.act-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 18px; }
-.act-card {
-  background: var(--sf);
-  border-radius: var(--r);
-  padding: 14px;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  width: 100%;
-  -webkit-appearance: none;
-}
-.act-card:active { background: var(--sf2); }
-.act-ic { font-size: 24px; margin-bottom: 5px; display: block; }
-.act-title { font-size: 13px; font-weight: 600; color: var(--tx); }
-.act-sub { font-size: 11px; color: var(--tx2); margin-top: 2px; }
+.list-card { background:var(--sf); border-radius:var(--r); padding:13px; margin-bottom:7px; display:flex; align-items:center; gap:11px; border:none; cursor:pointer; width:100%; text-align:left; -webkit-appearance:none; font-family:inherit; }
+.list-card:active { background:var(--sf2); }
+.list-ic { width:40px; height:40px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+.list-inf { flex:1; min-width:0; }
+.list-name { font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.list-meta { font-size:11px; color:var(--tx2); margin-top:2px; }
+.list-badge { background:var(--ac); color:#fff; font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; }
 
-/* ---- LIST CARDS ---- */
-.sec-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; }
-.sec-title { font-size: 12px; font-weight: 600; color: var(--tx2); text-transform: uppercase; letter-spacing: .08em; }
+/* 言語バッジ */
+.lang-badge { display:inline-block; font-size:10px; font-weight:700; padding:1px 6px; border-radius:5px; margin-left:5px; vertical-align:middle; }
+.lang-en { background:rgba(76,255,145,.15); color:var(--gn); }
+.lang-de { background:rgba(255,215,0,.15); color:var(--gd); }
+.lang-fr { background:rgba(92,248,252,.15); color:var(--ac3); }
+.lang-es { background:rgba(255,156,76,.15); color:var(--or); }
+.lang-it { background:rgba(252,92,125,.15); color:var(--ac2); }
 
-.list-card {
-  background: var(--sf);
-  border-radius: var(--r);
-  padding: 13px;
-  margin-bottom: 7px;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  border: none;
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
-  -webkit-appearance: none;
-}
-.list-card:active { background: var(--sf2); }
-.list-ic { width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
-.list-inf { flex: 1; min-width: 0; }
-.list-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.list-meta { font-size: 11px; color: var(--tx2); margin-top: 2px; }
-.list-badge { background: var(--ac); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+.seg { display:flex; background:var(--sf); border-radius:11px; padding:3px; margin-bottom:16px; }
+.seg-btn { flex:1; padding:8px 3px; border:none; border-radius:8px; background:transparent; color:var(--tx2); font-size:12px; font-weight:500; cursor:pointer; -webkit-appearance:none; font-family:inherit; }
+.seg-btn.on { background:var(--sf3); color:var(--tx); }
 
-/* ---- ADD SCREEN ---- */
-.seg {
-  display: flex;
-  background: var(--sf);
-  border-radius: 11px;
-  padding: 3px;
-  margin-bottom: 16px;
-}
-.seg-btn {
-  flex: 1; padding: 8px 3px;
-  border: none; border-radius: 8px;
-  background: transparent; color: var(--tx2);
-  font-size: 12px; font-weight: 500;
-  cursor: pointer; -webkit-appearance: none;
-  font-family: inherit;
-}
-.seg-btn.on { background: var(--sf3); color: var(--tx); }
+.lbl { font-size:12px; color:var(--tx2); margin-bottom:5px; font-weight:500; }
+.inp { width:100%; background:var(--sf); border:1px solid rgba(255,255,255,.08); border-radius:var(--r); color:var(--tx); font-family:inherit; font-size:15px; padding:12px 14px; outline:none; -webkit-appearance:none; margin-bottom:12px; -webkit-user-select:text; user-select:text; }
+.inp:focus { border-color:var(--ac); }
+.ta { height:140px; resize:none; line-height:1.6; }
+.hint { font-size:11px; color:var(--tx2); margin-bottom:12px; line-height:1.5; }
 
-.lbl { font-size: 12px; color: var(--tx2); margin-bottom: 5px; font-weight: 500; }
-.inp {
-  width: 100%;
-  background: var(--sf);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: var(--r);
-  color: var(--tx);
-  font-family: inherit;
-  font-size: 15px;
-  padding: 12px 14px;
-  outline: none;
-  -webkit-appearance: none;
-  margin-bottom: 12px;
-  -webkit-user-select: text;
-  user-select: text;
-}
-.inp:focus { border-color: var(--ac); }
-.ta { height: 140px; resize: none; line-height: 1.6; }
-.hint { font-size: 11px; color: var(--tx2); margin-bottom: 12px; line-height: 1.5; }
+/* 言語選択 */
+.lang-sel-wrap { margin-bottom:14px; }
+.lang-sel-title { font-size:12px; color:var(--tx2); margin-bottom:7px; font-weight:500; }
+.lang-sel-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+.lang-sel-btn { padding:8px 4px; border:2px solid rgba(255,255,255,.08); border-radius:10px; background:var(--sf); color:var(--tx2); font-size:11px; font-weight:600; cursor:pointer; text-align:center; -webkit-appearance:none; font-family:inherit; line-height:1.4; }
+.lang-sel-btn.on { border-color:var(--ac); background:rgba(124,92,252,.12); color:var(--tx); }
 
-.upload {
-  border: 2px dashed rgba(124,92,252,.3);
-  border-radius: var(--r);
-  padding: 26px;
-  text-align: center;
-  cursor: pointer;
-  margin-bottom: 12px;
-  background: rgba(124,92,252,.03);
-}
-.upload:active { border-color: var(--ac); background: rgba(124,92,252,.08); }
-.upload-ic { font-size: 30px; margin-bottom: 5px; }
-.upload-tx { font-size: 14px; font-weight: 500; }
-.upload-sub { font-size: 11px; color: var(--tx2); margin-top: 3px; }
+.upload { border:2px dashed rgba(124,92,252,.3); border-radius:var(--r); padding:26px; text-align:center; cursor:pointer; margin-bottom:12px; background:rgba(124,92,252,.03); }
+.upload:active { border-color:var(--ac); background:rgba(124,92,252,.08); }
+.upload-ic { font-size:30px; margin-bottom:5px; }
+.upload-tx { font-size:14px; font-weight:500; }
+.upload-sub { font-size:11px; color:var(--tx2); margin-top:3px; }
 
-.prev-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; }
-.prev-title { font-size: 13px; font-weight: 600; color: var(--tx2); }
-.prev-cnt { background: var(--ac); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
-.prev-list { display: flex; flex-direction: column; gap: 5px; max-height: 220px; overflow-y: scroll; -webkit-overflow-scrolling: touch; }
-.prev-item { background: var(--sf); border-radius: 9px; padding: 9px 11px; display: flex; align-items: center; gap: 9px; }
-.pi-n { font-size: 11px; color: var(--tx2); width: 20px; flex-shrink: 0; }
-.pi-en { font-size: 14px; font-weight: 500; flex: 1; }
-.pi-ja { font-size: 12px; color: var(--ac3); }
+.prev-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:9px; }
+.prev-title { font-size:13px; font-weight:600; color:var(--tx2); }
+.prev-cnt { background:var(--ac); color:#fff; font-size:11px; padding:2px 8px; border-radius:10px; }
+.prev-list { display:flex; flex-direction:column; gap:5px; max-height:220px; overflow-y:scroll; -webkit-overflow-scrolling:touch; }
+.prev-item { background:var(--sf); border-radius:9px; padding:9px 11px; display:flex; align-items:center; gap:9px; }
+.pi-n { font-size:11px; color:var(--tx2); width:20px; flex-shrink:0; }
+.pi-en { font-size:14px; font-weight:500; flex:1; }
+.pi-ja { font-size:12px; color:var(--ac3); }
 
-/* ---- WORD LIST ---- */
-.srch-wrap { padding: 9px 16px 0; flex-shrink: 0; }
-.srch {
-  width: 100%;
-  background: var(--sf);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 11px;
-  padding: 9px 13px;
-  color: var(--tx);
-  font-family: inherit;
-  font-size: 14px;
-  outline: none;
-  -webkit-appearance: none;
-  -webkit-user-select: text;
-  user-select: text;
-}
-.word-item {
-  background: var(--sf);
-  border-radius: var(--r);
-  padding: 11px 13px;
-  margin-bottom: 6px;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  border: none;
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
-  -webkit-appearance: none;
-}
-.word-item:active { background: var(--sf2); }
-.wi-inf { flex: 1; min-width: 0; }
-.wi-en { font-size: 14px; font-weight: 500; }
-.wi-ja { font-size: 11px; color: var(--tx2); margin-top: 2px; }
-.wi-lvl { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
-.l0 { background: rgba(255,76,106,.15); color: var(--rd); }
-.l1 { background: rgba(255,156,76,.15); color: var(--or); }
-.l2 { background: rgba(255,215,0,.15); color: var(--gd); }
-.l3 { background: rgba(76,255,145,.15); color: var(--gn); }
-.l4 { background: rgba(124,92,252,.15); color: var(--ac); }
-.l5 { background: rgba(92,248,252,.15); color: var(--ac3); }
+.srch-wrap { padding:9px 16px 0; flex-shrink:0; }
+.srch { width:100%; background:var(--sf); border:1px solid rgba(255,255,255,.08); border-radius:11px; padding:9px 13px; color:var(--tx); font-family:inherit; font-size:14px; outline:none; -webkit-appearance:none; -webkit-user-select:text; user-select:text; }
 
-/* ---- QUIZ ---- */
-#s-quiz {
-  background:
-    radial-gradient(ellipse at 50% 0%, rgba(124,92,252,.12) 0%, transparent 55%),
-    var(--bg);
-}
-.qz-hdr {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  padding-top: calc(var(--st) + 12px);
-  gap: 11px;
-  flex-shrink: 0;
-}
-.qz-prog { flex: 1; height: 5px; background: var(--sf2); border-radius: 3px; overflow: hidden; }
-.qz-fill { height: 100%; background: linear-gradient(90deg, var(--ac), var(--ac2)); border-radius: 3px; transition: width .35s ease; }
-.qz-cnt { font-size: 12px; color: var(--tx2); font-weight: 500; white-space: nowrap; }
+/* フィルタバー */
+.filter-bar { display:flex; gap:7px; padding:9px 16px 0; overflow-x:scroll; -webkit-overflow-scrolling:touch; flex-shrink:0; }
+.filter-bar::-webkit-scrollbar { display:none; }
+.flt-btn { padding:5px 12px; border-radius:20px; border:1px solid rgba(255,255,255,.1); background:var(--sf); color:var(--tx2); font-size:12px; font-weight:500; white-space:nowrap; cursor:pointer; -webkit-appearance:none; font-family:inherit; flex-shrink:0; }
+.flt-btn.on { background:var(--ac); border-color:var(--ac); color:#fff; }
 
-.qz-body { flex: 1; display: flex; flex-direction: column; padding: 13px 16px; overflow: hidden; gap: 10px; }
-.qz-card { background: var(--sf); border-radius: 18px; padding: 22px 18px; text-align: center; flex-shrink: 0; }
-.qz-badge { display: inline-block; background: rgba(124,92,252,.15); color: var(--ac); font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; margin-bottom: 12px; text-transform: uppercase; letter-spacing: .06em; }
-.qz-word { font-size: 28px; font-weight: 700; line-height: 1.2; word-break: break-word; }
+.word-item { background:var(--sf); border-radius:var(--r); padding:11px 13px; margin-bottom:6px; display:flex; align-items:center; gap:9px; border:none; cursor:pointer; width:100%; text-align:left; -webkit-appearance:none; font-family:inherit; }
+.word-item:active { background:var(--sf2); }
+.wi-inf { flex:1; min-width:0; }
+.wi-en { font-size:14px; font-weight:500; }
+.wi-ja { font-size:11px; color:var(--tx2); margin-top:2px; }
+.wi-lvl { width:28px; height:28px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; flex-shrink:0; }
+.l0{background:rgba(255,76,106,.15);color:var(--rd);} .l1{background:rgba(255,156,76,.15);color:var(--or);} .l2{background:rgba(255,215,0,.15);color:var(--gd);} .l3{background:rgba(76,255,145,.15);color:var(--gn);} .l4{background:rgba(124,92,252,.15);color:var(--ac);} .l5{background:rgba(92,248,252,.15);color:var(--ac3);}
 
-.choices { display: flex; flex-direction: column; gap: 7px; flex: 1; justify-content: center; }
-.ch-btn {
-  width: 100%;
-  padding: 13px 14px;
-  background: var(--sf);
-  border: 2px solid rgba(255,255,255,.08);
-  border-radius: 13px;
-  color: var(--tx);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  -webkit-appearance: none;
-  min-height: 50px;
-}
-.ch-btn:active:not(.done) { border-color: var(--ac); background: rgba(124,92,252,.08); }
-.ch-btn.ok  { border-color: var(--gn) !important; background: rgba(76,255,145,.08) !important; }
-.ch-btn.ok  .ch-lt { background: rgba(76,255,145,.2); color: var(--gn); }
-.ch-btn.ok  .ch-tx { color: var(--gn); }
-.ch-btn.ng  { border-color: var(--rd) !important; background: rgba(255,76,106,.08) !important; }
-.ch-btn.ng  .ch-lt { background: rgba(255,76,106,.2); color: var(--rd); }
-.ch-btn.ng  .ch-tx { color: var(--rd); }
-.ch-lt { width: 25px; height: 25px; border-radius: 6px; background: rgba(255,255,255,.06); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--tx2); flex-shrink: 0; }
-.ch-tx { flex: 1; line-height: 1.3; }
-.ch-ic { font-size: 15px; margin-left: auto; flex-shrink: 0; min-width: 18px; text-align: center; }
+#s-quiz { background:radial-gradient(ellipse at 50% 0%,rgba(124,92,252,.12) 0%,transparent 55%),var(--bg); }
+.qz-hdr { display:flex; align-items:center; padding:12px 16px; padding-top:calc(var(--st) + 12px); gap:11px; flex-shrink:0; }
+.qz-prog { flex:1; height:5px; background:var(--sf2); border-radius:3px; overflow:hidden; }
+.qz-fill { height:100%; background:linear-gradient(90deg,var(--ac),var(--ac2)); border-radius:3px; transition:width .35s ease; }
+.qz-cnt { font-size:12px; color:var(--tx2); font-weight:500; white-space:nowrap; }
+.qz-body { flex:1; display:flex; flex-direction:column; padding:13px 16px; overflow:hidden; gap:10px; }
+.qz-card { background:var(--sf); border-radius:18px; padding:22px 18px; text-align:center; flex-shrink:0; }
+.qz-badge { display:inline-block; background:rgba(124,92,252,.15); color:var(--ac); font-size:10px; font-weight:700; padding:3px 9px; border-radius:20px; margin-bottom:12px; text-transform:uppercase; letter-spacing:.06em; }
+.qz-word { font-size:28px; font-weight:700; line-height:1.2; word-break:break-word; }
+.choices { display:flex; flex-direction:column; gap:7px; flex:1; justify-content:center; }
+.ch-btn { width:100%; padding:13px 14px; background:var(--sf); border:2px solid rgba(255,255,255,.08); border-radius:13px; color:var(--tx); font-size:14px; font-weight:500; cursor:pointer; font-family:inherit; text-align:left; display:flex; align-items:center; gap:9px; -webkit-appearance:none; min-height:50px; }
+.ch-btn:active:not(.done) { border-color:var(--ac); background:rgba(124,92,252,.08); }
+.ch-btn.ok { border-color:var(--gn)!important; background:rgba(76,255,145,.08)!important; }
+.ch-btn.ok .ch-lt { background:rgba(76,255,145,.2); color:var(--gn); }
+.ch-btn.ok .ch-tx { color:var(--gn); }
+.ch-btn.ng { border-color:var(--rd)!important; background:rgba(255,76,106,.08)!important; }
+.ch-btn.ng .ch-lt { background:rgba(255,76,106,.2); color:var(--rd); }
+.ch-btn.ng .ch-tx { color:var(--rd); }
+.ch-lt { width:25px; height:25px; border-radius:6px; background:rgba(255,255,255,.06); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--tx2); flex-shrink:0; }
+.ch-tx { flex:1; line-height:1.3; }
+.ch-ic { font-size:15px; margin-left:auto; flex-shrink:0; min-width:18px; text-align:center; }
 
-/* ---- FEEDBACK BAR ---- */
-.fb {
-  position: absolute;
-  bottom: calc(var(--sb) + 7px);
-  left: 14px; right: 14px;
-  background: var(--sf2);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 13px;
-  padding: 11px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 9px;
-  opacity: 0;
-  transform: translateY(28px);
-  transition: opacity .25s ease, transform .25s ease;
-  pointer-events: none;
-  z-index: 10;
-}
-.fb.on { opacity: 1; transform: translateY(0); pointer-events: auto; }
-.fb-tx { font-size: 13px; font-weight: 600; }
-.fb-dt { font-size: 11px; color: var(--tx2); margin-top: 2px; }
-.fb-next {
-  background: var(--ac); color: #fff;
-  border: none; border-radius: 9px;
-  padding: 8px 14px; font-size: 13px; font-weight: 600;
-  cursor: pointer; white-space: nowrap; flex-shrink: 0;
-  font-family: inherit; -webkit-appearance: none;
-}
-.fb-next:active { opacity: .8; }
+.fb { position:absolute; bottom:calc(var(--sb) + 7px); left:14px; right:14px; background:var(--sf2); border:1px solid rgba(255,255,255,.08); border-radius:13px; padding:11px 14px; display:flex; align-items:center; justify-content:space-between; gap:9px; opacity:0; transform:translateY(28px); transition:opacity .25s ease,transform .25s ease; pointer-events:none; z-index:10; }
+.fb.on { opacity:1; transform:translateY(0); pointer-events:auto; }
+.fb-tx { font-size:13px; font-weight:600; }
+.fb-dt { font-size:11px; color:var(--tx2); margin-top:2px; }
+.fb-next { background:var(--ac); color:#fff; border:none; border-radius:9px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; flex-shrink:0; font-family:inherit; -webkit-appearance:none; }
+.fb-next:active { opacity:.8; }
 
-/* ---- RESULT ---- */
-#s-result {
-  background:
-    radial-gradient(ellipse at 50% 30%, rgba(124,92,252,.2) 0%, transparent 55%),
-    var(--bg);
-  align-items: center;
-  justify-content: center;
-  padding: 36px 22px;
-}
-.res-em { font-size: 64px; margin-bottom: 12px; }
-.res-tl { font-size: 26px; font-weight: 700; margin-bottom: 5px; text-align: center; }
-.res-sub { font-size: 13px; color: var(--tx2); margin-bottom: 24px; text-align: center; }
-.res-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 9px; width: 100%; margin-bottom: 24px; }
-.res-stat { background: var(--sf); border-radius: 13px; padding: 13px; text-align: center; }
-.rs-n { font-size: 24px; font-weight: 700; }
-.rs-l { font-size: 10px; color: var(--tx2); margin-top: 2px; }
+#s-result { background:radial-gradient(ellipse at 50% 30%,rgba(124,92,252,.2) 0%,transparent 55%),var(--bg); align-items:center; justify-content:center; padding:36px 22px; }
+.res-em { font-size:64px; margin-bottom:12px; }
+.res-tl { font-size:26px; font-weight:700; margin-bottom:5px; text-align:center; }
+.res-sub { font-size:13px; color:var(--tx2); margin-bottom:24px; text-align:center; }
+.res-stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:9px; width:100%; margin-bottom:24px; }
+.res-stat { background:var(--sf); border-radius:13px; padding:13px; text-align:center; }
+.rs-n { font-size:24px; font-weight:700; }
+.rs-l { font-size:10px; color:var(--tx2); margin-top:2px; }
 
-/* ---- SETTINGS ---- */
-.set-group { background: var(--sf); border-radius: var(--r); margin-bottom: 16px; overflow: hidden; }
-.set-row { display: flex; align-items: center; padding: 13px 14px; gap: 9px; border-bottom: 1px solid rgba(255,255,255,.05); cursor: pointer; }
-.set-row:last-child { border-bottom: none; }
-.set-lbl { flex: 1; font-size: 14px; }
-.set-val { font-size: 13px; color: var(--tx2); }
-.set-sec { font-size: 11px; color: var(--tx2); text-transform: uppercase; letter-spacing: .08em; font-weight: 600; margin-bottom: 6px; padding-left: 2px; }
-.set-inp { background: transparent; border: none; color: var(--tx); font-family: inherit; font-size: 13px; outline: none; flex: 1; text-align: right; -webkit-user-select: text; user-select: text; -webkit-appearance: none; }
-.toggle { width: 40px; height: 24px; border-radius: 12px; background: var(--sf3); position: relative; cursor: pointer; transition: background .3s; flex-shrink: 0; border: none; -webkit-appearance: none; }
-.toggle.on { background: var(--ac); }
-.toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .3s; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
-.toggle.on::after { transform: translateX(16px); }
-.sel { background: transparent; border: none; color: var(--tx2); font-size: 13px; outline: none; font-family: inherit; -webkit-appearance: none; padding: 4px 0; }
+.set-group { background:var(--sf); border-radius:var(--r); margin-bottom:16px; overflow:hidden; }
+.set-row { display:flex; align-items:center; padding:13px 14px; gap:9px; border-bottom:1px solid rgba(255,255,255,.05); cursor:pointer; }
+.set-row:last-child { border-bottom:none; }
+.set-lbl { flex:1; font-size:14px; }
+.set-val { font-size:13px; color:var(--tx2); }
+.set-sec { font-size:11px; color:var(--tx2); text-transform:uppercase; letter-spacing:.08em; font-weight:600; margin-bottom:6px; padding-left:2px; }
+.set-inp { background:transparent; border:none; color:var(--tx); font-family:inherit; font-size:13px; outline:none; flex:1; text-align:right; -webkit-user-select:text; user-select:text; -webkit-appearance:none; }
+.toggle { width:40px; height:24px; border-radius:12px; background:var(--sf3); position:relative; cursor:pointer; transition:background .3s; flex-shrink:0; border:none; -webkit-appearance:none; }
+.toggle.on { background:var(--ac); }
+.toggle::after { content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:transform .3s; box-shadow:0 1px 3px rgba(0,0,0,.4); }
+.toggle.on::after { transform:translateX(16px); }
+.sel { background:transparent; border:none; color:var(--tx2); font-size:13px; outline:none; font-family:inherit; -webkit-appearance:none; padding:4px 0; }
 
-/* ---- MODAL ---- */
-.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 50; display: none; align-items: flex-end; }
-.modal-bg.on { display: flex; }
-.modal-sh { background: var(--sf); border-radius: 20px 20px 0 0; padding: 18px 16px calc(var(--sb) + 16px); width: 100%; max-height: 80%; overflow-y: scroll; -webkit-overflow-scrolling: touch; }
-.modal-hd { width: 32px; height: 4px; background: rgba(255,255,255,.15); border-radius: 2px; margin: 0 auto 16px; }
-.modal-tl { font-size: 17px; font-weight: 700; margin-bottom: 13px; }
-.del-btn { background: rgba(255,76,106,.1); color: var(--rd); border: 1px solid rgba(255,76,106,.2); border-radius: 11px; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; font-family: inherit; margin-top: 5px; -webkit-appearance: none; }
-.del-btn:active { background: rgba(255,76,106,.2); }
+.modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:50; display:none; align-items:flex-end; }
+.modal-bg.on { display:flex; }
+.modal-sh { background:var(--sf); border-radius:20px 20px 0 0; padding:18px 16px calc(var(--sb) + 16px); width:100%; max-height:80%; overflow-y:scroll; -webkit-overflow-scrolling:touch; }
+.modal-hd { width:32px; height:4px; background:rgba(255,255,255,.15); border-radius:2px; margin:0 auto 16px; }
+.modal-tl { font-size:17px; font-weight:700; margin-bottom:13px; }
+.del-btn { background:rgba(255,76,106,.1); color:var(--rd); border:1px solid rgba(255,76,106,.2); border-radius:11px; padding:12px; font-size:14px; font-weight:600; cursor:pointer; width:100%; font-family:inherit; margin-top:5px; -webkit-appearance:none; }
+.del-btn:active { background:rgba(255,76,106,.2); }
 
-/* ---- MISC ---- */
-.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 44px 20px; text-align: center; gap: 9px; }
-.empty-ic { font-size: 42px; }
-.empty-tl { font-size: 16px; font-weight: 600; }
-.empty-sub { font-size: 12px; color: var(--tx2); line-height: 1.5; }
+.empty { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:44px 20px; text-align:center; gap:9px; }
+.empty-ic { font-size:42px; }
+.empty-tl { font-size:16px; font-weight:600; }
+.empty-sub { font-size:12px; color:var(--tx2); line-height:1.5; }
 
-.ai-tag { display: inline-block; background: linear-gradient(135deg,var(--ac),var(--ac2)); color:#fff; font-size:9px; font-weight:700; padding:1px 5px; border-radius:4px; vertical-align:middle; margin-left:3px; }
+.ai-tag { display:inline-block; background:linear-gradient(135deg,var(--ac),var(--ac2)); color:#fff; font-size:9px; font-weight:700; padding:1px 5px; border-radius:4px; vertical-align:middle; margin-left:3px; }
 
-/* ---- LOADING ---- */
-.ld-bg { position: fixed; inset: 0; background: rgba(10,10,15,.9); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
-.ld-bg.on { display: flex; }
-.spin { width: 42px; height: 42px; border: 3px solid rgba(124,92,252,.2); border-top-color: var(--ac); border-radius: 50%; animation: sp .8s linear infinite; margin-bottom: 12px; }
-@keyframes sp { to { transform: rotate(360deg); } }
-.ld-tx { font-size: 13px; color: var(--tx2); }
+.ld-bg { position:fixed; inset:0; background:rgba(10,10,15,.9); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:100; }
+.ld-bg.on { display:flex; }
+.spin { width:42px; height:42px; border:3px solid rgba(124,92,252,.2); border-top-color:var(--ac); border-radius:50%; animation:sp .8s linear infinite; margin-bottom:12px; }
+@keyframes sp { to { transform:rotate(360deg); } }
+.ld-tx { font-size:13px; color:var(--tx2); }
 
-/* ---- TOAST ---- */
-.toast { position: fixed; top: calc(var(--st) + 12px); left: 16px; right: 16px; background: var(--sf3); border: 1px solid rgba(255,255,255,.1); border-radius: 11px; padding: 10px 14px; font-size: 13px; font-weight: 500; text-align: center; z-index: 200; transform: translateY(-70px); opacity: 0; transition: all .25s ease; pointer-events: none; }
-.toast.on { transform: translateY(0); opacity: 1; }
-
-::-webkit-scrollbar { display: none; }
+.toast { position:fixed; top:calc(var(--st) + 12px); left:16px; right:16px; background:var(--sf3); border:1px solid rgba(255,255,255,.1); border-radius:11px; padding:10px 14px; font-size:13px; font-weight:500; text-align:center; z-index:200; transform:translateY(-70px); opacity:0; transition:all .25s ease; pointer-events:none; }
+.toast.on { transform:translateY(0); opacity:1; }
+::-webkit-scrollbar { display:none; }
 </style>
 </head>
 <body>
 <div id="app">
 
-<!-- LOADING -->
 <div class="ld-bg" id="ld"><div class="spin"></div><div class="ld-tx" id="ld-tx">処理中...</div></div>
-<!-- TOAST -->
 <div class="toast" id="toast"></div>
-<!-- MODAL -->
 <div class="modal-bg" id="modal-bg"><div class="modal-sh"><div class="modal-hd"></div><div id="modal-ct"></div></div></div>
 
-<!-- ============ HOME ============ -->
+<!-- HOME -->
 <div class="scr on" id="s-home">
   <div class="home-top">
     <div class="logo">VocabMaster</div>
@@ -554,7 +255,7 @@ html, body {
   </div>
 </div>
 
-<!-- ============ ADD ============ -->
+<!-- ADD -->
 <div class="scr" id="s-add">
   <div class="hdr">
     <button class="btn btn-back" id="B-add-back">←</button>
@@ -567,12 +268,24 @@ html, body {
       <button class="seg-btn" id="SG-ai">AI抽出<span class="ai-tag">AI</span></button>
     </div>
 
+    <!-- 言語選択（共通） -->
+    <div class="lang-sel-wrap">
+      <div class="lang-sel-title">学習言語を選択</div>
+      <div class="lang-sel-grid">
+        <button class="lang-sel-btn on" data-lang="en" id="LS-en">🇬🇧<br>英語</button>
+        <button class="lang-sel-btn" data-lang="de" id="LS-de">🇩🇪<br>独語</button>
+        <button class="lang-sel-btn" data-lang="fr" id="LS-fr">🇫🇷<br>仏語</button>
+        <button class="lang-sel-btn" data-lang="es" id="LS-es">🇪🇸<br>西語</button>
+        <button class="lang-sel-btn" data-lang="it" id="LS-it">🇮🇹<br>伊語</button>
+      </div>
+    </div>
+
     <!-- PASTE -->
     <div id="TP-paste">
       <div class="lbl">リスト名</div>
-      <input class="inp" id="IN-paste-name" type="text" placeholder="例: TOEIC頻出単語">
+      <input class="inp" id="IN-paste-name" type="text" placeholder="例: ドイツ語基礎単語">
       <div class="lbl">単語リスト（1行1単語 または「単語,訳」形式）</div>
-      <textarea class="inp ta" id="IN-paste-text" placeholder="例:&#10;abandon&#10;absolute,絶対的な&#10;accomplish&#10;achieve,達成する"></textarea>
+      <textarea class="inp ta" id="IN-paste-text" placeholder="例:&#10;Haus&#10;Schule,学校&#10;arbeiten&#10;schön,美しい"></textarea>
       <div class="hint">訳なしの単語はAPIキー設定でAI自動翻訳できます</div>
       <button class="btn-primary" id="B-parse">🔍 解析する</button>
     </div>
@@ -580,22 +293,22 @@ html, body {
     <!-- FILE -->
     <div id="TP-file" style="display:none">
       <div class="lbl">リスト名</div>
-      <input class="inp" id="IN-file-name" type="text" placeholder="例: 英検準1級">
+      <input class="inp" id="IN-file-name" type="text" placeholder="例: Deutsch A1">
       <div class="upload" id="B-upload">
         <div class="upload-ic">📁</div>
         <div class="upload-tx">タップしてファイルを選択</div>
         <div class="upload-sub">CSV / Excel (.xlsx) / テキスト (.txt)</div>
       </div>
       <input type="file" id="IN-file" accept=".csv,.xlsx,.xls,.txt" style="display:none">
-      <div class="hint">CSV: 1列目=英語、2列目=日本語訳（任意）</div>
+      <div class="hint">CSV: 1列目=単語、2列目=日本語訳（任意）</div>
     </div>
 
     <!-- AI -->
     <div id="TP-ai" style="display:none">
       <div class="lbl">リスト名</div>
       <input class="inp" id="IN-ai-name" type="text" placeholder="例: 小説から抽出">
-      <div class="lbl">英文テキストを貼り付け</div>
-      <textarea class="inp ta" id="IN-ai-text" style="height:150px" placeholder="英語テキストを貼り付けてください。AIが重要単語を自動抽出・翻訳します。&#10;&#10;例: The enigmatic professor was known for his perspicacious observations..."></textarea>
+      <div class="lbl">テキストを貼り付け</div>
+      <textarea class="inp ta" id="IN-ai-text" style="height:150px" placeholder="テキストを貼り付けてください。AIが重要単語を自動抽出・翻訳します。&#10;&#10;例 (独): Das Haus ist sehr schön und die Schule liegt in der Nähe...&#10;例 (英): The enigmatic professor was known for his perspicacious observations..."></textarea>
       <div class="hint">✨ AIが重要単語を抽出し日本語訳を付与します。APIキーなしでもオフライン抽出が使えます。</div>
       <button class="btn-primary" id="B-ai-extract">✨ AI で単語を抽出</button>
     </div>
@@ -614,7 +327,7 @@ html, body {
   </div>
 </div>
 
-<!-- ============ LIST ============ -->
+<!-- LIST -->
 <div class="scr" id="s-list">
   <div class="hdr">
     <button class="btn btn-back" id="B-list-back">←</button>
@@ -624,13 +337,21 @@ html, body {
   <div class="srch-wrap">
     <input class="srch" id="IN-search" type="search" placeholder="単語を検索...">
   </div>
+  <div class="filter-bar" id="LANG-filter">
+    <button class="flt-btn on" data-lang="all">すべて</button>
+    <button class="flt-btn" data-lang="en">🇬🇧 英語</button>
+    <button class="flt-btn" data-lang="de">🇩🇪 ドイツ語</button>
+    <button class="flt-btn" data-lang="fr">🇫🇷 フランス語</button>
+    <button class="flt-btn" data-lang="es">🇪🇸 スペイン語</button>
+    <button class="flt-btn" data-lang="it">🇮🇹 イタリア語</button>
+  </div>
   <div class="scroll" style="padding-top:10px">
     <div id="L-words"></div>
     <div style="height:14px"></div>
   </div>
 </div>
 
-<!-- ============ QUIZ ============ -->
+<!-- QUIZ -->
 <div class="scr" id="s-quiz">
   <div class="qz-hdr">
     <button class="btn btn-back" id="B-quiz-exit">✕</button>
@@ -650,7 +371,7 @@ html, body {
   </div>
 </div>
 
-<!-- ============ RESULT ============ -->
+<!-- RESULT -->
 <div class="scr" id="s-result">
   <div class="res-em" id="R-em">🎉</div>
   <div class="res-tl" id="R-tl">よくできました！</div>
@@ -664,7 +385,7 @@ html, body {
   <button class="btn-sec" id="B-res-weak" style="width:260px">🎯 間違いを復習</button>
 </div>
 
-<!-- ============ SETTINGS ============ -->
+<!-- SETTINGS -->
 <div class="scr" id="s-settings">
   <div class="hdr">
     <button class="btn btn-back" id="B-set-back">←</button>
@@ -688,7 +409,7 @@ html, body {
         <select class="sel" id="SEL-size"><option value="10">10問</option><option value="20" selected>20問</option><option value="30">30問</option><option value="50">50問</option></select>
       </div>
       <div class="set-row" id="ROW-rev">
-        <span class="set-lbl">🔄 逆クイズ（日→英）混在</span>
+        <span class="set-lbl">🔄 逆クイズ（日→外国語）混在</span>
         <button class="toggle" id="TG-rev"></button>
       </div>
     </div>
@@ -698,487 +419,451 @@ html, body {
       <div class="set-row" id="B-import-row"><span class="set-lbl">📥 インポート</span><span class="set-val">→</span></div>
       <div class="set-row" id="B-reset"><span class="set-lbl" style="color:var(--rd)">🗑️ すべて削除</span><span class="set-val">→</span></div>
     </div>
-    <div style="text-align:center;padding:16px;color:var(--tx2);font-size:11px">VocabMaster v1.2 — Spaced Repetition</div>
+    <div style="text-align:center;padding:16px;color:var(--tx2);font-size:11px">VocabMaster v2.0 — 多言語対応版</div>
     <div style="height:20px"></div>
   </div>
 </div>
 
-</div><!-- #app -->
+</div>
 <input type="file" id="IN-import" accept=".json" style="display:none">
 
 <script>
-/* ============================================================
-   VocabMaster — iOS local file compatible
-   - No onclick attributes (all addEventListener)
-   - localStorage with full in-memory fallback
-   - window.onload instead of DOMContentLoaded
-   - No external dependencies at runtime
-   ============================================================ */
+var MEM=null, DBKEY='vm3';
+function sGet(){try{var v=localStorage.getItem(DBKEY);return v?JSON.parse(v):null;}catch(e){return MEM;}}
+function sSet(v){try{localStorage.setItem(DBKEY,JSON.stringify(v));}catch(e){}MEM=v;}
 
-/* ---------- STORAGE (fallback to memory if localStorage blocked) ---------- */
-var MEM = null;
-var DBKEY = 'vm2';
-function sGet() {
-  try {
-    var v = localStorage.getItem(DBKEY);
-    return v ? JSON.parse(v) : null;
-  } catch(e) { return MEM; }
-}
-function sSet(v) {
-  try { localStorage.setItem(DBKEY, JSON.stringify(v)); } catch(e) {}
-  MEM = v;
-}
+var EASE0=2.5, EMIN=1.3;
 
-/* ---------- DB ---------- */
-var EASE0 = 2.5, EMIN = 1.3;
-function mkDB() {
-  return { words:[], lists:[], cfg:{ size:20, rev:false, key:'' }, stats:{ streak:0, lastDay:'' } };
-}
-var G = sGet() || mkDB();
-function save() { sSet(G); }
+/* 言語定義 */
+var LANGS={
+  en:{name:'英語',flag:'🇬🇧',cls:'lang-en'},
+  de:{name:'ドイツ語',flag:'🇩🇪',cls:'lang-de'},
+  fr:{name:'フランス語',flag:'🇫🇷',cls:'lang-fr'},
+  es:{name:'スペイン語',flag:'🇪🇸',cls:'lang-es'},
+  it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
+};
 
-/* ---------- SRS ---------- */
-function lvl(w) {
-  var s = w.s; if(!s) return 0;
-  if(s.i>=60)return 5; if(s.i>=30)return 4;
-  if(s.i>=14)return 3; if(s.i>=7)return 2;
-  if(s.i>=3)return 1; return 0;
-}
-function due(w) {
-  if(!w.s||!w.s.d) return true;
-  return new Date(w.s.d) <= new Date();
-}
-function answer(w, ok) {
-  if(!w.s) w.s = {i:1, e:EASE0, d:null, k:0, l:0};
-  var s = w.s;
-  if(ok) {
-    s.k = (s.k||0)+1;
-    if(s.k<=1) s.i=1;
-    else if(s.k===2) s.i=3;
-    else s.i = Math.round(s.i * s.e);
-    s.e = Math.min(3.0, s.e+0.1);
-  } else {
-    s.l=(s.l||0)+1; s.k=0; s.i=1;
-    s.e=Math.max(EMIN, s.e-0.2);
-  }
+function mkDB(){return{words:[],lists:[],cfg:{size:20,rev:false,key:''},stats:{streak:0,lastDay:''}};}
+var G=sGet()||mkDB();
+function save(){sSet(G);}
+
+/* SRS */
+function lvl(w){var s=w.s;if(!s)return 0;if(s.i>=60)return 5;if(s.i>=30)return 4;if(s.i>=14)return 3;if(s.i>=7)return 2;if(s.i>=3)return 1;return 0;}
+function due(w){if(!w.s||!w.s.d)return true;return new Date(w.s.d)<=new Date();}
+function answer(w,ok){
+  if(!w.s)w.s={i:1,e:EASE0,d:null,k:0,l:0};
+  var s=w.s;
+  if(ok){s.k=(s.k||0)+1;if(s.k<=1)s.i=1;else if(s.k===2)s.i=3;else s.i=Math.round(s.i*s.e);s.e=Math.min(3.0,s.e+0.1);}
+  else{s.l=(s.l||0)+1;s.k=0;s.i=1;s.e=Math.max(EMIN,s.e-0.2);}
   s.i=Math.max(1,Math.min(s.i,365));
-  var dt=new Date(); dt.setDate(dt.getDate()+s.i);
-  s.d=dt.toISOString(); w.lr=new Date().toISOString(); save();
+  var dt=new Date();dt.setDate(dt.getDate()+s.i);s.d=dt.toISOString();w.lr=new Date().toISOString();save();
 }
-function getDue()  { return G.words.filter(due); }
-function getWeak() {
-  return G.words.filter(function(w){return w.s&&(w.s.l||0)>0;})
-    .sort(function(a,b){return (b.s.l||0)-(a.s.l||0);});
-}
+function getDue(){return G.words.filter(due);}
+function getWeak(){return G.words.filter(function(w){return w.s&&(w.s.l||0)>0;}).sort(function(a,b){return(b.s.l||0)-(a.s.l||0);});}
 
-/* ---------- SCREENS ---------- */
-var screens = ['s-home','s-add','s-list','s-quiz','s-result','s-settings'];
-var tabMap   = {'s-home':'T-home','s-add':'T-add','s-list':'T-list','s-settings':'T-settings'};
-
-function go(id) {
-  screens.forEach(function(s){ el(s).classList.remove('on'); });
+/* NAV */
+var SCREENS=['s-home','s-add','s-list','s-quiz','s-result','s-settings'];
+var TABMAP={'s-home':'T-home','s-add':'T-add','s-list':'T-list','s-settings':'T-settings'};
+function go(id){
+  SCREENS.forEach(function(s){el(s).classList.remove('on');});
   el(id).classList.add('on');
-  ['T-home','T-add','T-list','T-settings'].forEach(function(t){ el(t).classList.remove('on'); });
-  if(tabMap[id]) el(tabMap[id]).classList.add('on');
-  if(id==='s-home')     homeRefresh();
-  if(id==='s-list')     { listFilterRebuild(); listRender(); }
-  if(id==='s-settings') settingsLoad();
+  ['T-home','T-add','T-list','T-settings'].forEach(function(t){el(t).classList.remove('on');});
+  if(TABMAP[id])el(TABMAP[id]).classList.add('on');
+  if(id==='s-home')homeRefresh();
+  if(id==='s-list'){listFilterRebuild();listRender();}
+  if(id==='s-settings')settingsLoad();
 }
 
-/* ---------- HELPERS ---------- */
-function el(id){ return document.getElementById(id); }
-function esc(s){ if(s==null)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-var _toastTimer = null;
-function toast(msg) {
-  var t=el('toast'); t.textContent=msg; t.classList.add('on');
-  if(_toastTimer) clearTimeout(_toastTimer);
-  _toastTimer=setTimeout(function(){t.classList.remove('on');},2800);
-}
-function loading(msg) { el('ld-tx').textContent=msg||'処理中...'; el('ld').classList.add('on'); }
-function loaded()     { el('ld').classList.remove('on'); }
-function shuffle(a) {
-  var b=a.slice();
-  for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}
-  return b;
-}
-function uid() { return '_'+(Date.now()%1e9)+'_'+(Math.random()*1e6|0); }
+/* HELPERS */
+function el(id){return document.getElementById(id);}
+function esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+var _tt=null;
+function toast(msg){var t=el('toast');t.textContent=msg;t.classList.add('on');if(_tt)clearTimeout(_tt);_tt=setTimeout(function(){t.classList.remove('on');},2800);}
+function loading(msg){el('ld-tx').textContent=msg||'処理中...';el('ld').classList.add('on');}
+function loaded(){el('ld').classList.remove('on');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function uid(){return '_'+(Date.now()%1e9)+'_'+(Math.random()*1e6|0);}
+function langBadge(lang){var l=LANGS[lang||'en'];if(!l)return'';return'<span class="lang-badge '+l.cls+'">'+l.flag+' '+l.name+'</span>';}
 
-/* ---------- HOME ---------- */
-function homeRefresh() {
-  el('H-total').textContent    = G.words.length;
-  el('H-mastered').textContent = G.words.filter(function(w){return w.s&&w.s.i>=14;}).length;
-  el('H-streak').textContent   = G.stats.streak||0;
-  el('H-due').textContent      = getDue().length;
+/* HOME */
+function homeRefresh(){
+  el('H-total').textContent=G.words.length;
+  el('H-mastered').textContent=G.words.filter(function(w){return w.s&&w.s.i>=14;}).length;
+  el('H-streak').textContent=G.stats.streak||0;
+  el('H-due').textContent=getDue().length;
   homeListsRender();
 }
-function homeListsRender() {
+function homeListsRender(){
   var c=el('H-lists');
-  if(!G.lists.length){
-    c.innerHTML='<div class="empty"><div class="empty-ic">📖</div><div class="empty-tl">単語リストなし</div><div class="empty-sub">「単語を追加」から<br>新しい単語を登録しよう</div></div>';
-    return;
-  }
+  if(!G.lists.length){c.innerHTML='<div class="empty"><div class="empty-ic">📖</div><div class="empty-tl">単語リストなし</div><div class="empty-sub">「単語を追加」から<br>新しい単語を登録しよう</div></div>';return;}
   var h='';
   G.lists.forEach(function(lst){
     var ws=G.words.filter(function(w){return w.lid===lst.id;});
     var d=ws.filter(due).length;
+    var l=LANGS[lst.lang||'en'];
     h+='<button class="list-card" data-lid="'+esc(lst.id)+'">'+
-      '<div class="list-ic" style="background:'+lst.clr+'20">'+lst.ic+'</div>'+
-      '<div class="list-inf"><div class="list-name">'+esc(lst.name)+'</div>'+
+      '<div class="list-ic" style="background:'+lst.clr+'20">'+(l?l.flag:'📗')+'</div>'+
+      '<div class="list-inf"><div class="list-name">'+esc(lst.name)+langBadge(lst.lang)+'</div>'+
       '<div class="list-meta">'+ws.length+'単語'+(d?' · 復習'+d+'件':'')+'</div></div>'+
       (d?'<div class="list-badge">'+d+'</div>':'')+'</button>';
   });
   c.innerHTML=h;
-  c.querySelectorAll('.list-card').forEach(function(b){
-    b.addEventListener('click',function(){ quizStart('list',this.getAttribute('data-lid')); });
-  });
+  c.querySelectorAll('.list-card').forEach(function(b){b.addEventListener('click',function(){listMenu(this.getAttribute('data-lid'));});});
 }
 
-/* ---------- ADD ---------- */
-var addMode='paste', prevWords=[];
-function segSwitch(mode) {
+/* ADD */
+var addMode='paste', prevWords=[], selLang='en';
+
+function segSwitch(mode){
   addMode=mode;
-  ['paste','file','ai'].forEach(function(m){
-    el('TP-'+m).style.display = m===mode?'block':'none';
-    el('SG-'+m).classList.toggle('on', m===mode);
-  });
+  ['paste','file','ai'].forEach(function(m){el('TP-'+m).style.display=m===mode?'block':'none';el('SG-'+m).classList.toggle('on',m===mode);});
   prvHide();
 }
 
-function parsePaste() {
+function setLang(lang){
+  selLang=lang;
+  document.querySelectorAll('.lang-sel-btn').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-lang')===lang);});
+  /* プレースホルダー更新 */
+  var ph={en:'例:\nabandon\nabsolute,絶対的な',de:'例:\nHaus\nSchule,学校\narbeiten\nschön,美しい',fr:'例:\nmaison\nécole,学校\ntravail,仕事',es:'例:\ncasa\nescuela,学校\ntrabajo,仕事',it:'例:\ncasa\nscuola,学校\nlavoro,仕事'};
+  var ta=el('IN-paste-text');if(ta)ta.placeholder=ph[lang]||ph.en;
+}
+
+function parsePaste(){
   var txt=el('IN-paste-text').value.trim();
   if(!txt){toast('テキストを入力してください');return;}
   var words=[];
   txt.split('\n').forEach(function(line){
-    line=line.trim(); if(!line)return;
+    line=line.trim();if(!line)return;
     var p=line.split(/[,\t]/);
-    var w=(p[0]||'').trim(); var m=(p[1]||'').trim();
-    if(w) words.push({word:w.toLowerCase(),meaning:m});
+    var w=(p[0]||'').trim();var m=(p[1]||'').trim();
+    if(w)words.push({word:w,meaning:m});
   });
   if(!words.length){toast('単語が見つかりません');return;}
-  needTranslate(words) ? doTranslate(words) : prvShow(words);
+  needTranslate(words)?doTranslate(words,selLang):prvShow(words);
 }
 
-function needTranslate(words) {
-  return G.cfg.key && words.some(function(w){return !w.meaning;});
-}
+function needTranslate(words){return G.cfg.key&&words.some(function(w){return !w.meaning;});}
 
-function handleFile(evt) {
-  var f=evt.target.files[0]; if(!f)return;
-  evt.target.value='';
+function handleFile(evt){
+  var f=evt.target.files[0];if(!f)return;evt.target.value='';
   var ext=f.name.split('.').pop().toLowerCase();
-  if(ext==='csv'||ext==='txt') {
-    var fr=new FileReader();
-    fr.onload=function(e){ csvParse(e.target.result, f.name); };
-    fr.readAsText(f,'UTF-8');
-  } else if(ext==='xlsx'||ext==='xls') {
-    xlsxRead(f);
-  } else {
-    toast('対応形式: CSV, TXT, XLSX');
-  }
+  if(ext==='csv'||ext==='txt'){var fr=new FileReader();fr.onload=function(e){csvParse(e.target.result,f.name);};fr.readAsText(f,'UTF-8');}
+  else if(ext==='xlsx'||ext==='xls'){xlsxRead(f);}
+  else toast('対応形式: CSV, TXT, XLSX');
 }
 
-function csvParse(txt, fname) {
+function csvParse(txt,fname){
   var words=[];
   txt.split('\n').forEach(function(line){
-    line=line.trim(); if(!line)return;
+    line=line.trim();if(!line)return;
     var p=line.split(/[,\t]/);
     var w=(p[0]||'').trim().replace(/^["']|["']$/g,'');
     var m=(p[1]||'').trim().replace(/^["']|["']$/g,'');
-    if(w&&/[a-zA-Z]/.test(w)) words.push({word:w.toLowerCase(),meaning:m});
+    if(w)words.push({word:w,meaning:m});
   });
-  var ni=el('IN-file-name'); if(ni&&!ni.value) ni.value=fname.replace(/\.[^.]+$/,'');
-  if(!words.length){toast('英単語が見つかりません');return;}
-  needTranslate(words) ? doTranslate(words) : prvShow(words);
+  var ni=el('IN-file-name');if(ni&&!ni.value)ni.value=fname.replace(/\.[^.]+$/,'');
+  if(!words.length){toast('単語が見つかりません');return;}
+  needTranslate(words)?doTranslate(words,selLang):prvShow(words);
 }
 
-function xlsxRead(file) {
+function xlsxRead(file){
   loading('Excelを読み込み中...');
-  function doRead() {
+  function doRead(){
     var fr=new FileReader();
     fr.onload=function(e){
       loaded();
-      try {
+      try{
         var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
         var rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1});
         var words=[];
-        rows.forEach(function(r){
-          var w=(r[0]||'').toString().trim(), m=(r[1]||'').toString().trim();
-          if(w&&/[a-zA-Z]/.test(w)) words.push({word:w.toLowerCase(),meaning:m});
-        });
-        var ni=el('IN-file-name'); if(ni&&!ni.value) ni.value=file.name.replace(/\.[^.]+$/,'');
+        rows.forEach(function(r){var w=(r[0]||'').toString().trim(),m=(r[1]||'').toString().trim();if(w)words.push({word:w,meaning:m});});
+        var ni=el('IN-file-name');if(ni&&!ni.value)ni.value=file.name.replace(/\.[^.]+$/,'');
         if(!words.length){toast('単語が見つかりません');return;}
-        needTranslate(words) ? doTranslate(words) : prvShow(words);
-      } catch(e){ toast('Excelの読み込みに失敗しました'); }
+        needTranslate(words)?doTranslate(words,selLang):prvShow(words);
+      }catch(e){toast('Excelの読み込みに失敗しました');}
     };
     fr.readAsArrayBuffer(file);
   }
-  if(typeof XLSX!=='undefined'){ loaded(); doRead(); return; }
+  if(typeof XLSX!=='undefined'){loaded();doRead();return;}
   var s=document.createElement('script');
   s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-  s.onload=function(){ loaded(); doRead(); };
-  s.onerror=function(){ loaded(); toast('オフライン環境ではExcel非対応。CSVに変換してください。'); };
+  s.onload=function(){loaded();doRead();};
+  s.onerror=function(){loaded();toast('オフライン環境ではExcel非対応。CSVに変換してください。');};
   document.head.appendChild(s);
 }
 
-function aiExtract() {
+function aiExtract(){
   var txt=el('IN-ai-text').value.trim();
-  if(!txt||txt.length<30){toast('もう少し長いテキストを入力してください');return;}
-  var ni=el('IN-ai-name'); if(ni&&!ni.value) ni.value='AI抽出';
-  G.cfg.key ? aiExtractAPI(txt) : offlineExtract(txt);
+  if(!txt||txt.length<20){toast('もう少し長いテキストを入力してください');return;}
+  var ni=el('IN-ai-name');if(ni&&!ni.value)ni.value=(LANGS[selLang]?LANGS[selLang].name:'')+' AI抽出';
+  G.cfg.key?aiExtractAPI(txt):offlineExtract(txt);
 }
 
-function apiCall(body, ok, ng) {
+function apiCall(body,ok,ng){
   var xhr=new XMLHttpRequest();
   xhr.open('POST','https://api.anthropic.com/v1/messages',true);
   xhr.setRequestHeader('Content-Type','application/json');
   xhr.setRequestHeader('x-api-key',G.cfg.key);
   xhr.setRequestHeader('anthropic-version','2023-06-01');
-  xhr.onload=function(){
-    try{
-      var d=JSON.parse(xhr.responseText);
-      xhr.status===200 ? ok(d) : ng(new Error((d.error&&d.error.message)||'APIエラー'));
-    }catch(e){ng(e);}
-  };
+  xhr.onload=function(){try{var d=JSON.parse(xhr.responseText);xhr.status===200?ok(d):ng(new Error((d.error&&d.error.message)||'APIエラー'));}catch(e){ng(e);}};
   xhr.onerror=function(){ng(new Error('通信エラー'));};
   xhr.send(JSON.stringify(body));
 }
 
-function aiExtractAPI(txt) {
+function langName(lang){return LANGS[lang]?LANGS[lang].name:'英語';}
+
+function aiExtractAPI(txt){
+  var ln=langName(selLang);
   loading('AIが単語を抽出中...');
   apiCall({
-    model:'claude-haiku-4-5-20251001', max_tokens:2048,
-    messages:[{role:'user',content:'以下の英文から学習価値のある英単語を20〜30個抽出し、日本語訳をつけてください。基本的すぎる単語(the,is,a,have等)は除いてください。JSONのみで返してください: {"words":[{"word":"abandon","meaning":"捨てる"},...]}\\n\\nテキスト:\\n'+txt.slice(0,3000)}]
-  }, function(d){
+    model:'claude-haiku-4-5-20251001',max_tokens:2048,
+    messages:[{role:'user',content:'以下の'+ln+'テキストから学習価値のある単語を20〜30個抽出し、日本語訳をつけてください。基本的すぎる単語は除いてください。JSONのみで返してください: {"words":[{"word":"Haus","meaning":"家"},...]}\\n\\nテキスト:\\n'+txt.slice(0,3000)}]
+  },function(d){
     loaded();
-    try{
-      var m=d.content[0].text.match(/\{[\s\S]*\}/);
-      if(!m) throw 0;
-      prvShow(JSON.parse(m[0]).words||[]);
-    }catch(e){ toast('AI抽出エラー'); offlineExtract(el('IN-ai-text').value); }
-  }, function(e){ loaded(); toast('エラー: '+e.message.slice(0,40)); offlineExtract(el('IN-ai-text').value); });
+    try{var m=d.content[0].text.match(/\{[\s\S]*\}/);if(!m)throw 0;prvShow(JSON.parse(m[0]).words||[]);}
+    catch(e){toast('AI抽出エラー');offlineExtract(el('IN-ai-text').value);}
+  },function(e){loaded();toast('エラー: '+e.message.slice(0,40));offlineExtract(el('IN-ai-text').value);});
 }
 
-function offlineExtract(txt) {
-  var common={the:1,be:1,is:1,are:1,was:1,were:1,been:1,have:1,has:1,had:1,do:1,does:1,did:1,will:1,would:1,shall:1,should:1,may:1,might:1,must:1,can:1,could:1,a:1,an:1,in:1,on:1,at:1,to:1,for:1,of:1,and:1,or:1,but:1,not:1,this:1,that:1,with:1,from:1,by:1,as:1,up:1,out:1,if:1,about:1,who:1,what:1,which:1,all:1,when:1,there:1,then:1,so:1,no:1,just:1,into:1,over:1,after:1,back:1,also:1,than:1,only:1,its:1,them:1,they:1,their:1,your:1,you:1,his:1,her:1,our:1,we:1,he:1,she:1,me:1,my:1,us:1,him:1,it:1,i:1};
-  var f={},m,re=/\b([a-zA-Z]{4,})\b/g;
-  while((m=re.exec(txt))!==null){var w=m[1].toLowerCase();if(!common[w])f[w]=(f[w]||0)+1;}
+function offlineExtract(txt){
+  var common={the:1,be:1,is:1,are:1,was:1,were:1,have:1,has:1,had:1,do:1,does:1,did:1,will:1,would:1,shall:1,should:1,may:1,might:1,must:1,can:1,could:1,a:1,an:1,in:1,on:1,at:1,to:1,for:1,of:1,and:1,or:1,but:1,not:1,this:1,that:1,with:1,from:1,by:1,as:1,up:1,out:1,if:1,about:1,who:1,what:1,which:1,all:1,when:1,so:1,no:1,just:1,into:1,over:1,after:1,also:1,than:1,only:1,they:1,their:1,you:1,we:1,he:1,she:1,me:1,my:1,us:1,him:1,it:1,i:1,
+    der:1,die:1,das:1,ein:1,eine:1,und:1,oder:1,aber:1,nicht:1,ist:1,sind:1,war:1,hat:1,haben:1,mit:1,von:1,aus:1,bei:1,nach:1,zum:1,zur:1,dem:1,den:1,des:1,
+    le:1,la:1,les:1,un:1,une:1,des:1,et:1,ou:1,est:1,sont:1,pas:1,que:1,qui:1,dans:1,sur:1,avec:1,par:1,
+    el:1,los:1,las:1,es:1,son:1,una:1,con:1,por:1,para:1,
+    il:1,lo:1,gli:1,del:1,della:1,nella:1,con:1,per:1,una:1,sono:1};
+  var f={},m,re=/\b([\wÄäÖöÜüßàâäéèêëîïôùûüÿçæœÁáÉéÍíÓóÚúÑñÀàÈèÌìÒòÙù]{3,})\b/g;
+  while((m=re.exec(txt))!==null){var w=m[1];if(!common[w.toLowerCase()]&&!common[w])f[w]=(f[w]||0)+1;}
   var s=Object.keys(f).sort(function(a,b){return f[b]-f[a];}).slice(0,30);
   toast('オフライン抽出完了（訳なし）APIキーを設定すると訳も付与できます');
   prvShow(s.map(function(w){return{word:w,meaning:''};}));
 }
 
-function doTranslate(words) {
+function doTranslate(words,lang){
   var nm=words.filter(function(w){return !w.meaning;});
   if(!nm.length){prvShow(words);return;}
+  var ln=langName(lang);
   loading(nm.length+'単語を翻訳中...');
   apiCall({
-    model:'claude-haiku-4-5-20251001', max_tokens:2048,
-    messages:[{role:'user',content:'以下の英単語に日本語訳をつけてください。JSONのみで返してください: {"translations":{"abandon":"捨てる",...}}\\n\\n単語: '+nm.map(function(w){return w.word;}).join(', ')}]
-  }, function(d){
-    try{
-      var m=d.content[0].text.match(/\{[\s\S]*\}/);
-      if(m){var tr=JSON.parse(m[0]).translations||{};words.forEach(function(w){if(!w.meaning&&tr[w.word])w.meaning=tr[w.word];});}
-    }catch(e){}
-    loaded(); prvShow(words);
-  }, function(){ loaded(); prvShow(words); });
+    model:'claude-haiku-4-5-20251001',max_tokens:2048,
+    messages:[{role:'user',content:'以下の'+ln+'の単語に日本語訳をつけてください。JSONのみで返してください: {"translations":{"Haus":"家",...}}\\n\\n単語: '+nm.map(function(w){return w.word;}).join(', ')}]
+  },function(d){
+    try{var m=d.content[0].text.match(/\{[\s\S]*\}/);if(m){var tr=JSON.parse(m[0]).translations||{};words.forEach(function(w){if(!w.meaning&&tr[w.word])w.meaning=tr[w.word];});}}catch(e){}
+    loaded();prvShow(words);
+  },function(){loaded();prvShow(words);});
 }
 
-function prvShow(words) {
+function prvShow(words){
   prevWords=words.filter(function(w){return w.word&&w.word.trim();});
   el('PRV').style.display='block';
   el('PRV-cnt').textContent=prevWords.length+' 単語';
   var h='';
   prevWords.forEach(function(w,i){
-    h+='<div class="prev-item">'+
-      '<div class="pi-n">'+(i+1)+'</div>'+
-      '<div class="pi-en">'+esc(w.word)+'</div>'+
-      '<div class="pi-ja">'+(w.meaning?esc(w.meaning):'<span style="color:var(--tx2);font-size:11px">訳なし</span>')+'</div></div>';
+    h+='<div class="prev-item"><div class="pi-n">'+(i+1)+'</div><div class="pi-en">'+esc(w.word)+'</div><div class="pi-ja">'+(w.meaning?esc(w.meaning):'<span style="color:var(--tx2);font-size:11px">訳なし</span>')+'</div></div>';
   });
   el('PRV-list').innerHTML=h;
-  var sc=el('s-add').querySelector('.scroll'); if(sc) sc.scrollTop=9999;
+  var sc=el('s-add').querySelector('.scroll');if(sc)sc.scrollTop=9999;
 }
-function prvHide() { prevWords=[]; el('PRV').style.display='none'; el('PRV-list').innerHTML=''; }
+function prvHide(){prevWords=[];el('PRV').style.display='none';el('PRV-list').innerHTML='';}
 
-function saveList() {
-  if(!prevWords.length) return;
+function saveList(){
+  if(!prevWords.length)return;
   var nameMap={paste:'IN-paste-name',file:'IN-file-name',ai:'IN-ai-name'};
   var ni=el(nameMap[addMode]||'IN-paste-name');
-  var listName=(ni&&ni.value.trim())||('新しいリスト '+(G.lists.length+1));
+  var listName=(ni&&ni.value.trim())||((LANGS[selLang]?LANGS[selLang].name:'')+'リスト '+(G.lists.length+1));
   var lst=null;
   for(var i=0;i<G.lists.length;i++){if(G.lists[i].name===listName){lst=G.lists[i];break;}}
   if(!lst){
-    var ics=['📗','📘','📙','📕','⭐','🎯','💎','🔥'];
     var clrs=['#7c5cfc','#fc5c7d','#5cf8fc','#ffd700','#4cff91','#ff9c4c'];
-    lst={id:uid(),name:listName,ic:ics[G.lists.length%ics.length],clr:clrs[G.lists.length%clrs.length],cr:new Date().toISOString()};
+    var langClr={en:'#4cff91',de:'#ffd700',fr:'#5cf8fc',es:'#ff9c4c',it:'#fc5c7d'};
+    lst={id:uid(),name:listName,ic:LANGS[selLang]?LANGS[selLang].flag:'📗',clr:langClr[selLang]||clrs[G.lists.length%clrs.length],lang:selLang,cr:new Date().toISOString()};
     G.lists.push(lst);
   }
   var added=0;
   prevWords.forEach(function(pw){
-    var ex=G.words.some(function(w){return w.word.toLowerCase()===pw.word.toLowerCase()&&w.lid===lst.id;});
-    if(!ex){
-      G.words.push({id:uid(),word:pw.word,meaning:pw.meaning||'',lid:lst.id,s:{i:1,e:EASE0,d:null,k:0,l:0},cr:new Date().toISOString(),lr:null});
-      added++;
-    }
+    var ex=G.words.some(function(w){return w.word===pw.word&&w.lid===lst.id;});
+    if(!ex){G.words.push({id:uid(),word:pw.word,meaning:pw.meaning||'',lid:lst.id,lang:selLang,s:{i:1,e:EASE0,d:null,k:0,l:0},cr:new Date().toISOString(),lr:null});added++;}
   });
-  save(); prvHide();
+  save();prvHide();
   if(ni)ni.value='';
-  var ta=el(addMode==='paste'?'IN-paste-text':addMode==='ai'?'IN-ai-text':'IN-paste-text');
-  if(ta)ta.value='';
+  var ta=el(addMode==='paste'?'IN-paste-text':addMode==='ai'?'IN-ai-text':'IN-paste-text');if(ta)ta.value='';
   toast('✅ '+added+'単語を「'+listName+'」に追加しました');
   setTimeout(function(){go('s-home');},500);
 }
 
-/* ---------- WORD LIST ---------- */
-function listFilterRebuild() {
-  var sel=el('SEL-list'), cur=sel.value;
+/* WORD LIST */
+var listLangFilter='all';
+function listFilterRebuild(){
+  var sel=el('SEL-list'),cur=sel.value;
   sel.innerHTML='<option value="all">すべて</option>';
-  G.lists.forEach(function(l){var o=document.createElement('option');o.value=l.id;o.textContent=l.name;sel.appendChild(o);});
+  G.lists.forEach(function(l){var o=document.createElement('option');o.value=l.id;o.textContent=(LANGS[l.lang]?LANGS[l.lang].flag+' ':'')+l.name;sel.appendChild(o);});
   sel.value=cur||'all';
 }
-function listRender() {
+function listRender(){
   var flt=(el('SEL-list')||{}).value||'all';
   var srch=((el('IN-search')||{}).value||'').toLowerCase();
   var c=el('L-words');
   var words=flt==='all'?G.words.slice():G.words.filter(function(w){return w.lid===flt;});
+  if(listLangFilter!=='all')words=words.filter(function(w){return(w.lang||'en')===listLangFilter;});
   if(srch)words=words.filter(function(w){return w.word.toLowerCase().indexOf(srch)>=0||w.meaning.toLowerCase().indexOf(srch)>=0;});
   if(!words.length){c.innerHTML='<div class="empty"><div class="empty-ic">🔍</div><div class="empty-tl">単語なし</div></div>';return;}
   var lb=['初','入','中','中上','上','習得'],h='';
   words.forEach(function(w){
     var v=lvl(w);
+    var l=LANGS[w.lang||'en'];
     h+='<button class="word-item" data-wid="'+esc(w.id)+'">'+
-      '<div class="wi-inf"><div class="wi-en">'+esc(w.word)+'</div><div class="wi-ja">'+(w.meaning?esc(w.meaning):'訳なし')+'</div></div>'+
+      '<div class="wi-inf"><div class="wi-en">'+(l?'<span style="font-size:11px;margin-right:4px">'+l.flag+'</span>':'')+esc(w.word)+'</div>'+
+      '<div class="wi-ja">'+(w.meaning?esc(w.meaning):'訳なし')+'</div></div>'+
       '<div class="wi-lvl l'+v+'">'+lb[v]+'</div></button>';
   });
   c.innerHTML=h;
-  c.querySelectorAll('.word-item').forEach(function(b){
-    b.addEventListener('click',function(){wordDetail(this.getAttribute('data-wid'));});
+  c.querySelectorAll('.word-item').forEach(function(b){b.addEventListener('click',function(){wordDetail(this.getAttribute('data-wid'));});});
+}
+
+function listMenu(lid){
+  var lst=G.lists.find(function(x){return x.id===lid;}); if(!lst)return;
+  var ws=G.words.filter(function(w){return w.lid===lid;});
+  var d=ws.filter(due).length;
+  var l=LANGS[lst.lang||'en'];
+  el('modal-ct').innerHTML=
+    '<div class="modal-tl">'+(l?l.flag+' ':'')+esc(lst.name)+'</div>'+
+    '<div style="font-size:12px;color:var(--tx2);margin-bottom:16px">'+ws.length+'単語'+(d?' · 復習'+d+'件':'')+'</div>'+
+    '<button class="btn-primary" id="LM-quiz" style="margin-bottom:8px">⚡ このリストをクイズ</button>'+
+    '<button class="btn-sec" id="LM-due" style="margin-top:0;margin-bottom:8px'+(d?'':';opacity:.4;pointer-events:none')+'">📅 復習単語のみ（'+d+'件）</button>'+
+    '<button class="btn-sec" id="LM-list" style="margin-top:0">📚 単語一覧を見る</button>';
+  el('modal-bg').classList.add('on');
+  el('LM-quiz').addEventListener('click',function(){el('modal-bg').classList.remove('on');quizStart('list',lid);});
+  el('LM-due').addEventListener('click',function(){
+    if(!d)return;
+    el('modal-bg').classList.remove('on');
+    /* このリストの復習単語のみ */
+    var pool=ws.filter(due);
+    if(pool.length<2){toast('復習単語が少なすぎます（最低2単語）');return;}
+    var size=Math.min(pool.length,parseInt(G.cfg.size)||20);
+    var qs=shuffle(pool).slice(0,size);
+    Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:''};
+    go('s-quiz');qRender();
+  });
+  el('LM-list').addEventListener('click',function(){
+    el('modal-bg').classList.remove('on');
+    /* リスト絞り込みで一覧へ */
+    go('s-list');
+    var sel=el('SEL-list');
+    listFilterRebuild();
+    sel.value=lid;
+    listRender();
   });
 }
-function wordDetail(wid) {
-  var w=G.words.find(function(x){return x.id===wid;}); if(!w)return;
+
+function wordDetail(wid){
+  var w=G.words.find(function(x){return x.id===wid;});if(!w)return;
   var lst=G.lists.find(function(x){return x.id===w.lid;});
   var dStr=w.s&&w.s.d?new Date(w.s.d).toLocaleDateString('ja-JP'):'すぐ';
   var lbn=['初級','入門','中級','中上級','上級','習得済み'],v=lvl(w);
+  var l=LANGS[w.lang||'en'];
   el('modal-ct').innerHTML=
-    '<div class="modal-tl">'+esc(w.word)+'</div>'+
+    '<div class="modal-tl">'+(l?l.flag+' ':'')+esc(w.word)+'</div>'+
     '<div style="font-size:20px;color:var(--ac3);margin-bottom:13px">'+esc(w.meaning||'訳なし')+'</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px">'+
     mkCard('SRSレベル',lbn[v])+mkCard('次回復習',dStr)+
     mkCard('連続正解',(w.s&&w.s.k||0))+mkCard('間違い回数','<span style="color:var(--rd)">'+(w.s&&w.s.l||0)+'</span>')+
     '</div>'+
-    '<div style="font-size:12px;color:var(--tx2);margin-bottom:14px">リスト: '+esc(lst?lst.name:'不明')+'</div>'+
+    '<div style="font-size:12px;color:var(--tx2);margin-bottom:14px">言語: '+(l?l.flag+' '+l.name:'不明')+' ／ リスト: '+esc(lst?lst.name:'不明')+'</div>'+
     '<button class="del-btn" id="DEL-btn">🗑️ この単語を削除</button>';
   el('modal-bg').classList.add('on');
   el('DEL-btn').addEventListener('click',function(){
     G.words=G.words.filter(function(x){return x.id!==wid;});
-    save(); el('modal-bg').classList.remove('on'); listRender(); toast('削除しました');
+    save();el('modal-bg').classList.remove('on');listRender();toast('削除しました');
   });
 }
-function mkCard(l,v){return '<div style="background:var(--sf2);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--tx2);margin-bottom:3px">'+l+'</div><div style="font-size:14px;font-weight:600">'+v+'</div></div>';}
+function mkCard(l,v){return'<div style="background:var(--sf2);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--tx2);margin-bottom:3px">'+l+'</div><div style="font-size:14px;font-weight:600">'+v+'</div></div>';}
 
-/* ---------- QUIZ ---------- */
+/* QUIZ */
 var Q={words:[],q:[],i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:''};
-
-function quizStart(mode,lid) {
+function quizStart(mode,lid){
   var pool=[];
-  if(mode==='due')  pool=getDue();
-  else if(mode==='all') pool=G.words.slice();
+  if(mode==='due')pool=getDue();
+  else if(mode==='all')pool=G.words.slice();
   else if(mode==='weak'){pool=getWeak();if(!pool.length){toast('間違えた単語がありません');return;}}
   else if(mode==='list')pool=G.words.filter(function(w){return w.lid===lid;});
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
   var size=Math.min(pool.length,parseInt(G.cfg.size)||20);
   var ws=shuffle(pool).slice(0,size);
   Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:''};
-  go('s-quiz');
-  qRender();
+  go('s-quiz');qRender();
 }
 
-function qRender() {
-  var q=Q.q[Q.i]; if(!q){qResult();return;}
-  var tot=Q.q.length, cur=Q.i+1;
+function qRender(){
+  var q=Q.q[Q.i];if(!q){qResult();return;}
+  var tot=Q.q.length,cur=Q.i+1;
   el('QZ-fill').style.width=(cur/tot*100)+'%';
   el('QZ-cnt').textContent=cur+'/'+tot;
-  var rev=G.cfg.rev&&Math.random()<0.3; Q.rev=rev;
-  el('QZ-badge').textContent=rev?'英語を選べ':'日本語を選べ';
+  var rev=G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
+  var l=LANGS[q.lang||'en'];
+  el('QZ-badge').textContent=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
   el('QZ-word').textContent=rev?(q.meaning||q.word):q.word;
   Q.done=false;
   var ca=rev?q.word:(q.meaning||'（訳なし）');
-  var others=shuffle(G.words.filter(function(w){return w.id!==q.id;}));
-  var dist=others.slice(0,3).map(function(w){return rev?w.word:(w.meaning||w.word);});
+  /* 同じ言語の単語から選択肢を作る（可能な限り） */
+  var sameLang=G.words.filter(function(w){return w.id!==q.id&&(w.lang||'en')===(q.lang||'en');});
+  var others=sameLang.length>=3?sameLang:G.words.filter(function(w){return w.id!==q.id;});
+  var dist=shuffle(others).slice(0,3).map(function(w){return rev?w.word:(w.meaning||w.word);});
   var choices=shuffle([ca].concat(dist).slice(0,4));
   while(choices.length<4)choices.push('---');
-  Q.ca=ca; Q.ci=choices.indexOf(ca);
+  Q.ca=ca;Q.ci=choices.indexOf(ca);
   var L=['A','B','C','D'],h='';
   choices.forEach(function(c,i){
-    h+='<button class="ch-btn" data-i="'+i+'">'+
-      '<div class="ch-lt">'+L[i]+'</div>'+
-      '<div class="ch-tx">'+esc(c)+'</div>'+
-      '<div class="ch-ic"></div></button>';
+    h+='<button class="ch-btn" data-i="'+i+'"><div class="ch-lt">'+L[i]+'</div><div class="ch-tx">'+esc(c)+'</div><div class="ch-ic"></div></button>';
   });
   el('QZ-choices').innerHTML=h;
-  el('QZ-choices').querySelectorAll('.ch-btn').forEach(function(b){
-    b.addEventListener('click',function(){ qSelect(parseInt(this.getAttribute('data-i'))); });
-  });
+  el('QZ-choices').querySelectorAll('.ch-btn').forEach(function(b){b.addEventListener('click',function(){qSelect(parseInt(this.getAttribute('data-i')));});});
   el('FB').classList.remove('on');
 }
 
-function qSelect(i) {
-  if(Q.done)return; Q.done=true;
+function qSelect(i){
+  if(Q.done)return;Q.done=true;
   var btns=el('QZ-choices').querySelectorAll('.ch-btn');
   btns.forEach(function(b){b.classList.add('done');});
   var ok=(i===Q.ci);
   btns[i].classList.add(ok?'ok':'ng');
   btns[i].querySelector('.ch-ic').textContent=ok?'✓':'✗';
   if(!ok){btns[Q.ci].classList.add('ok');btns[Q.ci].querySelector('.ch-ic').textContent='✓';}
-  var q=Q.q[Q.i]; answer(q,ok);
+  var q=Q.q[Q.i];answer(q,ok);
   ok?Q.ok++:(Q.ng++,Q.miss.push(q));
   el('FB-tx').innerHTML=ok?'<span style="color:var(--gn)">✓ 正解！</span>':'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca);
   el('FB-dt').textContent=ok?'次回: '+(q.s&&q.s.i||1)+'日後':'1日後に再復習';
   el('FB').classList.add('on');
 }
 
-function qNext() {
-  Q.i++;
-  Q.i>=Q.q.length ? qResult() : qRender();
-}
+function qNext(){Q.i++;Q.i>=Q.q.length?qResult():qRender();}
 
-function qResult() {
+function qResult(){
   el('FB').classList.remove('on');
-  var tot=Q.ok+Q.ng, acc=tot?Math.round(Q.ok/tot*100):0;
-  el('R-ok').textContent=Q.ok; el('R-ng').textContent=Q.ng; el('R-ac').textContent=acc+'%';
+  var tot=Q.ok+Q.ng,acc=tot?Math.round(Q.ok/tot*100):0;
+  el('R-ok').textContent=Q.ok;el('R-ng').textContent=Q.ng;el('R-ac').textContent=acc+'%';
   var em='📚',tl='もう少しです！';
-  if(acc>=90){em='🏆';tl='完璧です！';}
-  else if(acc>=70){em='🎉';tl='よくできました！';}
-  else if(acc>=50){em='📚';tl='もう少しです！';}
-  else{em='💪';tl='練習あるのみ！';}
-  el('R-em').textContent=em; el('R-tl').textContent=tl;
+  if(acc>=90){em='🏆';tl='完璧です！';}else if(acc>=70){em='🎉';tl='よくできました！';}else if(acc>=50){em='📚';tl='もう少しです！';}else{em='💪';tl='練習あるのみ！';}
+  el('R-em').textContent=em;el('R-tl').textContent=tl;
   el('R-sub').textContent=tot+'問中'+Q.ok+'問正解 · 正解率'+acc+'%';
   var today=new Date().toDateString();
-  if(G.stats.lastDay!==today){
-    var yest=new Date(Date.now()-86400000).toDateString();
-    G.stats.streak=(G.stats.lastDay===yest)?(G.stats.streak||0)+1:1;
-    G.stats.lastDay=today; save();
-  }
+  if(G.stats.lastDay!==today){var yest=new Date(Date.now()-86400000).toDateString();G.stats.streak=(G.stats.lastDay===yest)?(G.stats.streak||0)+1:1;G.stats.lastDay=today;save();}
   go('s-result');
 }
 
-/* ---------- SETTINGS ---------- */
-function settingsLoad() {
+/* SETTINGS */
+function settingsLoad(){
   el('IN-apikey').value=G.cfg.key||'';
   el('SEL-size').value=G.cfg.size||20;
   el('TG-rev').classList.toggle('on',!!G.cfg.rev);
 }
 
-/* ---------- BIND ---------- */
-function bind() {
-  /* tabs */
+/* BIND */
+function bind(){
   el('T-home').addEventListener('click',function(){go('s-home');});
   el('T-add').addEventListener('click',function(){go('s-add');});
   el('T-list').addEventListener('click',function(){go('s-list');});
   el('T-settings').addEventListener('click',function(){go('s-settings');});
   el('B-go-settings').addEventListener('click',function(){go('s-settings');});
 
-  /* home */
   el('B-quiz-due').addEventListener('click',function(){quizStart('due');});
   el('B-go-add').addEventListener('click',function(){go('s-add');});
   el('B-quiz-all').addEventListener('click',function(){quizStart('all');});
@@ -1186,11 +871,26 @@ function bind() {
   el('B-quiz-weak').addEventListener('click',function(){quizStart('weak');});
   el('B-new-list').addEventListener('click',function(){go('s-add');});
 
-  /* add */
   el('B-add-back').addEventListener('click',function(){go('s-home');});
   el('SG-paste').addEventListener('click',function(){segSwitch('paste');});
   el('SG-file').addEventListener('click',function(){segSwitch('file');});
   el('SG-ai').addEventListener('click',function(){segSwitch('ai');});
+
+  /* 言語選択ボタン */
+  document.querySelectorAll('.lang-sel-btn').forEach(function(b){
+    b.addEventListener('click',function(){setLang(this.getAttribute('data-lang'));});
+  });
+
+  /* 言語フィルター */
+  el('LANG-filter').querySelectorAll('.flt-btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      listLangFilter=this.getAttribute('data-lang');
+      el('LANG-filter').querySelectorAll('.flt-btn').forEach(function(x){x.classList.remove('on');});
+      this.classList.add('on');
+      listRender();
+    });
+  });
+
   el('B-parse').addEventListener('click',parsePaste);
   el('B-upload').addEventListener('click',function(){el('IN-file').click();});
   el('IN-file').addEventListener('change',handleFile);
@@ -1198,20 +898,15 @@ function bind() {
   el('B-save').addEventListener('click',saveList);
   el('B-clr-prv').addEventListener('click',prvHide);
 
-  /* list */
   el('B-list-back').addEventListener('click',function(){go('s-home');});
   el('SEL-list').addEventListener('change',listRender);
   el('IN-search').addEventListener('input',listRender);
 
-  /* quiz */
   el('B-quiz-exit').addEventListener('click',function(){el('FB').classList.remove('on');go('s-home');});
   el('B-next').addEventListener('click',qNext);
-
-  /* result */
   el('B-res-home').addEventListener('click',function(){go('s-home');});
   el('B-res-weak').addEventListener('click',function(){quizStart('weak');});
 
-  /* settings */
   el('B-set-back').addEventListener('click',function(){go('s-home');});
   el('IN-apikey').addEventListener('input',function(){G.cfg.key=this.value;save();});
   el('SEL-size').addEventListener('change',function(){G.cfg.size=parseInt(this.value);save();});
@@ -1220,53 +915,44 @@ function bind() {
 
   el('B-export').addEventListener('click',function(){
     var b=new Blob([JSON.stringify(G,null,2)],{type:'application/json'});
-    var u=URL.createObjectURL(b), a=document.createElement('a');
-    a.href=u; a.download='vocabmaster_backup.json'; document.body.appendChild(a); a.click();
+    var u=URL.createObjectURL(b),a=document.createElement('a');
+    a.href=u;a.download='vocabmaster_backup.json';document.body.appendChild(a);a.click();
     setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},1000);
     toast('エクスポート完了');
   });
   el('B-import-row').addEventListener('click',function(){el('IN-import').click();});
   el('IN-import').addEventListener('change',function(e){
-    var f=e.target.files[0]; if(!f)return;
+    var f=e.target.files[0];if(!f)return;
     var fr=new FileReader();
     fr.onload=function(ev){
-      try{
-        var d=JSON.parse(ev.target.result);
-        if(!d.words||!d.lists) throw 0;
-        G=d; save(); toast('✅ '+G.words.length+'単語をインポートしました'); homeRefresh();
-      }catch(err){toast('インポートに失敗しました');}
+      try{var d=JSON.parse(ev.target.result);if(!d.words||!d.lists)throw 0;G=d;save();toast('✅ '+G.words.length+'単語をインポートしました');homeRefresh();}
+      catch(err){toast('インポートに失敗しました');}
     };
-    fr.readAsText(f); e.target.value='';
+    fr.readAsText(f);e.target.value='';
   });
   el('B-reset').addEventListener('click',function(){
-    if(confirm('すべてのデータを削除しますか？\nこの操作は取り消せません。')){
-      G=mkDB(); save(); toast('データを削除しました'); homeRefresh();
-    }
+    if(confirm('すべてのデータを削除しますか？\nこの操作は取り消せません。')){G=mkDB();save();toast('データを削除しました');homeRefresh();}
   });
   el('modal-bg').addEventListener('click',function(e){if(e.target===this)this.classList.remove('on');});
 }
 
-/* ---------- SAMPLE ---------- */
-function loadSample() {
-  if(G.words.length>0) return;
-  var lst={id:uid(),name:'サンプル単語',ic:'⭐',clr:'#7c5cfc',cr:new Date().toISOString()};
-  G.lists.push(lst);
-  [['abandon','捨てる、放棄する'],['absolute','絶対的な、完全な'],['accomplish','達成する、成し遂げる'],
-   ['acquire','取得する、習得する'],['advocate','提唱する、支持者'],['ambiguous','あいまいな、不明確な'],
-   ['analyze','分析する、解析する'],['anticipate','予期する、期待する'],['apparent','明らかな、外見上の'],
-   ['approximately','およそ、約']].forEach(function(s){
-    G.words.push({id:uid(),word:s[0],meaning:s[1],lid:lst.id,s:{i:1,e:EASE0,d:null,k:0,l:0},cr:new Date().toISOString(),lr:null});
+/* SAMPLE */
+function loadSample(){
+  if(G.words.length>0)return;
+  var samples=[
+    {lang:'en',name:'英語サンプル',ic:'🇬🇧',clr:'#4cff91',words:[['abandon','捨てる、放棄する'],['accomplish','達成する'],['acquire','取得する'],['advocate','提唱する'],['ambiguous','あいまいな']]},
+    {lang:'de',name:'ドイツ語サンプル',ic:'🇩🇪',clr:'#ffd700',words:[['Haus','家'],['Schule','学校'],['Arbeit','仕事'],['schön','美しい'],['lernen','学ぶ']]},
+    {lang:'fr',name:'フランス語サンプル',ic:'🇫🇷',clr:'#5cf8fc',words:[['maison','家'],['école','学校'],['travail','仕事'],['beau','美しい'],['apprendre','学ぶ']]},
+  ];
+  samples.forEach(function(s){
+    var lst={id:uid(),name:s.name,ic:s.ic,clr:s.clr,lang:s.lang,cr:new Date().toISOString()};
+    G.lists.push(lst);
+    s.words.forEach(function(w){G.words.push({id:uid(),word:w[0],meaning:w[1],lid:lst.id,lang:s.lang,s:{i:1,e:EASE0,d:null,k:0,l:0},cr:new Date().toISOString(),lr:null});});
   });
   save();
 }
 
-/* ---------- START ---------- */
-/* Use window.onload — most reliable for local file:// on iOS */
-window.onload = function() {
-  bind();
-  loadSample();
-  homeRefresh();
-};
+window.onload=function(){bind();loadSample();homeRefresh();};
 </script>
 </body>
 </html>
