@@ -315,10 +315,16 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         <button class="lang-sel-btn" data-level="advanced" id="LV-advanced">🔥<br>上級</button>
       </div>
       <div id="LV-hint" style="font-size:10px;color:var(--tx2);margin-bottom:12px;line-height:1.6;padding:7px 10px;background:var(--sf);border-radius:9px"></div>
+      <div class="lbl">抽出タイプ</div>
+      <div style="display:flex;gap:7px;margin-bottom:12px">
+        <button class="lang-sel-btn on" data-type="words" id="TY-words" style="flex:1;padding:8px">📝<br>単語のみ</button>
+        <button class="lang-sel-btn" data-type="phrases" id="TY-phrases" style="flex:1;padding:8px">💬<br>熟語のみ</button>
+        <button class="lang-sel-btn" data-type="both" id="TY-both" style="flex:1;padding:8px">✨<br>単語＋熟語</button>
+      </div>
       <div class="lbl">テキストを貼り付け</div>
-      <textarea class="inp ta" id="IN-ai-text" style="height:150px" placeholder="テキストを貼り付けてください。AIが重要単語を自動抽出・翻訳します。&#10;&#10;例 (独): Das Haus ist sehr schön und die Schule liegt in der Nähe...&#10;例 (英): The enigmatic professor was known for his perspicacious observations..."></textarea>
-      <div class="hint">✨ AIが重要単語を抽出し日本語訳を付与します。APIキーなしでもオフライン抽出が使えます。</div>
-      <button class="btn-primary" id="B-ai-extract">✨ AI で単語を抽出</button>
+      <textarea class="inp ta" id="IN-ai-text" style="height:140px" placeholder="テキストを貼り付けてください。AIが重要単語・熟語を自動抽出・翻訳します。&#10;&#10;例 (独): Das Haus ist sehr schön und die Schule liegt in der Nähe...&#10;例 (英): The enigmatic professor was known for his perspicacious observations..."></textarea>
+      <div class="hint">✨ AIが重要単語・熟語を抽出し日本語訳を付与します。APIキーなしでもオフライン抽出が使えます。</div>
+      <button class="btn-primary" id="B-ai-extract">✨ AI で単語・熟語を抽出</button>
     </div>
 
     <!-- PREVIEW -->
@@ -520,7 +526,7 @@ function homeListsRender(){
 }
 
 /* ADD */
-var addMode='paste', prevWords=[], selLang='en', selLevel='all';
+var addMode='paste', prevWords=[], selLang='en', selLevel='all', selType='words';
 
 function segSwitch(mode){
   addMode=mode;
@@ -653,6 +659,11 @@ function updateLevelHint(){
   h.textContent=def.hint;
 }
 
+function setType(type){
+  selType=type;
+  document.querySelectorAll('[data-type]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-type')===type);});
+}
+
 function aiExtract(){
   var txt=el('IN-ai-text').value.trim();
   if(!txt||txt.length<20){toast('もう少し長いテキストを入力してください');return;}
@@ -676,16 +687,41 @@ function aiExtractAPI(txt){
   var ln=langName(selLang);
   var def=getLevelDef(selLang,selLevel);
   var levelLabel={all:'',beginner:'初級_',intermediate:'中級_',advanced:'上級_'};
+  var typeLabel={words:'単語_',phrases:'熟語_',both:'単語熟語_'};
+  var typeCond={
+    words:'単語のみ（2語以上の熟語・イディオムは含めない）',
+    phrases:'熟語・イディオム・慣用句のみ（2語以上のフレーズ）',
+    both:'単語と熟語・イディオム・慣用句の両方'
+  };
   var ni=el('IN-ai-name');
-  if(ni&&!ni.value)ni.value=(LANGS[selLang]?LANGS[selLang].name:'')+'_'+(levelLabel[selLevel]||'')+'AI抽出';
-  loading('AIが単語を抽出中...');
+  if(ni&&!ni.value)ni.value=(LANGS[selLang]?LANGS[selLang].name:'')+'_'+(levelLabel[selLevel]||'')+(typeLabel[selType]||'')+'AI抽出';
+  loading('AIが抽出中...');
+  var prompt=
+    '以下の'+ln+'テキストから、'+
+    '「'+def.cond+'」に該当する'+typeCond[selType]+'を20〜30個抽出し、それぞれ日本語訳をつけてください。\n'+
+    '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
+    '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
+    '{"words":[{"word":"give up","meaning":"諦める"},{"word":"abandon","meaning":"捨てる"}]}\n\n'+
+    'テキスト:\n'+txt.slice(0,3000);
   apiCall({
-    model:'claude-haiku-4-5-20251001',max_tokens:2048,
-    messages:[{role:'user',content:'以下の'+ln+'テキストから「'+def.cond+'」を20〜30個抽出し、日本語訳をつけてください。JSONのみで返してください: {"words":[{"word":"Haus","meaning":"家"},...]}\\n\\nテキスト:\\n'+txt.slice(0,3000)}]
+    model:'claude-haiku-4-5-20251001',max_tokens:3000,
+    messages:[{role:'user',content:prompt}]
   },function(d){
     loaded();
-    try{var m=d.content[0].text.match(/\{[\s\S]*\}/);if(!m)throw 0;prvShow(JSON.parse(m[0]).words||[]);}
-    catch(e){toast('AI抽出エラー');offlineExtract(el('IN-ai-text').value);}
+    try{
+      var raw=d.content[0].text;
+      /* バッククォートや余分な文字を除去してJSONを取り出す */
+      raw=raw.replace(/```json|```/g,'').trim();
+      var m=raw.match(/\{[\s\S]*\}/);
+      if(!m)throw new Error('JSON not found');
+      var parsed=JSON.parse(m[0]);
+      var words=(parsed.words||[]).filter(function(w){return w.word&&w.word.trim();});
+      if(!words.length)throw new Error('empty');
+      prvShow(words);
+    }catch(e){
+      toast('AI抽出エラー。オフラインで再試行します');
+      offlineExtract(el('IN-ai-text').value);
+    }
   },function(e){loaded();toast('エラー: '+e.message.slice(0,40));offlineExtract(el('IN-ai-text').value);});
 }
 
@@ -939,6 +975,11 @@ function bind(){
   el('SG-paste').addEventListener('click',function(){segSwitch('paste');});
   el('SG-file').addEventListener('click',function(){segSwitch('file');});
   el('SG-ai').addEventListener('click',function(){segSwitch('ai');});
+
+  /* 抽出タイプボタン */
+  document.querySelectorAll('[data-type]').forEach(function(b){
+    b.addEventListener('click',function(){setType(this.getAttribute('data-type'));});
+  });
 
   /* レベル選択ボタン */
   document.querySelectorAll('[data-level]').forEach(function(b){
