@@ -524,15 +524,23 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         <button class="toggle" id="TG-flashauto"></button>
       </div>
       <div class="set-row" style="cursor:default">
+        <span class="set-lbl">🔊 読み上げる言語</span>
+        <div style="display:flex;gap:6px">
+          <button class="opt-btn on" id="SPK-both" style="padding:5px 10px;font-size:12px">両方</button>
+          <button class="opt-btn" id="SPK-foreign" style="padding:5px 10px;font-size:12px">外国語のみ</button>
+          <button class="opt-btn" id="SPK-ja" style="padding:5px 10px;font-size:12px">日本語のみ</button>
+        </div>
+      </div>
+      <div class="set-row" style="cursor:default">
         <span class="set-lbl">⏱️ カード切替間隔</span>
         <div style="display:flex;align-items:center;gap:6px">
-          <input type="number" id="IN-flash-sec" min="2" max="15" step="0.5" value="4"
+          <input type="number" id="IN-flash-sec" min="1" max="15" step="0.5" value="2"
             style="width:58px;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:14px;font-weight:600;padding:5px 8px;text-align:center;outline:none;-webkit-appearance:none;-webkit-user-select:text;user-select:text;">
           <span style="font-size:13px;color:var(--tx2)">秒</span>
         </div>
       </div>
       <div class="set-row" style="cursor:default">
-        <span style="font-size:11px;color:var(--tx2);line-height:1.6">外国語読み上げ完了 → 0.8秒後に和訳表示・読み上げ → <b>日本語読み上げ完了後</b>に設定秒数待って次のカードへ。<br>自動再生オンにすると予習画面を開いた瞬間から自動で始まります。</span>
+        <span style="font-size:11px;color:var(--tx2);line-height:1.6">読み上げ完了後に設定秒数待って次のカードへ進みます。</span>
       </div>
     </div>
     <div class="set-sec">データ</div>
@@ -568,7 +576,7 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],cfg:{size:20,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:4,flashAuto:false,key:''},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],cfg:{size:20,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',key:''},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 function save(){sSet(G);}
 
@@ -1240,48 +1248,32 @@ function flRender(){
   el('FL-lang').textContent=l?l.flag+' '+l.name:'';
   var card=el('FL-card');
   card.classList.add('flip');
+
   setTimeout(function(){
     if(FL.token!==token)return;
     el('FL-word').textContent=w.word;
     el('FL-meaning').textContent='';
     card.classList.remove('flip');
 
-    /* ① 外国語を読み上げ、onendで②へ */
-    function doForeign(){
-      if(!window.speechSynthesis||!w.word){afterForeign();return;}
-      var u=new SpeechSynthesisUtterance(w.word);
-      u.lang=LANG_VOICE[w.lang||'en']||'en-US';
-      u.rate=0.9;
-      u.onend=afterForeign;
-      u.onerror=afterForeign;
-      window.speechSynthesis.cancel();
-      setTimeout(function(){window.speechSynthesis.speak(u);},80);
+    var mode=G.cfg.spkMode||'both';
+    var doForeign=(mode==='both'||mode==='foreign');
+    var doJa=(mode==='both'||mode==='ja');
+
+    /* 読み上げ完了後に次フェーズへ進む汎用関数 */
+    function sayThen(text, lang, next){
+      if(!text||!text.trim()||!window.speechSynthesis){
+        setTimeout(next,50);return;
+      }
+      var u=new SpeechSynthesisUtterance(text);
+      u.lang=lang; u.rate=0.9;
+      u.onend=function(){if(FL.token===token)next();};
+      u.onerror=function(){if(FL.token===token)next();};
+      window.speechSynthesis.speak(u);
     }
 
-    /* ② 外国語完了 → 800ms後に和訳表示して日本語読み上げ → ③へ */
-    function afterForeign(){
-      if(FL.token!==token)return;
-      setTimeout(function(){
-        if(FL.token!==token)return;
-        el('FL-meaning').textContent=w.meaning||'';
-        if(w.meaning&&w.meaning.trim()){
-          var u2=new SpeechSynthesisUtterance(w.meaning);
-          u2.lang='ja-JP';
-          u2.rate=0.9;
-          u2.onend=afterJapanese;
-          u2.onerror=afterJapanese;
-          window.speechSynthesis.cancel();
-          setTimeout(function(){window.speechSynthesis.speak(u2);},80);
-        } else {
-          afterJapanese();
-        }
-      },800);
-    }
-
-    /* ③ 両方完了 → 設定秒数待って次へ */
-    function afterJapanese(){
-      if(FL.token!==token)return;
-      if(!FL.playing)return;
+    /* ③ 両方完了後に設定秒数待って次へ */
+    function afterAll(){
+      if(!FL.playing||FL.token!==token)return;
       FL.timer=setTimeout(function(){
         if(!FL.playing||FL.token!==token)return;
         if(FL.i<FL.words.length-1){FL.i++;flRender();}
@@ -1289,7 +1281,26 @@ function flRender(){
       },(G.cfg.flashSec||2)*1000);
     }
 
-    doForeign();
+    /* ② 和訳を表示して日本語読み上げ → afterAll */
+    function showMeaning(){
+      if(FL.token!==token)return;
+      el('FL-meaning').textContent=w.meaning||'';
+      if(doJa&&w.meaning&&w.meaning.trim()){
+        sayThen(w.meaning,'ja-JP',afterAll);
+      } else {
+        afterAll();
+      }
+    }
+
+    /* ① 外国語読み上げ → 800ms後にshowMeaning */
+    if(doForeign&&w.word){
+      sayThen(w.word, LANG_VOICE[w.lang||'en']||'en-US', function(){
+        setTimeout(showMeaning, 800);
+      });
+    } else {
+      setTimeout(showMeaning, 300);
+    }
+
   },200);
 }
 
@@ -1477,7 +1488,9 @@ function settingsLoad(){
   el('TG-autonext').classList.toggle('on',!!G.cfg.autonext);
   el('IN-autonext-sec').value=G.cfg.autonextSec||1.5;
   el('TG-flashauto').classList.toggle('on',!!G.cfg.flashAuto);
-  el('IN-flash-sec').value=G.cfg.flashSec||4;
+  el('IN-flash-sec').value=G.cfg.flashSec||2;
+  var sm=G.cfg.spkMode||'both';
+  ['both','foreign','ja'].forEach(function(m){el('SPK-'+m).classList.toggle('on',sm===m);});
   updateKeyStatus();
 }
 
@@ -1590,6 +1603,12 @@ function bind(){
   });
   el('TG-flashauto').addEventListener('click',function(){G.cfg.flashAuto=!this.classList.contains('on');this.classList.toggle('on',G.cfg.flashAuto);save();});
   el('ROW-flashauto').addEventListener('click',function(e){if(e.target!==el('TG-flashauto'))el('TG-flashauto').click();});
+  ['both','foreign','ja'].forEach(function(m){
+    el('SPK-'+m).addEventListener('click',function(){
+      G.cfg.spkMode=m;save();
+      ['both','foreign','ja'].forEach(function(x){el('SPK-'+x).classList.toggle('on',x===m);});
+    });
+  });
 
   /* ---- エクスポート/インポート ---- */
 
