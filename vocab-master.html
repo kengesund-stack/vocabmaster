@@ -537,8 +537,11 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     </div>
     <div class="set-sec">データ</div>
     <div class="set-group">
-      <div class="set-row" id="B-export"><span class="set-lbl">📤 エクスポート</span><span class="set-val">→</span></div>
-      <div class="set-row" id="B-import-row"><span class="set-lbl">📥 インポート</span><span class="set-val">→</span></div>
+      <div class="set-row" id="B-export"><span class="set-lbl">📤 全データをエクスポート (JSON)</span><span class="set-val">→</span></div>
+      <div class="set-row" id="B-export-select"><span class="set-lbl">📋 リストを選んでエクスポート</span><span class="set-val">→</span></div>
+      <div class="set-row" id="B-export-csv"><span class="set-lbl">📊 CSVでエクスポート</span><span class="set-val">→</span></div>
+      <div class="set-row" id="B-qr"><span class="set-lbl">📱 QRコードで転送</span><span class="set-val">→</span></div>
+      <div class="set-row" id="B-import-row"><span class="set-lbl">📥 インポート（追加統合）</span><span class="set-val">→</span></div>
       <div class="set-row" id="B-reset"><span class="set-lbl" style="color:var(--rd)">🗑️ すべて削除</span><span class="set-val">→</span></div>
     </div>
     <div style="text-align:center;padding:16px;color:var(--tx2);font-size:11px">VocabMaster v2.0 — 多言語対応版</div>
@@ -1516,27 +1519,165 @@ function bind(){
   el('TG-flashauto').addEventListener('click',function(){G.cfg.flashAuto=!this.classList.contains('on');this.classList.toggle('on',G.cfg.flashAuto);save();});
   el('ROW-flashauto').addEventListener('click',function(e){if(e.target!==el('TG-flashauto'))el('TG-flashauto').click();});
 
+  /* ---- エクスポート/インポート ---- */
+
+  /* 全データJSON */
   el('B-export').addEventListener('click',function(){
-    var b=new Blob([JSON.stringify(G,null,2)],{type:'application/json'});
-    var u=URL.createObjectURL(b),a=document.createElement('a');
-    a.href=u;a.download='vocabmaster_backup.json';document.body.appendChild(a);a.click();
-    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},1000);
-    toast('エクスポート完了');
+    dlJson(G,'vocabmaster_backup.json');
+    toast('✅ エクスポート完了');
   });
+
+  /* リスト選択エクスポート */
+  el('B-export-select').addEventListener('click',function(){
+    if(!G.lists.length){toast('リストがありません');return;}
+    var html='<div class="modal-tl">📋 エクスポートするリストを選択</div>';
+    html+='<div style="max-height:220px;overflow-y:auto;margin-bottom:12px">';
+    G.lists.forEach(function(lst){
+      var l=LANGS[lst.lang||'en'];
+      var cnt=G.words.filter(function(w){return w.lid===lst.id;}).length;
+      html+='<label style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">'+
+        '<input type="checkbox" data-lid="'+lst.id+'" style="width:18px;height:18px;accent-color:var(--ac)">'+
+        '<span>'+(l?l.flag+' ':'')+esc(lst.name)+'</span>'+
+        '<span style="margin-left:auto;font-size:12px;color:var(--tx2)">'+cnt+'単語</span></label>';
+    });
+    html+='</div>';
+    html+='<button class="btn-primary" id="EXP-json-sel" style="margin-bottom:8px">📤 JSON</button>';
+    html+='<button class="btn-sec" id="EXP-csv-sel" style="margin-top:0">📊 CSV</button>';
+    el('modal-ct').innerHTML=html;
+    el('modal-bg').classList.add('on');
+
+    function getSelected(){
+      return Array.from(el('modal-ct').querySelectorAll('input[data-lid]:checked')).map(function(c){return c.getAttribute('data-lid');});
+    }
+    el('EXP-json-sel').addEventListener('click',function(){
+      var ids=getSelected();if(!ids.length){toast('リストを選択してください');return;}
+      var lists=G.lists.filter(function(l){return ids.indexOf(l.id)>=0;});
+      var words=G.words.filter(function(w){return ids.indexOf(w.lid)>=0;});
+      dlJson({words:words,lists:lists,cfg:G.cfg,stats:G.stats}, 'vocabmaster_lists.json');
+      el('modal-bg').classList.remove('on');toast('✅ エクスポート完了');
+    });
+    el('EXP-csv-sel').addEventListener('click',function(){
+      var ids=getSelected();if(!ids.length){toast('リストを選択してください');return;}
+      var words=G.words.filter(function(w){return ids.indexOf(w.lid)>=0;});
+      exportCsv(words,'vocabmaster_lists.csv');
+      el('modal-bg').classList.remove('on');toast('✅ CSVエクスポート完了');
+    });
+  });
+
+  /* 全データCSV */
+  el('B-export-csv').addEventListener('click',function(){
+    exportCsv(G.words,'vocabmaster_all.csv');
+    toast('✅ CSVエクスポート完了');
+  });
+
+  /* QRコード転送 */
+  el('B-qr').addEventListener('click',function(){
+    if(!G.lists.length){toast('リストがありません');return;}
+    var html='<div class="modal-tl">📱 QRコードで転送</div>';
+    html+='<div style="font-size:12px;color:var(--tx2);margin-bottom:10px">転送するリストを1つ選んでください（QRコードのサイズ制限のため1リストずつ）</div>';
+    html+='<select id="QR-sel" class="sel" style="width:100%;margin-bottom:12px">';
+    G.lists.forEach(function(lst){
+      var cnt=G.words.filter(function(w){return w.lid===lst.id;}).length;
+      html+='<option value="'+lst.id+'">'+esc(lst.name)+' ('+cnt+'単語)</option>';
+    });
+    html+='</select>';
+    html+='<button class="btn-primary" id="QR-gen">QRコードを生成</button>';
+    html+='<div id="QR-area" style="margin-top:14px;text-align:center"></div>';
+    el('modal-ct').innerHTML=html;
+    el('modal-bg').classList.add('on');
+
+    el('QR-gen').addEventListener('click',function(){
+      var lid=el('QR-sel').value;
+      var lst=G.lists.find(function(l){return l.id===lid;});
+      var words=G.words.filter(function(w){return w.lid===lid;});
+      if(!words.length){toast('単語がありません');return;}
+      /* データをBase64に圧縮してURLに埋め込む */
+      var payload=JSON.stringify({lists:[lst],words:words});
+      if(payload.length>2953){
+        toast('単語数が多すぎます（目安：単語20個以下）。リストを分けてください');return;
+      }
+      var b64=btoa(unescape(encodeURIComponent(payload)));
+      /* GitHub PagesのURLにハッシュとしてデータを埋め込む */
+      var baseUrl=location.href.split('#')[0];
+      var qrUrl=baseUrl+'#import='+b64;
+      genQr(qrUrl, 'QR-area');
+    });
+  });
+
+  /* インポート（追加統合） */
   el('B-import-row').addEventListener('click',function(){el('IN-import').click();});
   el('IN-import').addEventListener('change',function(e){
     var f=e.target.files[0];if(!f)return;
     var fr=new FileReader();
     fr.onload=function(ev){
-      try{var d=JSON.parse(ev.target.result);if(!d.words||!d.lists)throw 0;G=d;save();toast('✅ '+G.words.length+'単語をインポートしました');homeRefresh();}
+      try{
+        var d=JSON.parse(ev.target.result);
+        if(!d.words||!d.lists)throw 0;
+        /* 追加統合: 既存IDと重複しないものだけ追加 */
+        var existListIds=G.lists.map(function(l){return l.id;});
+        var existWordIds=G.words.map(function(w){return w.id;});
+        var addedLists=0,addedWords=0;
+        d.lists.forEach(function(lst){
+          if(existListIds.indexOf(lst.id)<0){G.lists.push(lst);addedLists++;}
+        });
+        d.words.forEach(function(w){
+          if(existWordIds.indexOf(w.id)<0){G.words.push(w);addedWords++;}
+        });
+        save();homeRefresh();
+        toast('✅ '+addedLists+'リスト・'+addedWords+'単語を追加しました');
+      }
       catch(err){toast('インポートに失敗しました');}
     };
     fr.readAsText(f);e.target.value='';
   });
+
   el('B-reset').addEventListener('click',function(){
     if(confirm('すべてのデータを削除しますか？\nこの操作は取り消せません。')){G=mkDB();save();toast('データを削除しました');homeRefresh();}
   });
   el('modal-bg').addEventListener('click',function(e){if(e.target===this)this.classList.remove('on');});
+}
+
+/* ---- データ転送ヘルパー ---- */
+function dlJson(data, fname){
+  var b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  var u=URL.createObjectURL(b),a=document.createElement('a');
+  a.href=u;a.download=fname;document.body.appendChild(a);a.click();
+  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},1000);
+}
+
+function exportCsv(words, fname){
+  var bom='\uFEFF'; /* BOM: ExcelでUTF-8が文字化けしないように */
+  var rows=[['word','meaning','lang','list']];
+  words.forEach(function(w){
+    var lst=G.lists.find(function(l){return l.id===w.lid;});
+    rows.push([w.word, w.meaning||'', w.lang||'en', lst?lst.name:'']);
+  });
+  var csv=bom+rows.map(function(r){
+    return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');
+  }).join('\r\n');
+  var b=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  var u=URL.createObjectURL(b),a=document.createElement('a');
+  a.href=u;a.download=fname;document.body.appendChild(a);a.click();
+  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},1000);
+}
+
+function genQr(text, targetId){
+  var area=el(targetId);
+  area.innerHTML='<div style="color:var(--tx2);font-size:12px;margin-bottom:8px">生成中...</div>';
+  /* QRコードライブラリを動的ロード */
+  function doGen(){
+    area.innerHTML='';
+    var div=document.createElement('div');
+    area.appendChild(div);
+    new QRCode(div,{text:text,width:200,height:200,colorDark:'#ffffff',colorLight:'#12121a',correctLevel:QRCode.CorrectLevel.M});
+    area.insertAdjacentHTML('beforeend','<div style="font-size:11px;color:var(--tx2);margin-top:8px">別のデバイスでスキャンしてインポートURLを開いてください</div>');
+  }
+  if(typeof QRCode!=='undefined'){doGen();return;}
+  var s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+  s.onload=doGen;
+  s.onerror=function(){area.innerHTML='<span style="color:var(--rd)">QRライブラリの読み込みに失敗しました</span>';};
+  document.head.appendChild(s);
 }
 
 /* SAMPLE */
@@ -1555,7 +1696,28 @@ function loadSample(){
   save();
 }
 
-window.onload=function(){bind();loadSample();homeRefresh();updateLevelHint();};
+window.onload=function(){
+  /* QRコードからのインポート処理 */
+  var hash=location.hash;
+  if(hash&&hash.indexOf('#import=')===0){
+    try{
+      var b64=hash.slice(8);
+      var json=decodeURIComponent(escape(atob(b64)));
+      var d=JSON.parse(json);
+      if(d.words&&d.lists){
+        var existListIds=G.lists.map(function(l){return l.id;});
+        var existWordIds=G.words.map(function(w){return w.id;});
+        var addedLists=0,addedWords=0;
+        d.lists.forEach(function(lst){if(existListIds.indexOf(lst.id)<0){G.lists.push(lst);addedLists++;}});
+        d.words.forEach(function(w){if(existWordIds.indexOf(w.id)<0){G.words.push(w);addedWords++;}});
+        save();
+        history.replaceState(null,'',location.pathname); /* ハッシュを消す */
+        setTimeout(function(){toast('📱 QRから '+addedLists+'リスト・'+addedWords+'単語をインポートしました！');},500);
+      }
+    }catch(e){/* 無効なハッシュは無視 */}
+  }
+  bind();loadSample();homeRefresh();updateLevelHint();
+};
 </script>
 </body>
 </html>
