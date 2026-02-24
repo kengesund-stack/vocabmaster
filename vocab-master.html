@@ -930,9 +930,9 @@ function fileAiExtract(text, fname){
     '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
     '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
     '{"words":[{"word":"der Mann","meaning":"男性、男"},{"word":"gehen","meaning":"行く"}]}\n\n'+
-    'テキスト:\n'+text.slice(0,8000);
+    'テキスト:\n'+text.slice(0,20000);
   apiCall({
-    model:'claude-haiku-4-5-20251001',max_tokens:8000,
+    model:'claude-haiku-4-5-20251001',max_tokens:20000,
     messages:[{role:'user',content:prompt}]
   },function(d){
     loaded();selLevel=savedLevel;selType=savedType;
@@ -1108,9 +1108,9 @@ function aiExtractAPI(txt){
     '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
     '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
     '{"words":[{"word":"der Mann","meaning":"男性、男"},{"word":"gehen","meaning":"行く"}]}\n\n'+
-    'テキスト:\n'+txt.slice(0,8000);
+    'テキスト:\n'+txt.slice(0,20000);
   apiCall({
-    model:'claude-haiku-4-5-20251001',max_tokens:8000,
+    model:'claude-haiku-4-5-20251001',max_tokens:20000,
     messages:[{role:'user',content:prompt}]
   },function(d){
     loaded();
