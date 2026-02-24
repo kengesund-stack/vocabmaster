@@ -316,13 +316,34 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     <div id="TP-file" style="display:none">
       <div class="lbl">リスト名</div>
       <input class="inp" id="IN-file-name" type="text" placeholder="例: Deutsch A1">
+      <div class="lbl">処理モード</div>
+      <div style="display:flex;gap:7px;margin-bottom:12px">
+        <button class="opt-btn on" data-fmode="vocab" id="FM-vocab" style="flex:1;padding:8px">📋<br>単語リスト<br><span style="font-size:9px;opacity:.7">CSV/Excel</span></button>
+        <button class="opt-btn" data-fmode="extract" id="FM-extract" style="flex:1;padding:8px">✨<br>AIで抽出<br><span style="font-size:9px;opacity:.7">Word/PDF/TXT</span></button>
+      </div>
       <div class="upload" id="B-upload">
-        <div class="upload-ic">📁</div>
+        <div class="upload-ic" id="UP-ic">📁</div>
         <div class="upload-tx">タップしてファイルを選択</div>
-        <div class="upload-sub">CSV / Excel (.xlsx) / テキスト (.txt)</div>
+        <div class="upload-sub" id="UP-sub">CSV / Excel (.xlsx)</div>
       </div>
       <input type="file" id="IN-file" accept=".csv,.xlsx,.xls,.txt" style="display:none">
-      <div class="hint">CSV: 1列目=単語、2列目=日本語訳（任意）</div>
+      <div class="hint" id="UP-hint">CSV: 1列目=単語、2列目=日本語訳（任意）</div>
+      <!-- AI抽出モードのオプション（ファイル用） -->
+      <div id="FILE-ai-opts" style="display:none">
+        <div class="lbl">抽出レベル</div>
+        <div class="lang-sel-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:4px">
+          <button class="opt-btn on" data-level="all" id="FLV-all">🔀<br>区別なし</button>
+          <button class="opt-btn" data-level="beginner" id="FLV-beginner">🌱<br>初級</button>
+          <button class="opt-btn" data-level="intermediate" id="FLV-intermediate">📘<br>中級</button>
+          <button class="opt-btn" data-level="advanced" id="FLV-advanced">🔥<br>上級</button>
+        </div>
+        <div class="lbl" style="margin-top:8px">抽出タイプ</div>
+        <div style="display:flex;gap:7px;margin-bottom:4px">
+          <button class="opt-btn on" data-type="words" id="FTY-words" style="flex:1;padding:7px">📝<br>単語のみ</button>
+          <button class="opt-btn" data-type="phrases" id="FTY-phrases" style="flex:1;padding:7px">💬<br>熟語のみ</button>
+          <button class="opt-btn" data-type="both" id="FTY-both" style="flex:1;padding:7px">✨<br>単語＋熟語</button>
+        </div>
+      </div>
     </div>
 
     <!-- AI -->
@@ -642,12 +663,161 @@ function parsePaste(){
 
 function needTranslate(words){return G.cfg.key&&words.some(function(w){return !w.meaning;});}
 
+/* ---- FILE MODE ---- */
+var fileMode='vocab'; /* vocab | extract */
+var fileSelLevel='all', fileSelType='words';
+
+function setFileMode(mode){
+  fileMode=mode;
+  document.querySelectorAll('[data-fmode]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-fmode')===mode);});
+  var isExtract=(mode==='extract');
+  el('FILE-ai-opts').style.display=isExtract?'block':'none';
+  el('UP-ic').textContent=isExtract?'📄':'📁';
+  el('UP-sub').textContent=isExtract?'Word (.docx) / PDF / TXT / CSV':'CSV / Excel (.xlsx)';
+  el('UP-hint').textContent=isExtract?'✨ AIがファイルの内容から単語・熟語を自動抽出し日本語訳を付与します':'CSV: 1列目=単語、2列目=日本語訳（任意）';
+  el('IN-file').accept=isExtract?'.txt,.csv,.docx,.pdf':'.csv,.xlsx,.xls,.txt';
+}
+
+function setFileLevel(level){
+  fileSelLevel=level;
+  document.querySelectorAll('[data-level][id^="FLV-"]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-level')===level);});
+}
+
+function setFileType(type){
+  fileSelType=type;
+  document.querySelectorAll('[data-type][id^="FTY-"]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-type')===type);});
+}
+
 function handleFile(evt){
   var f=evt.target.files[0];if(!f)return;evt.target.value='';
   var ext=f.name.split('.').pop().toLowerCase();
-  if(ext==='csv'||ext==='txt'){var fr=new FileReader();fr.onload=function(e){csvParse(e.target.result,f.name);};fr.readAsText(f,'UTF-8');}
-  else if(ext==='xlsx'||ext==='xls'){xlsxRead(f);}
-  else toast('対応形式: CSV, TXT, XLSX');
+  var ni=el('IN-file-name');
+  if(ni&&!ni.value)ni.value=f.name.replace(/\.[^.]+$/,'');
+
+  if(fileMode==='extract'){
+    /* AI抽出モード: テキストを取り出してAIへ */
+    if(ext==='txt'||ext==='csv'){
+      var fr=new FileReader();
+      fr.onload=function(e){fileAiExtract(e.target.result, f.name);};
+      fr.readAsText(f,'UTF-8');
+    } else if(ext==='docx'){
+      extractDocx(f);
+    } else if(ext==='pdf'){
+      extractPdf(f);
+    } else {
+      toast('AI抽出対応: TXT / CSV / Word(.docx) / PDF');
+    }
+  } else {
+    /* 単語リストモード（従来通り） */
+    if(ext==='csv'||ext==='txt'){var fr=new FileReader();fr.onload=function(e){csvParse(e.target.result,f.name);};fr.readAsText(f,'UTF-8');}
+    else if(ext==='xlsx'||ext==='xls'){xlsxRead(f);}
+    else toast('対応形式: CSV, TXT, XLSX');
+  }
+}
+
+function extractDocx(file){
+  loading('Wordファイルを読み込み中...');
+  function doExtract(){
+    var fr=new FileReader();
+    fr.onload=function(e){
+      try{
+        mammoth.extractRawText({arrayBuffer:e.target.result}).then(function(result){
+          loaded();
+          if(!result.value||result.value.trim().length<10){toast('テキストが取り出せませんでした');return;}
+          fileAiExtract(result.value, file.name);
+        }).catch(function(){loaded();toast('Wordファイルの読み込みに失敗しました');});
+      }catch(e){loaded();toast('Wordファイルの読み込みに失敗しました');}
+    };
+    fr.readAsArrayBuffer(file);
+  }
+  if(typeof mammoth!=='undefined'){loaded();doExtract();return;}
+  var s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+  s.onload=function(){loaded();doExtract();};
+  s.onerror=function(){loaded();toast('Wordライブラリの読み込みに失敗しました');};
+  document.head.appendChild(s);
+}
+
+function extractPdf(file){
+  loading('PDFを読み込み中...');
+  function doExtract(){
+    var fr=new FileReader();
+    fr.onload=function(e){
+      var typedArray=new Uint8Array(e.target.result);
+      pdfjsLib.getDocument({data:typedArray}).promise.then(function(pdf){
+        var totalPages=pdf.numPages, texts=[], done=0;
+        for(var i=1;i<=totalPages;i++){
+          (function(pageNum){
+            pdf.getPage(pageNum).then(function(page){
+              page.getTextContent().then(function(tc){
+                texts[pageNum-1]=tc.items.map(function(s){return s.str;}).join(' ');
+                done++;
+                if(done===totalPages){
+                  loaded();
+                  var fullText=texts.join('\n');
+                  if(!fullText.trim()){toast('PDFからテキストが取り出せませんでした（画像PDFは非対応）');return;}
+                  fileAiExtract(fullText, file.name);
+                }
+              });
+            });
+          })(i);
+        }
+      }).catch(function(){loaded();toast('PDFの読み込みに失敗しました');});
+    };
+    fr.readAsArrayBuffer(file);
+  }
+  if(typeof pdfjsLib!=='undefined'){loaded();doExtract();return;}
+  var s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  s.onload=function(){
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    loaded();doExtract();
+  };
+  s.onerror=function(){loaded();toast('PDFライブラリの読み込みに失敗しました');};
+  document.head.appendChild(s);
+}
+
+function fileAiExtract(text, fname){
+  /* AI抽出タブと同じロジックを使う — selLevel/selTypeをfileのものに一時差し替え */
+  var savedLevel=selLevel, savedType=selType;
+  selLevel=fileSelLevel; selType=fileSelType;
+  var ni=el('IN-file-name');
+  if(ni&&ni.value&&!el('IN-ai-name').value){/* ファイル名をAIタブにもセット */}
+  /* AI抽出へ */
+  if(!G.cfg.key){toast('AIでの抽出にはAPIキーが必要です（設定画面で入力）');selLevel=savedLevel;selType=savedType;return;}
+  var ln=langName(selLang);
+  var def=getLevelDef(selLang,fileSelLevel);
+  var typeCond={words:'単語のみ（2語以上の熟語・イディオムは含めない）',phrases:'熟語・イディオム・慣用句のみ（2語以上のフレーズ）',both:'単語と熟語・イディオム・慣用句の両方'};
+  var articleRule={en:'',de:'名詞には必ず定冠詞を付けてください（例: der Mann, die Frau, das Kind）。動詞は不定詞形、形容詞は原形で記載してください。',fr:'名詞には必ず定冠詞を付けてください（例: le livre, la maison）。動詞は不定詞形、形容詞は男性単数形で記載してください。',es:'名詞には必ず定冠詞を付けてください（例: el libro, la casa）。動詞は不定詞形、形容詞は男性単数形で記載してください。',it:'名詞には必ず定冠詞を付けてください（例: il libro, la casa）。動詞は不定詞形、形容詞は男性単数形で記載してください。'};
+  var articleInstr=articleRule[selLang]||'';
+  loading('AIが抽出中...');
+  var prompt=
+    '以下の'+ln+'テキストから、「'+def.cond+'」に該当する'+typeCond[fileSelType]+'を20〜30個抽出し、それぞれ日本語訳をつけてください。\n'+
+    (articleInstr?articleInstr+'\n':'')+
+    '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
+    '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
+    '{"words":[{"word":"der Mann","meaning":"男性、男"},{"word":"gehen","meaning":"行く"}]}\n\n'+
+    'テキスト:\n'+text.slice(0,4000);
+  apiCall({
+    model:'claude-haiku-4-5-20251001',max_tokens:3000,
+    messages:[{role:'user',content:prompt}]
+  },function(d){
+    loaded();selLevel=savedLevel;selType=savedType;
+    try{
+      var raw=d.content[0].text.replace(/```json|```/g,'').trim();
+      var m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('JSON not found');
+      var words=(JSON.parse(m[0]).words||[]).filter(function(w){return w.word&&w.word.trim();});
+      if(!words.length)throw new Error('empty');
+      prvShow(words);
+      /* リスト名をファイル名から自動設定 */
+      var ni2=el('IN-file-name');var ni3=el('IN-ai-name');
+      if(ni2&&ni2.value&&ni3&&!ni3.value)ni3.value=ni2.value;
+    }catch(e){toast('❌ AI抽出エラー: '+e.message);}
+  },function(e){
+    loaded();selLevel=savedLevel;selType=savedType;
+    var msg=e.message||'';
+    toast(msg.indexOf('401')>=0?'❌ APIキーが無効です':'❌ エラー: '+msg.slice(0,50));
+  });
 }
 
 function csvParse(txt,fname){
@@ -1276,6 +1446,17 @@ function bind(){
   el('B-parse').addEventListener('click',parsePaste);
   el('B-upload').addEventListener('click',function(){el('IN-file').click();});
   el('IN-file').addEventListener('change',handleFile);
+
+  /* ファイルタブのモード/レベル/タイプ切替 */
+  document.querySelectorAll('[data-fmode]').forEach(function(b){
+    b.addEventListener('click',function(){setFileMode(this.getAttribute('data-fmode'));});
+  });
+  document.querySelectorAll('[data-level][id^="FLV-"]').forEach(function(b){
+    b.addEventListener('click',function(){setFileLevel(this.getAttribute('data-level'));});
+  });
+  document.querySelectorAll('[data-type][id^="FTY-"]').forEach(function(b){
+    b.addEventListener('click',function(){setFileType(this.getAttribute('data-type'));});
+  });
   el('B-ai-extract').addEventListener('click',aiExtract);
   el('B-save').addEventListener('click',saveList);
   el('B-clr-prv').addEventListener('click',prvHide);
