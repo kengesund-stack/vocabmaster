@@ -480,6 +480,35 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         <span class="set-lbl">🔊 クイズ時に自動読み上げ</span>
         <button class="toggle" id="TG-speak"></button>
       </div>
+      <div class="set-row" id="ROW-autonext">
+        <span class="set-lbl">⏭️ クイズ正解時に自動で次へ</span>
+        <button class="toggle" id="TG-autonext"></button>
+      </div>
+      <div class="set-row" style="cursor:default">
+        <span class="set-lbl">⏱️ 自動進行の待機時間</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="number" id="IN-autonext-sec" min="0.5" max="10" step="0.5" value="1.5"
+            style="width:58px;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:14px;font-weight:600;padding:5px 8px;text-align:center;outline:none;-webkit-appearance:none;-webkit-user-select:text;user-select:text;">
+          <span style="font-size:13px;color:var(--tx2)">秒</span>
+        </div>
+      </div>
+      <div class="set-row" style="cursor:default">
+        <span style="font-size:11px;color:var(--tx2);line-height:1.5">⚠️ 待機時間は予習カードの自動切り替えにも使われます（単語+訳の読み上げ後に次へ）</span>
+      </div>
+    </div>
+    <div class="set-sec">予習設定</div>
+    <div class="set-group">
+      <div class="set-row" style="cursor:default">
+        <span class="set-lbl">📖 予習カード自動切替間隔</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="number" id="IN-flash-sec" min="2" max="15" step="0.5" value="4"
+            style="width:58px;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:14px;font-weight:600;padding:5px 8px;text-align:center;outline:none;-webkit-appearance:none;-webkit-user-select:text;user-select:text;">
+          <span style="font-size:13px;color:var(--tx2)">秒</span>
+        </div>
+      </div>
+      <div class="set-row" style="cursor:default">
+        <span style="font-size:11px;color:var(--tx2);line-height:1.5">外国語読み上げ → 1.5秒後に和訳表示・読み上げ → 残り時間後に次のカードへ</span>
+      </div>
     </div>
     <div class="set-sec">データ</div>
     <div class="set-group">
@@ -511,7 +540,7 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],cfg:{size:20,rev:false,speak:true,key:''},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],cfg:{size:20,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:4,key:''},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 function save(){sSet(G);}
 
@@ -1039,11 +1068,11 @@ function flToggleAuto(){
 function flStartAuto(){
   FL.playing=true;
   el('FL-play').textContent='⏸';
-  /* 外国語1.8秒 + 和訳1.5秒 + 間0.7秒 = 計4秒で次へ */
+  var interval=(G.cfg.flashSec||4)*1000;
   FL.timer=setInterval(function(){
     if(FL.i<FL.words.length-1){FL.i++;flRender();}
     else{flStopAuto();toast('予習完了！クイズで確認しよう');}
-  },4000);
+  },interval);
 }
 function flStopAuto(){
   FL.playing=false;
@@ -1141,9 +1170,29 @@ function qSelect(i){
   el('FB-tx').innerHTML=ok?'<span style="color:var(--gn)">✓ 正解！</span>':'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca);
   el('FB-dt').textContent=ok?'次回: '+(q.s&&q.s.i||1)+'日後':'1日後に再復習';
   el('FB').classList.add('on');
+  /* 自動進行 — 正解時のみ（不正解は手動で確認させる） */
+  if(ok&&G.cfg.autonext){
+    var delay=Math.round((G.cfg.autonextSec||1.5)*1000);
+    var remaining=Math.ceil(G.cfg.autonextSec||1.5);
+    el('B-next').textContent='次へ ('+remaining+'秒)';
+    var countdown=setInterval(function(){
+      remaining--;
+      if(remaining>0){el('B-next').textContent='次へ ('+remaining+'秒)';}
+      else{clearInterval(countdown);}
+    },1000);
+    Q._autoTimer=setTimeout(function(){
+      clearInterval(countdown);
+      el('B-next').textContent='次へ →';
+      if(Q.done)qNext();
+    },delay);
+  }
 }
 
-function qNext(){Q.i++;Q.i>=Q.q.length?qResult():qRender();}
+function qNext(){
+  if(Q._autoTimer){clearTimeout(Q._autoTimer);Q._autoTimer=null;}
+  el('B-next').textContent='次へ →';
+  Q.i++;Q.i>=Q.q.length?qResult():qRender();
+}
 
 function qResult(){
   el('FB').classList.remove('on');
@@ -1172,6 +1221,9 @@ function settingsLoad(){
   el('SEL-size').value=G.cfg.size||20;
   el('TG-rev').classList.toggle('on',!!G.cfg.rev);
   el('TG-speak').classList.toggle('on',G.cfg.speak!==false);
+  el('TG-autonext').classList.toggle('on',!!G.cfg.autonext);
+  el('IN-autonext-sec').value=G.cfg.autonextSec||1.5;
+  el('IN-flash-sec').value=G.cfg.flashSec||4;
   updateKeyStatus();
 }
 
@@ -1259,6 +1311,18 @@ function bind(){
   el('ROW-rev').addEventListener('click',function(e){if(e.target!==el('TG-rev'))el('TG-rev').click();});
   el('TG-speak').addEventListener('click',function(){G.cfg.speak=!this.classList.contains('on');this.classList.toggle('on',G.cfg.speak);save();});
   el('ROW-speak').addEventListener('click',function(e){if(e.target!==el('TG-speak'))el('TG-speak').click();});
+  el('TG-autonext').addEventListener('click',function(){G.cfg.autonext=!this.classList.contains('on');this.classList.toggle('on',G.cfg.autonext);save();});
+  el('ROW-autonext').addEventListener('click',function(e){if(e.target!==el('TG-autonext'))el('TG-autonext').click();});
+  el('IN-autonext-sec').addEventListener('input',function(){
+    var v=parseFloat(this.value)||1.5;
+    if(v<0.5)v=0.5; if(v>10)v=10;
+    G.cfg.autonextSec=v; save();
+  });
+  el('IN-flash-sec').addEventListener('input',function(){
+    var v=parseFloat(this.value)||4;
+    if(v<2)v=2; if(v>15)v=15;
+    G.cfg.flashSec=v; save();
+  });
 
   el('B-export').addEventListener('click',function(){
     var b=new Blob([JSON.stringify(G,null,2)],{type:'application/json'});
