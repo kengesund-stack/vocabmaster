@@ -1218,8 +1218,8 @@ function sqNext(){
   var u=new SpeechSynthesisUtterance(item.text);
   u.lang=LANG_VOICE[item.lang||'en']||'en-US';
   u.rate=0.9;
-  u.onend=function(){SQ.busy=false;item.cb();};
-  u.onerror=function(){SQ.busy=false;item.cb();};
+  u.onend=function(){SQ.busy=false;item.cb();sqNext();};
+  u.onerror=function(){SQ.busy=false;item.cb();sqNext();};
   setTimeout(function(){
     window.speechSynthesis.speak(u);
     setTimeout(function(){if(window.speechSynthesis.paused)window.speechSynthesis.resume();},200);
@@ -1245,25 +1245,51 @@ function flRender(){
     el('FL-word').textContent=w.word;
     el('FL-meaning').textContent='';
     card.classList.remove('flip');
-    /* ① 外国語を読み上げ */
-    sqSpeak(w.word, w.lang||'en', function(){
+
+    /* ① 外国語を読み上げ、onendで②へ */
+    function doForeign(){
+      if(!window.speechSynthesis||!w.word){afterForeign();return;}
+      var u=new SpeechSynthesisUtterance(w.word);
+      u.lang=LANG_VOICE[w.lang||'en']||'en-US';
+      u.rate=0.9;
+      u.onend=afterForeign;
+      u.onerror=afterForeign;
+      window.speechSynthesis.cancel();
+      setTimeout(function(){window.speechSynthesis.speak(u);},80);
+    }
+
+    /* ② 外国語完了 → 800ms後に和訳表示して日本語読み上げ → ③へ */
+    function afterForeign(){
       if(FL.token!==token)return;
-      /* ② 800ms後に和訳表示 → 日本語読み上げ */
       setTimeout(function(){
         if(FL.token!==token)return;
         el('FL-meaning').textContent=w.meaning||'';
-        sqSpeak(w.meaning||'', 'ja', function(){
-          if(FL.token!==token)return;
-          /* ③ 両方完了後、設定秒数待って次へ（自動再生中のみ） */
-          if(!FL.playing)return;
-          FL.timer=setTimeout(function(){
-            if(!FL.playing||FL.token!==token)return;
-            if(FL.i<FL.words.length-1){FL.i++;flRender();}
-            else{flStopAuto();toast('予習完了！クイズで確認しよう');}
-          },(G.cfg.flashSec||2)*1000);
-        });
+        if(w.meaning&&w.meaning.trim()){
+          var u2=new SpeechSynthesisUtterance(w.meaning);
+          u2.lang='ja-JP';
+          u2.rate=0.9;
+          u2.onend=afterJapanese;
+          u2.onerror=afterJapanese;
+          window.speechSynthesis.cancel();
+          setTimeout(function(){window.speechSynthesis.speak(u2);},80);
+        } else {
+          afterJapanese();
+        }
       },800);
-    });
+    }
+
+    /* ③ 両方完了 → 設定秒数待って次へ */
+    function afterJapanese(){
+      if(FL.token!==token)return;
+      if(!FL.playing)return;
+      FL.timer=setTimeout(function(){
+        if(!FL.playing||FL.token!==token)return;
+        if(FL.i<FL.words.length-1){FL.i++;flRender();}
+        else{flStopAuto();toast('予習完了！クイズで確認しよう');}
+      },(G.cfg.flashSec||2)*1000);
+    }
+
+    doForeign();
   },200);
 }
 
