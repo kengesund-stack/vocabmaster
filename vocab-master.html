@@ -799,14 +799,14 @@ function fileAiExtract(text, fname){
   var articleInstr=articleRule[selLang]||'';
   loading('AIが抽出中...');
   var prompt=
-    '以下の'+ln+'テキストから、「'+def.cond+'」に該当する'+typeCond[fileSelType]+'を20〜30個抽出し、それぞれ日本語訳をつけてください。\n'+
+    '以下の'+ln+'テキストから、「'+def.cond+'」に該当する'+typeCond[fileSelType]+'をできるだけ多く抽出し、それぞれ日本語訳をつけてください。\n'+
     (articleInstr?articleInstr+'\n':'')+
     '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
     '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
     '{"words":[{"word":"der Mann","meaning":"男性、男"},{"word":"gehen","meaning":"行く"}]}\n\n'+
-    'テキスト:\n'+text.slice(0,4000);
+    'テキスト:\n'+text.slice(0,8000);
   apiCall({
-    model:'claude-haiku-4-5-20251001',max_tokens:3000,
+    model:'claude-haiku-4-5-20251001',max_tokens:8000,
     messages:[{role:'user',content:prompt}]
   },function(d){
     loaded();selLevel=savedLevel;selType=savedType;
@@ -977,14 +977,14 @@ function aiExtractAPI(txt){
   loading('AIが抽出中...');
   var prompt=
     '以下の'+ln+'テキストから、'+
-    '「'+def.cond+'」に該当する'+typeCond[selType]+'を20〜30個抽出し、それぞれ日本語訳をつけてください。\n'+
+    '「'+def.cond+'」に該当する'+typeCond[selType]+'をできるだけ多く抽出し、それぞれ日本語訳をつけてください。\n'+
     (articleInstr?articleInstr+'\n':'')+
     '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
     '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
     '{"words":[{"word":"der Mann","meaning":"男性、男"},{"word":"gehen","meaning":"行く"}]}\n\n'+
-    'テキスト:\n'+txt.slice(0,3000);
+    'テキスト:\n'+txt.slice(0,8000);
   apiCall({
-    model:'claude-haiku-4-5-20251001',max_tokens:3000,
+    model:'claude-haiku-4-5-20251001',max_tokens:8000,
     messages:[{role:'user',content:prompt}]
   },function(d){
     loaded();
