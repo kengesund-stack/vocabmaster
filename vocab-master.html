@@ -1535,7 +1535,7 @@ function listMenu(lid){
     el('modal-bg').classList.remove('on');
     var r=makePool(false);
     if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
-    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:false,startMs:Date.now()};
+    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now()};
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     go('s-quiz');qRender();
   });
@@ -1543,7 +1543,7 @@ function listMenu(lid){
     el('modal-bg').classList.remove('on');
     var r=makePool(true);
     if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
-    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:false,startMs:Date.now()};
+    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now()};
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     go('s-quiz');qRender();
   });
@@ -1553,7 +1553,7 @@ function listMenu(lid){
     var pool=ws.filter(due);
     if(pool.length<2){toast('復習単語が少なすぎます（最低2単語）');return;}
     var qs=shuffle(pool).slice(0,size);
-    Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:false,startMs:Date.now()};
+    Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'due',sessionStart:Date.now()};
     go('s-quiz');qRender();
   });
   el('LM-list').addEventListener('click',function(){
@@ -1795,7 +1795,7 @@ function flLaunchAutoQuiz(){
   var pool=FL.words.slice();
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
   var pending=Q._pendingCursor;
-  Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:false,startMs:Date.now()};
+  Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now()};
   if(pending)Q._pendingCursor=pending;
   go('s-quiz');qRender();
 }
@@ -1835,7 +1835,7 @@ function flBindButtons(){
     var pool=FL.words.slice();
     if(pool.length<2){toast('クイズには最低2単語必要です');return;}
     var pending=Q._pendingCursor;
-    Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:false,startMs:Date.now()};
+    Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now()};
     if(pending)Q._pendingCursor=pending;
     go('s-quiz');qRender();
   });
@@ -1926,8 +1926,22 @@ function generateReport(period){
   /* 正答率推移（日別） */
   var dayKeys=Object.keys(dayMap).sort();
 
+  /* モード別学習時間集計 */
+  var MODES=['due','study','all','weak','test'];
+  var modeLabels={due:'今日の復習',all:'全単語クイズ',weak:'苦手単語',study:'予習→クイズ',test:'テスト形式'};
+  var modeColors={due:'#7c5cfc',all:'#4cff91',weak:'#fc5c7d',study:'#ffd700',test:'#5cf8fc'};
+  var modeMs={due:0,all:0,weak:0,study:0,test:0};
+  logs.forEach(function(l){
+    var m=l.quizMode||(l.testMode?'test':'all');
+    if(modeMs[m]===undefined)modeMs[m]=0;
+    modeMs[m]+=(l.durationMs||((l.dur||0)*1000));
+  });
+  var modeData=MODES.filter(function(k){return modeMs[k]>0;}).map(function(k){
+    return {key:k, label:modeLabels[k], ms:modeMs[k], color:modeColors[k]};
+  });
+
   /* HTML生成 */
-  var h=buildReportHTML(periodLabel, now, totalSessions, totalQ, totalOk, totalNg, avgAcc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, period);
+  var h=buildReportHTML(periodLabel, now, totalSessions, totalQ, totalOk, totalNg, avgAcc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, modeData, period);
 
   /* 別ウィンドウで開いて印刷 */
   var w=window.open('','_blank','width=900,height=700');
@@ -1943,7 +1957,7 @@ function fmtDateShort(s){
   var d=new Date(s);return (d.getMonth()+1)+'/'+d.getDate();
 }
 
-function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, period){
+function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, modeData, period){
 
   /* ── 時間フォーマット（ミリ秒 → 表示文字列） ── */
   function fmtDur(ms){
@@ -2054,6 +2068,25 @@ function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, 
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">'+
           '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:10px"><div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:4px">⏱️ 学習時間（分）</div>'+durMoSVG+'</div>'+
           '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:10px"><div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:4px">📈 正答率</div>'+accMoSVG+'</div>'+
+        '</div>';
+    }
+    /* ── モード別学習時間グラフ ── */
+    if(modeData&&modeData.length>0){
+      var modeDurVals=modeData.map(function(m){return Math.round(m.ms/60000);});
+      var modeLbls=modeData.map(function(m){return m.label;});
+      var modeSVG=makeSVG(modeDurVals,modeLbls,function(v,i){return modeData[i].color;},function(v){return v+'分';},'分');
+      graphSection+=
+        '<div style="margin-bottom:4px;font-size:10pt;font-weight:700;color:#444;padding-left:4px">🎯 モード別学習時間</div>'+
+        '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:10px;margin-bottom:16px">'+
+          '<div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:4px">各モードの累計学習時間</div>'+
+          modeSVG+
+          '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">'+
+          modeData.map(function(m){
+            return '<span style="font-size:8pt;color:#555">'+
+              '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+m.color+';margin-right:3px;vertical-align:middle"></span>'+
+              m.label+'：'+fmtDur(m.ms)+'</span>';
+          }).join('')+
+          '</div>'+
         '</div>';
     }
   }
@@ -2195,7 +2228,7 @@ function showListSelectModal(mode){
         Q._pendingCursor={lid:lid, next:nextCursor};
         flashStart(pool,'list',lid);
       } else {
-        Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:true,startMs:Date.now()};
+        Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:true,quizMode:'test',sessionStart:Date.now()};
         go('s-quiz');qRender();
       }
     });
@@ -2211,7 +2244,7 @@ function quizStart(mode,lid){
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
   var size=Math.min(pool.length,parseInt(G.cfg.size)||20);
   var ws=G.cfg.random?shuffle(pool).slice(0,size):pool.slice(0,size);
-  Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,sessionStart:Date.now()};
+  Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now()};
   go('s-quiz');qRender();
 }
 
@@ -2329,12 +2362,13 @@ function qResult(){
   }
 
   /* セッションログを保存 */
-  var _durSec=Q.startMs?Math.round((Date.now()-Q.startMs)/1000):0;
+  var _durMs=Q.sessionStart?Date.now()-Q.sessionStart:(Q.startMs?Date.now()-Q.startMs:0);
   if(!G.logs)G.logs=[];
   G.logs.push({
     ts: new Date().toISOString(),
     ok: Q.ok, ng: Q.ng, acc: acc, total: tot,
-    dur: _durSec,
+    durationMs: _durMs,
+    quizMode: Q.quizMode||'all',
     testMode: !!Q.testMode,
     miss: Q.miss.map(function(w){return{id:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',lid:w.lid};}),
     slow: (Q.slow||[]).map(function(w){return{id:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',lid:w.lid,answerMs:w.answerMs};}),
