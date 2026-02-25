@@ -533,6 +533,10 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
           style="width:64px;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:14px;font-weight:600;padding:5px 8px;text-align:center;outline:none;-webkit-appearance:none;-webkit-user-select:text;user-select:text;">
         <span style="font-size:13px;color:var(--tx2)">問</span>
       </div>
+      <div class="set-row" id="ROW-random">
+        <span class="set-lbl">🔀 ランダム出題（未出題から）</span>
+        <button class="toggle" id="TG-random"></button>
+      </div>
       <div class="set-row" id="ROW-rev">
         <span class="set-lbl">🔄 逆クイズ（日→外国語）混在</span>
         <button class="toggle" id="TG-rev"></button>
@@ -2024,9 +2028,24 @@ function showListSelectModal(mode){
       el('modal-bg').classList.remove('on');
       var size=Math.min(parseInt(G.cfg.size)||20, ws.length);
       var cursor=lst.cursor||0; if(cursor>=ws.length)cursor=0;
-      var pool=ws.slice(cursor, cursor+size);
-      if(pool.length<2){cursor=0; pool=ws.slice(0,size);}
-      var nextCursor=Math.min(cursor+pool.length, ws.length);
+      var unplayed=ws.slice(cursor);   /* 未出題 */
+      var pool;
+      if(G.cfg.random){
+        /* ランダムモード: 未出題をシャッフルしてsize枚取る */
+        var shuffled=shuffle(unplayed.slice());
+        pool=shuffled.slice(0,size);
+        /* 未出題が足りない場合は全体をシャッフルして補完（cursorはリセット） */
+        if(pool.length<2){
+          cursor=0;
+          pool=shuffle(ws.slice()).slice(0,size);
+        }
+      } else {
+        pool=ws.slice(cursor, cursor+size);
+        if(pool.length<2){cursor=0; pool=ws.slice(0,size);}
+      }
+      var nextCursor=G.cfg.random
+        ? Math.min(cursor+pool.length, ws.length)
+        : Math.min(cursor+pool.length, ws.length);
       if(isStudy){
         Q._pendingCursor={lid:lid, next:nextCursor};
         flashStart(pool,'list',lid);
@@ -2046,7 +2065,8 @@ function quizStart(mode,lid){
   else if(mode==='list')pool=G.words.filter(function(w){return w.lid===lid;});
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
   var size=Math.min(pool.length,parseInt(G.cfg.size)||20);
-  var ws=shuffle(pool).slice(0,size);
+  /* ランダム設定に応じてシャッフルするか順番通りか */
+  var ws=G.cfg.random ? shuffle(pool).slice(0,size) : pool.slice(0,size);
   Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:false};
   go('s-quiz');qRender();
 }
@@ -2184,6 +2204,7 @@ function settingsLoad(){
   el('IN-apikey').value=G.cfg.key||'';
   el('SEL-size').value=G.cfg.size||20;
   el('TG-rev').classList.toggle('on',!!G.cfg.rev);
+  el('TG-random').classList.toggle('on',!!G.cfg.random);
   el('TG-speak').classList.toggle('on',G.cfg.speak!==false);
   el('TG-autonext').classList.toggle('on',!!G.cfg.autonext);
   el('IN-autonext-sec').value=G.cfg.autonextSec||1.5;
@@ -2292,6 +2313,8 @@ function bind(){
     if(v>200)v=200;
     G.cfg.size=v;save();
   });
+  el('TG-random').addEventListener('click',function(){G.cfg.random=!this.classList.contains('on');this.classList.toggle('on',G.cfg.random);save();});
+  el('ROW-random').addEventListener('click',function(e){if(e.target!==el('TG-random'))el('TG-random').click();});
   el('TG-rev').addEventListener('click',function(){G.cfg.rev=!G.cfg.rev;this.classList.toggle('on',G.cfg.rev);save();});
   el('ROW-rev').addEventListener('click',function(e){if(e.target!==el('TG-rev'))el('TG-rev').click();});
   el('TG-speak').addEventListener('click',function(){G.cfg.speak=!this.classList.contains('on');this.classList.toggle('on',G.cfg.speak);save();});
