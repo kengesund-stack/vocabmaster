@@ -1535,7 +1535,7 @@ function listMenu(lid){
     el('modal-bg').classList.remove('on');
     var r=makePool(false);
     if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
-    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now()};
+    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0};
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     go('s-quiz');qRender();
   });
@@ -1543,7 +1543,7 @@ function listMenu(lid){
     el('modal-bg').classList.remove('on');
     var r=makePool(true);
     if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
-    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now()};
+    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0};
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     go('s-quiz');qRender();
   });
@@ -1553,7 +1553,7 @@ function listMenu(lid){
     var pool=ws.filter(due);
     if(pool.length<2){toast('復習単語が少なすぎます（最低2単語）');return;}
     var qs=shuffle(pool).slice(0,size);
-    Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'due',sessionStart:Date.now()};
+    Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'due',sessionStart:Date.now(),consec:{},mastered:0};
     go('s-quiz');qRender();
   });
   el('LM-list').addEventListener('click',function(){
@@ -1795,7 +1795,7 @@ function flLaunchAutoQuiz(){
   var pool=FL.words.slice();
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
   var pending=Q._pendingCursor;
-  Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now()};
+  Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0};
   if(pending)Q._pendingCursor=pending;
   go('s-quiz');qRender();
 }
@@ -1835,7 +1835,7 @@ function flBindButtons(){
     var pool=FL.words.slice();
     if(pool.length<2){toast('クイズには最低2単語必要です');return;}
     var pending=Q._pendingCursor;
-    Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now()};
+    Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0};
     if(pending)Q._pendingCursor=pending;
     go('s-quiz');qRender();
   });
@@ -2228,7 +2228,7 @@ function showListSelectModal(mode){
         Q._pendingCursor={lid:lid, next:nextCursor};
         flashStart(pool,'list',lid);
       } else {
-        Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:true,quizMode:'test',sessionStart:Date.now()};
+        Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:true,quizMode:'test',sessionStart:Date.now(),consec:{},mastered:0};
         go('s-quiz');qRender();
       }
     });
@@ -2244,16 +2244,18 @@ function quizStart(mode,lid){
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
   var size=Math.min(pool.length,parseInt(G.cfg.size)||20);
   var ws=G.cfg.random?shuffle(pool).slice(0,size):pool.slice(0,size);
-  Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now()};
+  Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now(),
+     consec:{},mastered:0}; /* consec: wordId→連続正解数 */
   go('s-quiz');qRender();
 }
 
 function qRender(){
   var q=Q.q[Q.i];if(!q){qResult();return;}
   if(Q.i===0&&!Q.sessionStart)Q.sessionStart=Date.now();
-  var tot=Q.q.length,cur=Q.i+1;
-  el('QZ-fill').style.width=(cur/tot*100)+'%';
-  el('QZ-cnt').textContent=cur+'/'+tot;
+  var totalWords=Q.words.length;
+  var mastered=Q.mastered||0;
+  el('QZ-fill').style.width=(mastered/totalWords*100)+'%';
+  el('QZ-cnt').textContent=mastered+'/'+totalWords;
   el('QZ-mode-badge').style.display=Q.testMode?'inline-block':'none';
   var rev=G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
   var l=LANGS[q.lang||'en'];
@@ -2309,7 +2311,19 @@ function qSelect(i){
     if(!Q.slow)Q.slow=[];
     Q.slow.push({id:q.id,word:q.word,meaning:q.meaning||'',lang:q.lang||'en',lid:q.lid,answerMs:answerMs});
   }
-  el('FB-tx').innerHTML=ok?'<span style="color:var(--gn)">✓ 正解！</span>':'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca);
+  /* 連続正解カウント管理（2回連続正解で習得） */
+  if(!Q.consec)Q.consec={};
+  if(ok){
+    Q.consec[q.id]=(Q.consec[q.id]||0)+1;
+  } else {
+    Q.consec[q.id]=0; /* 不正解でリセット */
+  }
+  var justMastered=(ok&&Q.consec[q.id]>=2);
+  if(justMastered)Q.mastered=(Q.mastered||0)+1;
+
+  el('FB-tx').innerHTML=ok
+    ?(justMastered?'<span style="color:var(--gn)">✓ 正解！ 🎓 習得！</span>':'<span style="color:var(--gn)">✓ 正解！ あと1回！</span>')
+    :'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca);
   el('FB-dt').textContent=Q.testMode?'':(ok?'次回: '+(q.s&&q.s.i||1)+'日後':'1日後に再復習');
   el('FB').classList.add('on');
   /* 自動進行 — 正解時のみ（不正解は手動で確認させる） */
@@ -2333,7 +2347,26 @@ function qSelect(i){
 function qNext(){
   if(Q._autoTimer){clearTimeout(Q._autoTimer);Q._autoTimer=null;}
   el('B-next').textContent='次へ →';
-  Q.i++;Q.i>=Q.q.length?qResult():qRender();
+
+  var q=Q.q[Q.i];
+  /* 2回連続正解未達（consec < 2）なら、残りキューのランダム位置に再挿入 */
+  var consecCount=(Q.consec&&q)?(Q.consec[q.id]||0):2;
+  if(q && consecCount<2){
+    var remaining=Q.q.length-(Q.i+1); /* 現在位置より後の残り問題数 */
+    if(remaining>0){
+      /* 残り問題の中のランダムな位置に挿入（すぐ次には入れない：min 1問後） */
+      var insertOffset=1+Math.floor(Math.random()*Math.min(remaining, Math.max(1, Math.ceil(remaining*0.5)+1)));
+      var insertAt=Q.i+1+insertOffset;
+      if(insertAt>Q.q.length)insertAt=Q.q.length;
+      Q.q.splice(insertAt,0,q);
+    } else {
+      /* 残り0問なら末尾に追加して続行 */
+      Q.q.push(q);
+    }
+  }
+
+  Q.i++;
+  Q.i>=Q.q.length?qResult():qRender();
 }
 
 function qResult(){
