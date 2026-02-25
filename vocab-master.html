@@ -1968,127 +1968,127 @@ function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, 
     return s+'秒';
   }
 
-  /* ── SVG棒グラフ生成 ── */
-  function makeSVG(dataArr, labelArr, colorFn, valFmt, yAxisLabel){
-    if(!dataArr.length)return '<p style="color:#888;font-size:9pt;margin:8px 0">データがありません</p>';
-    var maxVal=Math.max.apply(null,dataArr.concat([1]));
-    var n=dataArr.length;
-    var bw=Math.min(44, Math.floor(560/n)-4);
-    var svgW=Math.max(280, n*(bw+4)+60);
-    var CHART_H=110, PAD_L=34, PAD_B=20;
-    var bars='',vlbls='',xlbls='';
-    /* y軸目盛り */
-    var yLines='';
-    [0,0.5,1].forEach(function(r){
-      var y=CHART_H-Math.round(r*CHART_H);
-      yLines+='<line x1="'+PAD_L+'" y1="'+y+'" x2="'+(svgW-4)+'" y2="'+y+'" stroke="'+(r===0?'#bbb':'#e0e0e0')+'" stroke-width="'+(r===0?'1':'0.7')+'" stroke-dasharray="'+(r>0&&r<1?'3,3':'0')+'"/>';
-      if(r<1)yLines+='<text x="'+(PAD_L-3)+'" y="'+(y+3)+'" text-anchor="end" font-size="7" fill="#999">'+valFmt(Math.round(maxVal*r))+'</text>';
+  /* ── SVG：学習時間(棒)+正答率(折れ線) 複合グラフ ── */
+  function makeComboSVG(labels, durMins, accPcts){
+    var n=labels.length;
+    if(!n)return '<p style="color:#888;font-size:9pt;margin:8px 0">データがありません</p>';
+    var GW=560, GH=120, PAD_L=36, PAD_R=36, PAD_B=22, PAD_T=14;
+    var IW=GW-PAD_L-PAD_R, IH=GH-PAD_T-PAD_B;
+    var bw=Math.min(36, Math.floor(IW/n)-3);
+    var step=IW/n;
+    var maxDur=Math.max.apply(null,durMins.concat([1]));
+    /* y軸グリッド（左：分、右：%） */
+    var grid='',yLbls='';
+    [0,0.25,0.5,0.75,1].forEach(function(r){
+      var y=PAD_T+IH-Math.round(r*IH);
+      var isDash=(r>0&&r<1);
+      grid+='<line x1="'+PAD_L+'" y1="'+y+'" x2="'+(GW-PAD_R)+'" y2="'+y+'" stroke="'+(r===0||r===1?'#ccc':'#eee')+'" stroke-width="'+(r===0||r===1?'1':'0.5')+'" stroke-dasharray="'+(isDash?'3,3':'0')+'"/>';
+      yLbls+='<text x="'+(PAD_L-4)+'" y="'+(y+3)+'" text-anchor="end" font-size="7" fill="#888">'+Math.round(maxDur*r)+'</text>';
+      yLbls+='<text x="'+(GW-PAD_R+4)+'" y="'+(y+3)+'" text-anchor="start" font-size="7" fill="#5c9cf8">'+(100*r|0)+'%</text>';
     });
-    yLines+='<text x="'+(PAD_L-3)+'" y="5" text-anchor="end" font-size="7" fill="#999">'+valFmt(maxVal)+'</text>';
-    dataArr.forEach(function(v,i){
-      var bh=maxVal?Math.max(v>0?2:0, Math.round(v/maxVal*CHART_H)):0;
-      var x=PAD_L+i*(bw+4)+2;
-      var y=CHART_H-bh;
-      bars+='<rect x="'+x.toFixed(1)+'" y="'+y+'" width="'+bw+'" height="'+bh+'" fill="'+colorFn(v,i)+'" rx="2" opacity="0.9"/>';
-      if(bh>12)vlbls+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(y-2)+'" text-anchor="middle" font-size="7" fill="#555">'+valFmt(v)+'</text>';
-      /* ラベル間引き（多い場合） */
-      var showLbl=(n<=10)||(i%Math.ceil(n/10)===0)||(i===n-1);
-      if(showLbl)xlbls+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(CHART_H+PAD_B-4)+'" text-anchor="middle" font-size="7" fill="#888">'+labelArr[i]+'</text>';
+    /* 棒（学習時間） */
+    var bars='',barLbls='',xlbls='';
+    var lineP='',lineDots='';
+    durMins.forEach(function(v,i){
+      var bh=maxDur?Math.max(v>0?2:0,Math.round(v/maxDur*IH)):0;
+      var cx=(PAD_L+i*step+step/2);
+      var bx=cx-bw/2;
+      var by=PAD_T+IH-bh;
+      bars+='<rect x="'+bx.toFixed(1)+'" y="'+by+'" width="'+bw+'" height="'+bh+'" fill="#7c5cfc" rx="2" opacity="0.75"/>';
+      if(bh>13)barLbls+='<text x="'+cx.toFixed(1)+'" y="'+(by-2)+'" text-anchor="middle" font-size="6.5" fill="#7c5cfc">'+v+'分</text>';
+      /* X軸ラベル間引き */
+      var show=(n<=14)||(i%Math.ceil(n/14)===0)||(i===n-1);
+      if(show)xlbls+='<text x="'+cx.toFixed(1)+'" y="'+(GH-4)+'" text-anchor="middle" font-size="7" fill="#888">'+labels[i]+'</text>';
+      /* 折れ線点 */
+      var acc=accPcts[i];
+      var ly=PAD_T+IH-Math.round(acc/100*IH);
+      lineDots+='<circle cx="'+cx.toFixed(1)+'" cy="'+ly+'" r="2.5" fill="'+(acc>=80?'#4cff91':acc>=60?'#ffd700':'#fc5c7d')+'" stroke="#fff" stroke-width="1"/>';
+      if(i>0){
+        var px=PAD_L+(i-1)*step+step/2;
+        var py=PAD_T+IH-Math.round(accPcts[i-1]/100*IH);
+        lineP+='<line x1="'+px.toFixed(1)+'" y1="'+py+'" x2="'+cx.toFixed(1)+'" y2="'+ly+'" stroke="#5c9cf8" stroke-width="1.5" opacity="0.8"/>';
+      }
     });
-    return '<div style="overflow-x:auto"><svg viewBox="0 0 '+svgW+' '+(CHART_H+PAD_B)+'" style="width:100%;max-height:140px;display:block">'+yLines+bars+vlbls+xlbls+'</svg></div>';
+    /* 凡例 */
+    var legend=
+      '<text x="'+(PAD_L+4)+'" y="'+(PAD_T-4)+'" font-size="7" fill="#7c5cfc">■ 学習時間（分）</text>'+
+      '<text x="'+(PAD_L+80)+'" y="'+(PAD_T-4)+'" font-size="7" fill="#5c9cf8">— 正答率</text>';
+    return '<div style="overflow-x:auto"><svg viewBox="0 0 '+GW+' '+GH+'" style="width:100%;max-height:160px;display:block">'+grid+bars+barLbls+lineP+lineDots+xlbls+yLbls+legend+'</svg></div>';
   }
 
-  /* ── 日別グラフデータ ── */
-  var durDayVals=dayKeys.map(function(d){return Math.round((dayMap[d].durMs||0)/60000);}); /* 分 */
-  var accDayVals=dayKeys.map(function(d){var r=dayMap[d];return r.total?Math.round(r.ok/r.total*100):0;});
-  var dayLabels=dayKeys.map(function(d){return fmtDateShort(d);});
-  var maxDurDay=Math.max.apply(null,durDayVals.concat([1]));
+  /* ── SVG：モード別学習時間（色分け棒グラフ） ── */
+  function makeModeSVG(modeData){
+    if(!modeData||!modeData.length)return '';
+    var n=modeData.length;
+    var GW=560, GH=100, PAD_L=42, PAD_R=10, PAD_B=22, PAD_T=10;
+    var IW=GW-PAD_L-PAD_R, IH=GH-PAD_T-PAD_B;
+    var bw=Math.min(60, Math.floor(IW/n)-8);
+    var step=IW/n;
+    var maxMs=Math.max.apply(null,modeData.map(function(m){return m.ms;}).concat([1]));
+    var grid='',yLbls='',bars='',barLbls='',xlbls='';
+    [0,0.5,1].forEach(function(r){
+      var y=PAD_T+IH-Math.round(r*IH);
+      grid+='<line x1="'+PAD_L+'" y1="'+y+'" x2="'+(GW-PAD_R)+'" y2="'+y+'" stroke="'+(r===0?'#ccc':'#eee')+'" stroke-width="'+(r===0?'1':'0.5')+'" stroke-dasharray="'+(r>0?'3,3':'0')+'"/>';
+      yLbls+='<text x="'+(PAD_L-3)+'" y="'+(y+3)+'" text-anchor="end" font-size="7" fill="#888">'+fmtDur(Math.round(maxMs*r))+'</text>';
+    });
+    modeData.forEach(function(m,i){
+      var bh=maxMs?Math.max(m.ms>0?2:0,Math.round(m.ms/maxMs*IH)):0;
+      var cx=PAD_L+i*step+step/2;
+      var bx=cx-bw/2;
+      var by=PAD_T+IH-bh;
+      bars+='<rect x="'+bx.toFixed(1)+'" y="'+by+'" width="'+bw+'" height="'+bh+'" fill="'+m.color+'" rx="3" opacity="0.85"/>';
+      if(bh>13)barLbls+='<text x="'+cx.toFixed(1)+'" y="'+(by-2)+'" text-anchor="middle" font-size="7" fill="'+m.color+'">'+fmtDur(m.ms)+'</text>';
+      xlbls+='<text x="'+cx.toFixed(1)+'" y="'+(GH-4)+'" text-anchor="middle" font-size="7.5" fill="#555">'+m.label+'</text>';
+    });
+    return '<div style="overflow-x:auto"><svg viewBox="0 0 '+GW+' '+GH+'" style="width:100%;max-height:130px;display:block">'+grid+bars+barLbls+xlbls+yLbls+'</svg></div>';
+  }
 
-  var durDaySVG=makeSVG(durDayVals,dayLabels,function(){return '#7c5cfc';},function(v){return v+'分';},'分');
-  var accDaySVG=makeSVG(accDayVals,dayLabels,function(v){return v>=80?'#4cff91':v>=60?'#ffd700':'#fc5c7d';},function(v){return v+'%';},'%');
+  /* ── 各集計単位のラベルと値を period に応じて選択 ── */
+  var comboLabels, comboDurMins, comboAccPcts;
+  if(period==='day'){
+    comboLabels=dayKeys.map(function(d){return fmtDateShort(d);});
+    comboDurMins=dayKeys.map(function(d){return Math.round((dayMap[d].durMs||0)/60000);});
+    comboAccPcts=dayKeys.map(function(d){var r=dayMap[d];return r.total?Math.round(r.ok/r.total*100):0;});
+  } else if(period==='week'){
+    /* 週報：日別を使う */
+    comboLabels=dayKeys.map(function(d){return fmtDateShort(d);});
+    comboDurMins=dayKeys.map(function(d){return Math.round((dayMap[d].durMs||0)/60000);});
+    comboAccPcts=dayKeys.map(function(d){var r=dayMap[d];return r.total?Math.round(r.ok/r.total*100):0;});
+  } else {
+    /* 月報：週別集計 */
+    var weekMap={};
+    dayKeys.forEach(function(d){
+      var dt=new Date(d),dow=dt.getDay()||7;
+      var mon=new Date(dt);mon.setDate(dt.getDate()-(dow-1));
+      var wk=mon.toISOString().slice(0,10);
+      if(!weekMap[wk])weekMap[wk]={durMs:0,ok:0,total:0};
+      weekMap[wk].durMs+=(dayMap[d].durMs||0);
+      weekMap[wk].ok+=dayMap[d].ok; weekMap[wk].total+=dayMap[d].total;
+    });
+    var wkKeys=Object.keys(weekMap).sort();
+    comboLabels=wkKeys.map(function(k){var d=new Date(k);return (d.getMonth()+1)+'/'+(d.getDate())+'〜';});
+    comboDurMins=wkKeys.map(function(k){return Math.round(weekMap[k].durMs/60000);});
+    comboAccPcts=wkKeys.map(function(k){var r=weekMap[k];return r.total?Math.round(r.ok/r.total*100):0;});
+  }
 
-  /* ── 週別グラフデータ（月曜始まり） ── */
-  var weekMap={};
-  dayKeys.forEach(function(d,i){
-    var dt=new Date(d), dow=dt.getDay()||7;
-    var mon=new Date(dt); mon.setDate(dt.getDate()-(dow-1));
-    var wk=mon.toISOString().slice(0,10);
-    if(!weekMap[wk]){weekMap[wk]={durMs:0,ok:0,total:0};}
-    weekMap[wk].durMs+=(dayMap[d].durMs||0);
-    weekMap[wk].ok+=(dayMap[d].ok||0);
-    weekMap[wk].total+=(dayMap[d].total||0);
-  });
-  var wkKeys=Object.keys(weekMap).sort();
-  var durWkVals=wkKeys.map(function(k){return Math.round(weekMap[k].durMs/60000);});
-  var accWkVals=wkKeys.map(function(k){var r=weekMap[k];return r.total?Math.round(r.ok/r.total*100):0;});
-  var wkLabels=wkKeys.map(function(k){var d=new Date(k);return (d.getMonth()+1)+'/'+(d.getDate())+'〜';});
-  var durWkSVG=makeSVG(durWkVals,wkLabels,function(){return '#7c5cfc';},function(v){return v+'分';},'分');
-  var accWkSVG=makeSVG(accWkVals,wkLabels,function(v){return v>=80?'#4cff91':v>=60?'#ffd700':'#fc5c7d';},function(v){return v+'%';},'%');
+  var comboSVG=makeComboSVG(comboLabels,comboDurMins,comboAccPcts);
+  var modeSVG=makeModeSVG(modeData);
 
-  /* ── 月別グラフデータ ── */
-  var moMap={};
-  dayKeys.forEach(function(d){
-    var m=d.slice(0,7);
-    if(!moMap[m]){moMap[m]={durMs:0,ok:0,total:0};}
-    moMap[m].durMs+=(dayMap[d].durMs||0);
-    moMap[m].ok+=(dayMap[d].ok||0);
-    moMap[m].total+=(dayMap[d].total||0);
-  });
-  var moKeys=Object.keys(moMap).sort();
-  var durMoVals=moKeys.map(function(k){return Math.round(moMap[k].durMs/60000);});
-  var accMoVals=moKeys.map(function(k){var r=moMap[k];return r.total?Math.round(r.ok/r.total*100):0;});
-  var moLabels=moKeys.map(function(k){var p=k.split('-');return p[0].slice(2)+'/'+(+p[1])+'月';});
-  var durMoSVG=makeSVG(durMoVals,moLabels,function(){return '#7c5cfc';},function(v){return v+'分';},'分');
-  var accMoSVG=makeSVG(accMoVals,moLabels,function(v){return v>=80?'#4cff91':v>=60?'#ffd700':'#fc5c7d';},function(v){return v+'%';},'%');
-
-  /* ── 表示するグラフ段数（日次は日別のみ、週次は日+週、月次は3段） ── */
+  /* ── グラフセクション ── */
   var graphSection='';
   if(dayKeys.length>0){
-    var needWk=(period==='week'||period==='month')&&wkKeys.length>0;
-    var needMo=(period==='month')&&moKeys.length>0;
-    graphSection+=
+    graphSection=
       '<h2>📊 学習状況グラフ</h2>'+
-      /* 日別 */
-      '<div style="margin-bottom:4px;font-size:10pt;font-weight:700;color:#444;padding-left:4px">📅 日別</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">'+
-        '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:10px"><div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:4px">⏱️ 学習時間（分）</div>'+durDaySVG+'</div>'+
-        '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:10px"><div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:4px">📈 正答率</div>'+accDaySVG+'</div>'+
-      '</div>';
-    if(needWk){
-      graphSection+=
-        '<div style="margin-bottom:4px;font-size:10pt;font-weight:700;color:#444;padding-left:4px">📆 週別</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">'+
-          '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:10px"><div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:4px">⏱️ 学習時間（分）</div>'+durWkSVG+'</div>'+
-          '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:10px"><div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:4px">📈 正答率</div>'+accWkSVG+'</div>'+
-        '</div>';
-    }
-    if(needMo){
-      graphSection+=
-        '<div style="margin-bottom:4px;font-size:10pt;font-weight:700;color:#444;padding-left:4px">🗓️ 月別</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">'+
-          '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:10px"><div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:4px">⏱️ 学習時間（分）</div>'+durMoSVG+'</div>'+
-          '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:10px"><div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:4px">📈 正答率</div>'+accMoSVG+'</div>'+
-        '</div>';
-    }
-    /* ── モード別学習時間グラフ ── */
-    if(modeData&&modeData.length>0){
-      var modeDurVals=modeData.map(function(m){return Math.round(m.ms/60000);});
-      var modeLbls=modeData.map(function(m){return m.label;});
-      var modeSVG=makeSVG(modeDurVals,modeLbls,function(v,i){return modeData[i].color;},function(v){return v+'分';},'分');
-      graphSection+=
-        '<div style="margin-bottom:4px;font-size:10pt;font-weight:700;color:#444;padding-left:4px">🎯 モード別学習時間</div>'+
-        '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:10px;margin-bottom:16px">'+
-          '<div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:4px">各モードの累計学習時間</div>'+
+      '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:12px;margin-bottom:14px">'+
+        '<div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:6px">⏱️ 学習時間（棒）＋ 📈 正答率（折れ線）</div>'+
+        comboSVG+
+      '</div>'+
+      (modeSVG?
+        '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:12px;margin-bottom:14px">'+
+          '<div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:6px">🎯 モード別学習時間</div>'+
           modeSVG+
-          '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">'+
-          modeData.map(function(m){
-            return '<span style="font-size:8pt;color:#555">'+
-              '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+m.color+';margin-right:3px;vertical-align:middle"></span>'+
-              m.label+'：'+fmtDur(m.ms)+'</span>';
-          }).join('')+
-          '</div>'+
-        '</div>';
-    }
+        '</div>'
+      :'');
   }
 
   /* ── 日別テーブル ── */
