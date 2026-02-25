@@ -168,6 +168,9 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 .ch-lt { width:25px; height:25px; border-radius:6px; background:rgba(255,255,255,.06); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--tx2); flex-shrink:0; }
 .ch-tx { flex:1; line-height:1.3; }
 .ch-ic { font-size:15px; margin-left:auto; flex-shrink:0; min-width:18px; text-align:center; }
+.ch-dk { width:100%; padding:11px 14px; background:transparent; border:2px dashed rgba(255,255,255,.15); border-radius:13px; color:var(--tx2); font-size:13px; font-weight:500; cursor:pointer; font-family:inherit; text-align:center; margin-top:2px; -webkit-appearance:none; }
+.ch-dk:active:not(.done) { border-color:rgba(255,255,255,.35); color:var(--tx); }
+.ch-dk.done { opacity:.5; pointer-events:none; }
 
 .fb { position:absolute; bottom:calc(var(--sb) + 7px); left:14px; right:14px; background:var(--sf2); border:1px solid rgba(255,255,255,.08); border-radius:13px; padding:11px 14px; display:flex; align-items:center; justify-content:space-between; gap:9px; opacity:0; transform:translateY(28px); transition:opacity .25s ease,transform .25s ease; pointer-events:none; z-index:10; }
 .fb.on { opacity:1; transform:translateY(0); pointer-events:auto; }
@@ -619,6 +622,15 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         <span style="font-size:11px;color:var(--tx2);line-height:1.6">読み上げ中の音楽ボリュームを下げます。0%で無音、100%で変化なし。</span>
       </div>
     </div>
+    <div class="set-sec">☁️ クラウド同期（オプション）</div>
+    <div class="set-group">
+      <div class="set-row" style="cursor:default;flex-direction:column;align-items:stretch;gap:8px">
+        <div style="font-size:11px;color:var(--tx2);line-height:1.6;padding:2px 0">同じClaudeアカウントでログインした別デバイスとデータを手動同期できます。</div>
+        <button class="btn-primary" id="B-cloud-save" style="padding:10px;font-size:13px">☁️ クラウドに保存</button>
+        <button class="btn-sec" id="B-cloud-load" style="padding:10px;font-size:13px;margin-top:0">📥 クラウドから読み込む</button>
+        <div id="CLOUD-status" style="font-size:11px;text-align:center;color:var(--tx2);padding:2px 0;min-height:16px"></div>
+      </div>
+    </div>
     <div class="set-sec">データ</div>
     <div class="set-group">
       <div class="set-row" id="B-export"><span class="set-lbl">📤 全データをエクスポート (JSON)</span><span class="set-val">→</span></div>
@@ -640,6 +652,60 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 var MEM=null, DBKEY='vm3';
 function sGet(){try{var v=localStorage.getItem(DBKEY);return v?JSON.parse(v):null;}catch(e){return MEM;}}
 function sSet(v){try{localStorage.setItem(DBKEY,JSON.stringify(v));}catch(e){}MEM=v;}
+
+/* ── Claudeストレージ同期 ── */
+var CLOUD_KEY='vocabmaster-sync-v1';
+function cloudStatus(msg,clr){var el=document.getElementById('CLOUD-status');if(el){el.textContent=msg;el.style.color=clr||'var(--tx2)';}}
+
+async function cloudSave(){
+  if(!window.storage){cloudStatus('⚠️ このブラウザ環境では使用できません','var(--rd)');return;}
+  var btn=document.getElementById('B-cloud-save');
+  if(btn){btn.disabled=true;btn.textContent='保存中...';}
+  cloudStatus('','');
+  try{
+    var payload=JSON.stringify(G);
+    if(payload.length>4*1024*1024){cloudStatus('⚠️ データが大きすぎます（4MB超）','var(--rd)');return;}
+    var result=await window.storage.set(CLOUD_KEY, payload);
+    if(result){
+      var now=new Date();
+      var ts=now.getFullYear()+'/'+(now.getMonth()+1)+'/'+now.getDate()+' '+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
+      cloudStatus('✅ 保存完了 — '+ts,'var(--gn)');
+      toast('☁️ クラウドに保存しました');
+    }else{
+      cloudStatus('⚠️ 保存に失敗しました','var(--rd)');
+    }
+  }catch(e){
+    cloudStatus('⚠️ エラー: '+e.message,'var(--rd)');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='☁️ クラウドに保存';}
+  }
+}
+
+async function cloudLoad(){
+  if(!window.storage){cloudStatus('⚠️ このブラウザ環境では使用できません','var(--rd)');return;}
+  var btn=document.getElementById('B-cloud-load');
+  if(btn){btn.disabled=true;btn.textContent='読み込み中...';}
+  cloudStatus('','');
+  try{
+    var result=await window.storage.get(CLOUD_KEY);
+    if(!result||!result.value){cloudStatus('クラウドにデータがありません','var(--tx2)');toast('クラウドにデータが見つかりませんでした');return;}
+    var remote=JSON.parse(result.value);
+    /* 件数表示して確認 */
+    var lists=(remote.lists||[]).length;
+    var words=(remote.words||[]).length;
+    var msg='クラウドのデータ:\nリスト '+lists+' 件 / 単語 '+words+' 件\n\n現在のデータと置き換えますか？\n（置き換え前に現在のデータはエクスポートしてください）';
+    if(!confirm(msg))return;
+    G=remote;
+    sSet(G);
+    homeRefresh();listFilterRebuild();listRender();
+    cloudStatus('✅ 読み込み完了 — リスト'+lists+'件 / 単語'+words+'件','var(--gn)');
+    toast('📥 クラウドから読み込みました');
+  }catch(e){
+    cloudStatus('⚠️ エラー: '+e.message,'var(--rd)');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='📥 クラウドから読み込む';}
+  }
+}
 
 var EASE0=2.5, EMIN=1.3;
 
@@ -2137,8 +2203,41 @@ function generateReport(period){
     return {key:k, label:modeLabels[k], ms:modeMs[k], color:modeColors[k]};
   });
 
+  /* リスト別集計 */
+  var listMap={};
+  logs.forEach(function(l){
+    (l.lids||[]).forEach(function(lid){
+      if(!listMap[lid])listMap[lid]={sessions:0,total:0,ok:0,durMs:0};
+      listMap[lid].sessions++;
+      listMap[lid].total+=l.total;
+      listMap[lid].ok+=l.ok;
+      listMap[lid].durMs+=(l.durationMs||((l.dur||0)*1000));
+    });
+    /* lidsがない古いログはwordsから推定 */
+    if(!l.lids&&l.words&&l.words.length){
+      var lidSet={};
+      l.words.forEach(function(wid){
+        var w=G.words.find(function(x){return x.id===wid;});
+        if(w&&w.lid)lidSet[w.lid]=true;
+      });
+      Object.keys(lidSet).forEach(function(lid){
+        if(!listMap[lid])listMap[lid]={sessions:0,total:0,ok:0,durMs:0};
+        listMap[lid].sessions++;
+        listMap[lid].total+=l.total;
+        listMap[lid].ok+=l.ok;
+        listMap[lid].durMs+=(l.durationMs||((l.dur||0)*1000));
+      });
+    }
+  });
+  var listData=Object.keys(listMap).map(function(lid){
+    var lst=G.lists.find(function(x){return x.id===lid;});
+    var r=listMap[lid];
+    var acc2=r.total?Math.round(r.ok/r.total*100):0;
+    return {lid:lid, name:lst?lst.name:'（削除済みリスト）', lang:lst?lst.lang:'', sessions:r.sessions, total:r.total, ok:r.ok, acc:acc2, durMs:r.durMs};
+  }).sort(function(a,b){return b.durMs-a.durMs;});
+
   /* HTML生成 */
-  var h=buildReportHTML(periodLabel, now, totalSessions, totalQ, totalOk, totalNg, avgAcc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, modeData, period);
+  var h=buildReportHTML(periodLabel, now, totalSessions, totalQ, totalOk, totalNg, avgAcc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, modeData, listData, period);
 
   /* 別ウィンドウで開いて印刷 */
   var w=window.open('','_blank','width=900,height=700');
@@ -2154,7 +2253,7 @@ function fmtDateShort(s){
   var d=new Date(s);return (d.getMonth()+1)+'/'+d.getDate();
 }
 
-function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, modeData, period){
+function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, modeData, listData, period){
 
   /* ── 時間フォーマット（ミリ秒 → 表示文字列） ── */
   function fmtDur(ms){
@@ -2372,6 +2471,24 @@ function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, 
     graphSection+
     '<h2>📋 日別学習記録</h2>'+
     '<table><tr><th>日付</th><th>セッション</th><th>出題数</th><th>正解</th><th>不正解</th><th>正答率</th><th>学習時間</th></tr>'+dayRows+'</table>'+
+    /* ── 使用単語集テーブル ── */
+    (listData&&listData.length?
+      '<h2>📚 使用した単語集</h2>'+
+      '<table><tr><th>単語集名</th><th>言語</th><th>セッション</th><th>出題数</th><th>正答率</th><th>学習時間</th></tr>'+
+      listData.map(function(d){
+        var l=LANGS[d.lang||'en'];
+        var clr=d.acc>=80?'#4cff91':d.acc>=60?'#ffd700':'#fc5c7d';
+        return '<tr>'+
+          '<td><strong>'+(escHtml(d.name))+'</strong></td>'+
+          '<td>'+(l?l.flag+' '+l.name:'—')+'</td>'+
+          '<td style="text-align:center">'+d.sessions+'</td>'+
+          '<td style="text-align:center">'+d.total+'</td>'+
+          '<td style="text-align:center;color:'+clr+';font-weight:700">'+d.acc+'%</td>'+
+          '<td>'+fmtDur(d.durMs)+'</td>'+
+        '</tr>';
+      }).join('')+
+      '</table>'
+    :'')+
     '<h2>❌ 苦手単語一覧（不正解が多い順）</h2>'+
     '<table><tr><th>#</th><th>単語</th><th>意味</th><th>言語</th><th>間違い回数</th></tr>'+missRows+'</table>'+
     '<h2>⏱️ 準苦手ランキング（回答に時間がかかった単語）</h2>'+
@@ -2485,10 +2602,37 @@ function qRender(){
   choices.forEach(function(c,i){
     h+='<button class="ch-btn" data-i="'+i+'"><div class="ch-lt">'+L[i]+'</div><div class="ch-tx">'+esc(c)+'</div><div class="ch-ic"></div></button>';
   });
+  h+='<button class="ch-dk" id="QZ-dontknow">❓ 分からない</button>';
   el('QZ-choices').innerHTML=h;
   el('QZ-choices').querySelectorAll('.ch-btn').forEach(function(b){b.addEventListener('click',function(){qSelect(parseInt(this.getAttribute('data-i')));});});
+  el('QZ-choices').querySelector('#QZ-dontknow').addEventListener('click',function(){qDontKnow();});
   el('FB').classList.remove('on');
   Q.qStartTime=Date.now();
+}
+
+function qDontKnow(){
+  if(Q.done)return;Q.done=true;
+  var answerMs=Q.qStartTime?Date.now()-Q.qStartTime:0;
+  /* 全ボタン無効化 */
+  el('QZ-choices').querySelectorAll('.ch-btn,.ch-dk').forEach(function(b){b.classList.add('done');});
+  /* 正解を緑でハイライト */
+  var btns=el('QZ-choices').querySelectorAll('.ch-btn');
+  btns[Q.ci].classList.add('ok');
+  btns[Q.ci].querySelector('.ch-ic').textContent='✓';
+  var q=Q.q[Q.i];
+  q._answerMs=answerMs;
+  /* 不正解と同じ扱い（SRS更新・miss追加） */
+  answer(q,false);
+  Q.ng++;
+  Q.miss.push(q);
+  /* hadMissフラグ → 2回連続正解が必要になる */
+  if(!Q.consec)Q.consec={};
+  q._hadMiss=true;
+  Q.consec[q.id]=0;
+  /* 習得カウントは増やさない */
+  el('FB-tx').innerHTML='<span style="color:var(--ac3)">❓ 分からない</span> → <span style="color:var(--gn)">'+esc(Q.ca)+'</span>';
+  el('FB-dt').textContent=Q.testMode?'':'1日後に再復習';
+  el('FB').classList.add('on');
 }
 
 function qSelect(i){
@@ -2592,12 +2736,17 @@ function qResult(){
   /* セッションログを保存 */
   var _durMs=Q.sessionStart?Date.now()-Q.sessionStart:(Q.startMs?Date.now()-Q.startMs:0);
   if(!G.logs)G.logs=[];
+  /* 使用リストIDを収集（重複排除） */
+  var _lidSet={};
+  Q.words.forEach(function(w){if(w.lid)_lidSet[w.lid]=true;});
+  var _lids=Object.keys(_lidSet);
   G.logs.push({
     ts: new Date().toISOString(),
     ok: Q.ok, ng: Q.ng, acc: acc, total: tot,
     durationMs: _durMs,
     quizMode: Q.quizMode||'all',
     testMode: !!Q.testMode,
+    lids: _lids,
     miss: Q.miss.map(function(w){return{id:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',lid:w.lid};}),
     slow: (Q.slow||[]).map(function(w){return{id:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',lid:w.lid,answerMs:w.answerMs};}),
     words: Q.words.map(function(w){return w.id;})
@@ -2897,6 +3046,8 @@ function bind(){
   el('B-reset').addEventListener('click',function(){
     if(confirm('すべてのデータを削除しますか？\nこの操作は取り消せません。')){G=mkDB();save();toast('データを削除しました');homeRefresh();}
   });
+  el('B-cloud-save').addEventListener('click',function(){cloudSave();});
+  el('B-cloud-load').addEventListener('click',function(){cloudLoad();});
   el('modal-bg').addEventListener('click',function(e){if(e.target===this)this.classList.remove('on');});
 }
 
