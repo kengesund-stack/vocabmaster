@@ -695,7 +695,10 @@ async function cloudLoad(){
     var words=(remote.words||[]).length;
     var msg='クラウドのデータ:\nリスト '+lists+' 件 / 単語 '+words+' 件\n\n現在のデータと置き換えますか？\n（置き換え前に現在のデータはエクスポートしてください）';
     if(!confirm(msg))return;
+    var savedKey=(G.cfg&&G.cfg.key)||'';
     G=remote;
+    /* 現在デバイスのAPIキーを優先して保持 */
+    if(savedKey&&!G.cfg.key){if(!G.cfg)G.cfg={};G.cfg.key=savedKey;}
     sSet(G);
     homeRefresh();listFilterRebuild();listRender();
     cloudStatus('✅ 読み込み完了 — リスト'+lists+'件 / 単語'+words+'件','var(--gn)');
@@ -741,12 +744,14 @@ function getWeak(){return G.words.filter(function(w){return w.s&&(w.s.l||0)>0;})
 var SCREENS=['s-home','s-add','s-list','s-flash','s-quiz','s-result','s-settings'];
 var TABMAP={'s-home':'T-home','s-add':'T-add','s-list':'T-list','s-settings':'T-settings'};
 function go(id){
+  /* 選択モードをリセット */
+  if(selModeOn&&id!=='s-list'){selModeOn=false;selSet={};var tb=document.getElementById('SEL-toolbar');if(tb)tb.style.display='none';var sb=document.getElementById('B-sel-mode');if(sb)sb.style.color='var(--tx2)';}
   SCREENS.forEach(function(s){el(s).classList.remove('on');});
   el(id).classList.add('on');
   ['T-home','T-add','T-list','T-settings'].forEach(function(t){el(t).classList.remove('on');});
   if(TABMAP[id])el(TABMAP[id]).classList.add('on');
   if(id==='s-home')homeRefresh();
-  if(id==='s-list'){listFilterRebuild();listRender();}
+  if(id==='s-list'){if(selModeOn)toggleSelMode();listFilterRebuild();listRender();}
   if(id==='s-settings')settingsLoad();
 }
 
@@ -1550,6 +1555,9 @@ function listFilterRebuild(){
   sel.value=cur||'all';
 }
 function listRender(){
+  /* 選択モードのツールバー表示を同期 */
+  var _tb=document.getElementById('SEL-toolbar');
+  if(_tb)_tb.style.display=selModeOn?'block':'none';
   var flt=(el('SEL-list')||{}).value||'all';
   var srch=((el('IN-search')||{}).value||'').toLowerCase();
   var c=el('L-words');
@@ -1611,7 +1619,9 @@ function listMenu(lid){
     if(cur>=total)cur=0;
     var slice=ws.slice(cur, cur+size);
     if(slice.length<2&&total>=2){cur=0;slice=ws.slice(0,size);}
-    return {pool:slice, nextCursor:Math.min(cur+slice.length, total)};
+    /* ランダム設定が有効なら出題順をシャッフル（カーソルは進める） */
+    var pool=G.cfg.random?shuffle(slice):slice;
+    return {pool:pool, nextCursor:Math.min(cur+slice.length, total)};
   }
 
   el('LM-flash').addEventListener('click',function(){
@@ -1749,7 +1759,7 @@ function editWord(wid){
     w.lang=el('EW-lang').value;
     w.lid=el('EW-list').value;
     save();el('modal-bg').classList.remove('on');
-    listRender();toast('✅ 単語を更新しました');
+    homeRefresh();listRender();toast('✅ 単語を更新しました');
   });
   el('EW-cancel').addEventListener('click',function(){el('modal-bg').classList.remove('on');});
 }
@@ -1797,7 +1807,7 @@ function checkDuplicates(){
     if(!checked.length){toast('削除する単語を選択してください');return;}
     G.words=G.words.filter(function(w){return checked.indexOf(w.id)<0;});
     save();el('modal-bg').classList.remove('on');
-    listRender();toast('🗑️ '+checked.length+'件削除しました');
+    homeRefresh();listRender();toast('🗑️ '+checked.length+'件削除しました');
   });
   el('DUP-cancel').addEventListener('click',function(){el('modal-bg').classList.remove('on');});
 }
@@ -1826,7 +1836,7 @@ function selDeleteAll(){
   if(!ids.length){toast('単語を選択してください');return;}
   if(!confirm(ids.length+'件の単語を削除しますか？'))return;
   G.words=G.words.filter(function(w){return!selSet[w.id];});
-  selSet={};save();listRender();updateSelCount();toast('🗑️ '+ids.length+'件削除しました');
+  selSet={};save();homeRefresh();listRender();updateSelCount();toast('🗑️ '+ids.length+'件削除しました');
 }
 function selMoveAll(){
   var ids=Object.keys(selSet);
@@ -1891,16 +1901,6 @@ function speak(text, lang){
 
 /* ---------- FLASHCARD ---------- */
 var FL={words:[],i:0,playing:false,timer:null,quizPool:null,quizMode:null,quizLid:null,token:0};
-
-function flashStart(words, quizMode, quizLid){
-  if(!words||!words.length){toast('単語がありません');return;}
-  sqClear();
-  FL.words=words; FL.i=0; FL.playing=false; FL.timer=null; FL.token=0;
-  FL.quizMode=quizMode; FL.quizLid=quizLid;
-  go('s-flash');
-  flRender();
-  if(G.cfg.flashAuto){setTimeout(flStartAuto,500);}
-}
 
 /* ---- 読み上げキュー（iOS対応） ---- */
 var SQ={queue:[],busy:false};
@@ -2140,72 +2140,75 @@ function showReportStep1(){
 
 function showReportStep2(period){
   var periodLabels={day:'日次報告書',week:'週次報告書',month:'月次報告書'};
-  var html='<div class="modal-tl">📊 '+periodLabels[period]+'</div>';
-  html+='<div style="font-size:12px;color:var(--tx2);margin-bottom:14px">② 単語集を選択（複数可）</div>';
+  /* 選択状態をJSオブジェクトで管理（チェックボックス不使用） */
+  var selLids={all:true}; /* デフォルト：全て選択 */
 
-  /* 全て */
-  html+='<button class="rpt-list-btn" data-lid="all" style="display:flex;align-items:center;gap:12px;width:100%;background:var(--sf2);border:2px solid rgba(255,255,255,.08);border-radius:12px;padding:13px 14px;margin-bottom:8px;cursor:pointer;font-family:inherit;text-align:left;-webkit-appearance:none;">'+
-    '<input type="checkbox" class="rpt-chk" data-lid="all" style="width:18px;height:18px;flex-shrink:0;accent-color:var(--ac)" checked>'+
-    '<div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--tx)">📚 すべての単語集</div>'+
-    '<div style="font-size:11px;color:var(--tx2);margin-top:2px">全リストを対象にする</div></div></button>';
+  function renderStep2(){
+    var html='<div class="modal-tl">📊 '+periodLabels[period]+'</div>';
+    html+='<div style="font-size:12px;color:var(--tx2);margin-bottom:14px">② 単語集を選択（複数可）</div>';
 
-  G.lists.forEach(function(lst){
-    var l=LANGS[lst.lang||'en'];
-    var ws=G.words.filter(function(w){return w.lid===lst.id;});
-    html+='<button class="rpt-list-btn" data-lid="'+lst.id+'" style="display:flex;align-items:center;gap:12px;width:100%;background:var(--sf2);border:2px solid rgba(255,255,255,.08);border-radius:12px;padding:13px 14px;margin-bottom:8px;cursor:pointer;font-family:inherit;text-align:left;-webkit-appearance:none;">'+
-      '<input type="checkbox" class="rpt-chk" data-lid="'+lst.id+'" style="width:18px;height:18px;flex-shrink:0;accent-color:var(--ac)">'+
-      '<div style="font-size:22px;flex-shrink:0">'+(l?l.flag:'📗')+'</div>'+
-      '<div style="flex:1;min-width:0">'+
-        '<div style="font-size:14px;font-weight:600;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(lst.name)+'</div>'+
-        '<div style="font-size:11px;color:var(--tx2);margin-top:2px">'+ws.length+'単語</div>'+
-      '</div></button>';
-  });
-
-  html+='<button class="btn-primary" id="RPT-go" style="margin-top:4px">📄 報告書を作成</button>';
-  html+='<button class="btn-sec" id="RPT-back" style="margin-top:8px">← 戻る</button>';
-  el('modal-ct').innerHTML=html;
-
-  /* 「全て」チェックボックスの排他ロジック */
-  var allChk=el('modal-ct').querySelector('.rpt-chk[data-lid="all"]');
-  var listChks=Array.from(el('modal-ct').querySelectorAll('.rpt-chk:not([data-lid="all"])'));
-
-  el('modal-ct').querySelectorAll('.rpt-list-btn').forEach(function(btn){
-    btn.addEventListener('click',function(e){
-      if(e.target.tagName==='INPUT')return;
-      var chk=this.querySelector('.rpt-chk');
-      chk.checked=!chk.checked;
-      syncChks();
-      this.style.borderColor=chk.checked?'var(--ac)':'rgba(255,255,255,.08)';
-    });
-    btn.querySelector('.rpt-chk').addEventListener('change',function(){
-      syncChks();
-      btn.style.borderColor=this.checked?'var(--ac)':'rgba(255,255,255,.08)';
-    });
-  });
-
-  function syncChks(){
-    if(allChk.checked){
-      listChks.forEach(function(c){c.checked=false;c.closest('button').style.borderColor='rgba(255,255,255,.08)';});
-    } else {
-      var anyList=listChks.some(function(c){return c.checked;});
-      if(!anyList){allChk.checked=true;allChk.closest('button').style.borderColor='var(--ac)';}
+    function btnStyle(lid){
+      var on=selLids[lid];
+      return 'display:flex;align-items:center;gap:12px;width:100%;background:'+(on?'rgba(124,92,252,.15)':'var(--sf2)')+
+        ';border:2px solid '+(on?'var(--ac)':'rgba(255,255,255,.1)')+
+        ';border-radius:12px;padding:13px 14px;margin-bottom:8px;cursor:pointer;font-family:inherit;text-align:left;-webkit-appearance:none;';
     }
+    function chkMark(lid){
+      return '<div style="width:22px;height:22px;border-radius:6px;border:2px solid '+(selLids[lid]?'var(--ac)':'rgba(255,255,255,.2)')+
+        ';background:'+(selLids[lid]?'var(--ac)':'transparent')+
+        ';display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;color:#fff">'+
+        (selLids[lid]?'✓':'')+
+        '</div>';
+    }
+
+    html+='<button class="rpt-sel-btn" data-lid="all" style="'+btnStyle('all')+'">'+
+      chkMark('all')+
+      '<div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--tx)">📚 すべての単語集</div>'+
+      '<div style="font-size:11px;color:var(--tx2);margin-top:2px">全リストを対象にする</div></div></button>';
+
+    G.lists.forEach(function(lst){
+      var l=LANGS[lst.lang||'en'];
+      var ws=G.words.filter(function(w){return w.lid===lst.id;});
+      html+='<button class="rpt-sel-btn" data-lid="'+lst.id+'" style="'+btnStyle(lst.id)+'">'+
+        chkMark(lst.id)+
+        '<div style="font-size:22px;flex-shrink:0">'+(l?l.flag:'📗')+'</div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:14px;font-weight:600;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(lst.name)+'</div>'+
+          '<div style="font-size:11px;color:var(--tx2);margin-top:2px">'+ws.length+'単語</div>'+
+        '</div></button>';
+    });
+
+    html+='<button class="btn-primary" id="RPT-go" style="margin-top:4px">📄 報告書を作成</button>';
+    html+='<button class="btn-sec" id="RPT-back" style="margin-top:0;margin-top:8px">← 戻る</button>';
+    el('modal-ct').innerHTML=html;
+
+    el('modal-ct').querySelectorAll('.rpt-sel-btn').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        var lid=this.getAttribute('data-lid');
+        if(lid==='all'){
+          /* 「全て」をタップ → 全てON・個別OFF */
+          selLids={all:true};
+        } else {
+          /* 個別をタップ → 「全て」をOFF、個別トグル */
+          delete selLids.all;
+          if(selLids[lid]) delete selLids[lid];
+          else selLids[lid]=true;
+          /* 何も選ばれなければ「全て」に戻す */
+          if(!Object.keys(selLids).length) selLids={all:true};
+        }
+        renderStep2(); /* 再描画 */
+      });
+    });
+
+    el('RPT-go').addEventListener('click',function(){
+      var lids=Object.keys(selLids);
+      el('modal-bg').classList.remove('on');
+      generateReport(period, lids);
+    });
+    el('RPT-back').addEventListener('click',function(){showReportStep1();});
   }
-  /* 初期状態で「全て」をハイライト */
-  allChk.closest('button').style.borderColor='var(--ac)';
 
-  el('RPT-go').addEventListener('click',function(){
-    var lids=[];
-    if(allChk.checked){
-      lids=['all'];
-    } else {
-      listChks.forEach(function(c){if(c.checked)lids.push(c.getAttribute('data-lid'));});
-      if(!lids.length)lids=['all'];
-    }
-    el('modal-bg').classList.remove('on');
-    generateReport(period, lids);
-  });
-  el('RPT-back').addEventListener('click',function(){showReportStep1();});
+  renderStep2();
 }
 
 function generateReport(period, lids){
