@@ -426,7 +426,19 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
   <div class="hdr">
     <button class="btn btn-back" id="B-list-back">←</button>
     <div class="hdr-title">単語一覧</div>
-    <select class="sel" id="SEL-list"><option value="all">すべて</option></select>
+    <div style="display:flex;align-items:center;gap:4px">
+      <button class="btn" id="B-dup-check" title="重複チェック" style="font-size:18px;padding:4px 6px">⊜</button>
+      <button class="btn" id="B-sel-mode" title="選択モード" style="font-size:17px;padding:4px 6px;color:var(--tx2)">☑</button>
+      <select class="sel" id="SEL-list"><option value="all">すべて</option></select>
+    </div>
+  </div>
+  <div id="SEL-toolbar" style="display:none;padding:8px 14px;background:var(--sf);border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="btn" id="SEL-all-btn" style="font-size:12px;color:var(--ac);font-weight:600;padding:5px 10px;background:var(--sf2);border-radius:8px">全選択</button>
+      <span id="SEL-count" style="font-size:12px;color:var(--tx2);flex:1;text-align:center">0件選択中</span>
+      <button class="btn" id="SEL-move-btn" style="font-size:12px;color:var(--ac3);font-weight:600;padding:5px 10px;background:var(--sf2);border-radius:8px">✦ 移動</button>
+      <button class="btn" id="SEL-del-btn" style="font-size:12px;color:var(--rd);font-weight:600;padding:5px 10px;background:rgba(255,76,106,.1);border-radius:8px">🗑 削除</button>
+    </div>
   </div>
   <div class="srch-wrap">
     <input class="srch" id="IN-search" type="search" placeholder="単語を検索...">
@@ -1483,13 +1495,24 @@ function listRender(){
   words.forEach(function(w){
     var v=lvl(w);
     var l=LANGS[w.lang||'en'];
-    h+='<button class="word-item" data-wid="'+esc(w.id)+'">'+
+    var chk=selModeOn?'<input type="checkbox" class="word-sel-chk" data-wid="'+esc(w.id)+'"'+(selSet[w.id]?' checked':'')+' style="width:18px;height:18px;flex-shrink:0;margin-right:4px;accent-color:var(--ac)">':'';
+    h+='<button class="word-item" data-wid="'+esc(w.id)+'" style="'+(selModeOn&&selSet[w.id]?'background:rgba(124,92,252,.18);border-color:var(--ac);':'')+'">'+
+      chk+
       '<div class="wi-inf"><div class="wi-en">'+(l?'<span style="font-size:11px;margin-right:4px">'+l.flag+'</span>':'')+esc(w.word)+'</div>'+
       '<div class="wi-ja">'+(w.meaning?esc(w.meaning):'訳なし')+'</div></div>'+
       '<div class="wi-lvl l'+v+'">'+lb[v]+'</div></button>';
   });
   c.innerHTML=h;
-  c.querySelectorAll('.word-item').forEach(function(b){b.addEventListener('click',function(){wordDetail(this.getAttribute('data-wid'));});});
+  c.querySelectorAll('.word-item').forEach(function(b){
+    b.addEventListener('click',function(e){
+      var wid=this.getAttribute('data-wid');
+      if(selModeOn){selWordToggle(wid);this.style.background=selSet[wid]?'rgba(124,92,252,.18)':'';this.style.borderColor=selSet[wid]?'var(--ac)':'';}
+      else{wordDetail(wid);}
+    });
+  });
+  c.querySelectorAll('.word-sel-chk').forEach(function(chk){
+    chk.addEventListener('click',function(e){e.stopPropagation();selWordToggle(this.getAttribute('data-wid'));var btn=this.closest('.word-item');if(btn){btn.style.background=selSet[this.getAttribute('data-wid')]?'rgba(124,92,252,.18)':'';btn.style.borderColor=selSet[this.getAttribute('data-wid')]?'var(--ac)':'';}});
+  });
 }
 
 function listMenu(lid){
@@ -1512,7 +1535,8 @@ function listMenu(lid){
     '<button class="btn-sec" id="LM-quiz" style="margin-top:0;margin-bottom:8px">⚡ すぐクイズ（続きから）</button>'+
     '<button class="btn-sec" id="LM-quiz-reset" style="margin-top:0;margin-bottom:8px">🔁 最初からクイズ</button>'+
     '<button class="btn-sec" id="LM-due" style="margin-top:0;margin-bottom:8px'+(d?'':';opacity:.4;pointer-events:none')+'">📅 復習単語のみ（'+d+'件）</button>'+
-    '<button class="btn-sec" id="LM-list" style="margin-top:0">📚 単語一覧を見る</button>';
+    '<button class="btn-sec" id="LM-list" style="margin-top:0;margin-bottom:8px">📚 単語一覧を見る</button>'+
+    '<button class="btn-sec" id="LM-edit" style="margin-top:0">✏️ リストを編集</button>';
   el('modal-bg').classList.add('on');
 
   /* カーソル位置からpoolを作る共通関数 */
@@ -1564,6 +1588,10 @@ function listMenu(lid){
     sel.value=lid;
     listRender();
   });
+  el('LM-edit').addEventListener('click',function(){
+    el('modal-bg').classList.remove('on');
+    editList(lid);
+  });
 }
 
 function wordDetail(wid){
@@ -1580,14 +1608,183 @@ function wordDetail(wid){
     mkCard('連続正解',(w.s&&w.s.k||0))+mkCard('間違い回数','<span style="color:var(--rd)">'+(w.s&&w.s.l||0)+'</span>')+
     '</div>'+
     '<div style="font-size:12px;color:var(--tx2);margin-bottom:14px">言語: '+(l?l.flag+' '+l.name:'不明')+' ／ リスト: '+esc(lst?lst.name:'不明')+'</div>'+
+    '<button class="btn-sec" id="EDIT-word-btn" style="margin-bottom:8px">✏️ 単語を編集</button>'+
     '<button class="del-btn" id="DEL-btn">🗑️ この単語を削除</button>';
   el('modal-bg').classList.add('on');
+  el('EDIT-word-btn').addEventListener('click',function(){
+    el('modal-bg').classList.remove('on');
+    editWord(wid);
+  });
   el('DEL-btn').addEventListener('click',function(){
+    if(!confirm('「'+w.word+'」を削除しますか？'))return;
     G.words=G.words.filter(function(x){return x.id!==wid;});
     save();el('modal-bg').classList.remove('on');listRender();toast('削除しました');
   });
 }
 function mkCard(l,v){return'<div style="background:var(--sf2);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--tx2);margin-bottom:3px">'+l+'</div><div style="font-size:14px;font-weight:600">'+v+'</div></div>';}
+/* ========== EDIT FUNCTIONS ========== */
+
+/* ── リスト編集モーダル ── */
+function editList(lid){
+  var lst=G.lists.find(function(x){return x.id===lid;});if(!lst)return;
+  var langOpts=Object.entries(LANGS).map(function(kv){
+    return '<option value="'+kv[0]+'"'+(lst.lang===kv[0]?' selected':'')+'>'+kv[1].flag+' '+kv[1].name+'</option>';
+  }).join('');
+  el('modal-ct').innerHTML=
+    '<div class="modal-tl">✏️ リストを編集</div>'+
+    '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">リスト名</div>'+
+    '<input class="inp" id="EL-name" type="text" value="'+escHtml(lst.name)+'" style="margin-bottom:12px">'+
+    '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">言語</div>'+
+    '<select class="inp" id="EL-lang" style="margin-bottom:16px">'+langOpts+'</select>'+
+    '<button class="btn-primary" id="EL-save" style="margin-bottom:8px">💾 保存</button>'+
+    '<button class="btn-sec" id="EL-cancel" style="margin-top:0">キャンセル</button>';
+  el('modal-bg').classList.add('on');
+  setTimeout(function(){var n=el('EL-name');if(n){n.focus();n.select();}},100);
+  el('EL-save').addEventListener('click',function(){
+    var name=(el('EL-name').value||'').trim();
+    if(!name){toast('リスト名を入力してください');return;}
+    lst.name=name;
+    lst.lang=el('EL-lang').value;
+    save();el('modal-bg').classList.remove('on');
+    homeRefresh();listFilterRebuild();listRender();
+    toast('✅ リストを更新しました');
+  });
+  el('EL-cancel').addEventListener('click',function(){el('modal-bg').classList.remove('on');});
+}
+
+/* ── 単語編集モーダル ── */
+function editWord(wid){
+  var w=G.words.find(function(x){return x.id===wid;});if(!w)return;
+  var langOpts=Object.entries(LANGS).map(function(kv){
+    return '<option value="'+kv[0]+'"'+((w.lang||'en')===kv[0]?' selected':'')+'>'+kv[1].flag+' '+kv[1].name+'</option>';
+  }).join('');
+  var listOpts=G.lists.map(function(l){
+    return '<option value="'+l.id+'"'+(w.lid===l.id?' selected':'')+'>'+escHtml(l.name)+'</option>';
+  }).join('');
+  el('modal-ct').innerHTML=
+    '<div class="modal-tl">✏️ 単語を編集</div>'+
+    '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">単語（外国語）</div>'+
+    '<input class="inp" id="EW-word" type="text" value="'+escHtml(w.word)+'" style="margin-bottom:12px">'+
+    '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">意味（日本語）</div>'+
+    '<input class="inp" id="EW-meaning" type="text" value="'+escHtml(w.meaning||'')+'" style="margin-bottom:12px">'+
+    '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">言語</div>'+
+    '<select class="inp" id="EW-lang" style="margin-bottom:12px">'+langOpts+'</select>'+
+    '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">所属リスト</div>'+
+    '<select class="inp" id="EW-list" style="margin-bottom:16px">'+listOpts+'</select>'+
+    '<button class="btn-primary" id="EW-save" style="margin-bottom:8px">💾 保存</button>'+
+    '<button class="btn-sec" id="EW-cancel" style="margin-top:0">キャンセル</button>';
+  el('modal-bg').classList.add('on');
+  setTimeout(function(){var n=el('EW-word');if(n){n.focus();n.select();}},100);
+  el('EW-save').addEventListener('click',function(){
+    var word=(el('EW-word').value||'').trim();
+    var meaning=(el('EW-meaning').value||'').trim();
+    if(!word){toast('単語を入力してください');return;}
+    w.word=word; w.meaning=meaning;
+    w.lang=el('EW-lang').value;
+    w.lid=el('EW-list').value;
+    save();el('modal-bg').classList.remove('on');
+    listRender();toast('✅ 単語を更新しました');
+  });
+  el('EW-cancel').addEventListener('click',function(){el('modal-bg').classList.remove('on');});
+}
+
+/* ── 重複チェック ── */
+function checkDuplicates(){
+  var seen={}, dups=[];
+  G.words.forEach(function(w){
+    var key=(w.word||'').toLowerCase().trim()+'|'+(w.lang||'en');
+    if(seen[key]){
+      /* 同一グループに追加 */
+      var grp=dups.find(function(g){return g.key===key;});
+      if(grp)grp.words.push(w);
+      else dups.push({key:key,words:[seen[key],w]});
+    } else {
+      seen[key]=w;
+    }
+  });
+  if(!dups.length){toast('重複単語はありません ✅');return;}
+
+  var rows=dups.map(function(g){
+    var wds=g.words;
+    var lists=wds.map(function(w){var l=G.lists.find(function(x){return x.id===w.lid;});return l?l.name:'不明';});
+    return '<div style="background:var(--sf2);border-radius:9px;padding:10px;margin-bottom:8px">'+
+      '<div style="font-weight:700;margin-bottom:5px;color:var(--ac3)">'+escHtml(wds[0].word)+'</div>'+
+      wds.map(function(w,i){
+        return '<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">'+
+          '<input type="checkbox" class="dup-chk" data-wid="'+w.id+'" style="width:16px;height:16px;flex-shrink:0">'+
+          '<span style="font-size:11px;color:var(--tx2);flex:1">'+escHtml(w.meaning||'訳なし')+' <span style="opacity:.6">／ '+escHtml(lists[i])+'</span></span>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }).join('');
+
+  el('modal-ct').innerHTML=
+    '<div class="modal-tl">⊜ 重複チェック（'+dups.length+'件）</div>'+
+    '<div style="font-size:11px;color:var(--tx2);margin-bottom:10px">削除する単語にチェックを入れてください</div>'+
+    '<div id="DUP-list">'+rows+'</div>'+
+    '<button class="del-btn" id="DUP-del" style="margin-top:8px">🗑️ チェックした単語を削除</button>'+
+    '<button class="btn-sec" id="DUP-cancel" style="margin-top:8px">閉じる</button>';
+  el('modal-bg').classList.add('on');
+
+  el('DUP-del').addEventListener('click',function(){
+    var checked=Array.from(el('DUP-list').querySelectorAll('.dup-chk:checked')).map(function(c){return c.getAttribute('data-wid');});
+    if(!checked.length){toast('削除する単語を選択してください');return;}
+    G.words=G.words.filter(function(w){return checked.indexOf(w.id)<0;});
+    save();el('modal-bg').classList.remove('on');
+    listRender();toast('🗑️ '+checked.length+'件削除しました');
+  });
+  el('DUP-cancel').addEventListener('click',function(){el('modal-bg').classList.remove('on');});
+}
+
+/* ── 選択モード ── */
+var selModeOn=false, selSet={};
+function toggleSelMode(){
+  selModeOn=!selModeOn; selSet={};
+  el('SEL-toolbar').style.display=selModeOn?'block':'none';
+  el('B-sel-mode').style.color=selModeOn?'var(--ac)':'var(--tx2)';
+  listRender();
+  updateSelCount();
+}
+function updateSelCount(){
+  var n=Object.keys(selSet).length;
+  el('SEL-count').textContent=n+'件選択中';
+}
+function selWordToggle(wid){
+  if(selSet[wid])delete selSet[wid]; else selSet[wid]=true;
+  var chk=document.querySelector('.word-sel-chk[data-wid="'+wid+'"]');
+  if(chk)chk.checked=!!selSet[wid];
+  updateSelCount();
+}
+function selDeleteAll(){
+  var ids=Object.keys(selSet);
+  if(!ids.length){toast('単語を選択してください');return;}
+  if(!confirm(ids.length+'件の単語を削除しますか？'))return;
+  G.words=G.words.filter(function(w){return!selSet[w.id];});
+  selSet={};save();listRender();updateSelCount();toast('🗑️ '+ids.length+'件削除しました');
+}
+function selMoveAll(){
+  var ids=Object.keys(selSet);
+  if(!ids.length){toast('単語を選択してください');return;}
+  if(G.lists.length<2){toast('移動先リストがありません');return;}
+  var opts=G.lists.map(function(l){return '<button class="btn-sec sel-mv-btn" data-lid="'+l.id+'" style="margin-bottom:6px;margin-top:0">'+escHtml(l.name)+'</button>';}).join('');
+  el('modal-ct').innerHTML=
+    '<div class="modal-tl">✦ 移動先リストを選択</div>'+
+    '<div style="font-size:11px;color:var(--tx2);margin-bottom:10px">'+ids.length+'件を移動します</div>'+
+    opts+
+    '<button class="btn-sec" id="MV-cancel" style="margin-top:8px">キャンセル</button>';
+  el('modal-bg').classList.add('on');
+  el('modal-ct').querySelectorAll('.sel-mv-btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      var toLid=this.getAttribute('data-lid');
+      G.words.forEach(function(w){if(selSet[w.id])w.lid=toLid;});
+      selSet={};save();el('modal-bg').classList.remove('on');
+      listRender();updateSelCount();toast('✅ 移動しました');
+    });
+  });
+  el('MV-cancel').addEventListener('click',function(){el('modal-bg').classList.remove('on');});
+}
+/* ========== END EDIT FUNCTIONS ========== */
+
 
 /* ---------- SPEECH ---------- */
 var LANG_VOICE={en:'en-US',de:'de-DE',fr:'fr-FR',es:'es-ES',it:'it-IT'};
@@ -2508,7 +2705,20 @@ function bind(){
   el('B-save').addEventListener('click',saveList);
   el('B-clr-prv').addEventListener('click',prvHide);
 
-  el('B-list-back').addEventListener('click',function(){go('s-home');});
+  el('B-list-back').addEventListener('click',function(){
+    if(selModeOn){toggleSelMode();}else{go('s-home');}
+  });
+  el('B-dup-check').addEventListener('click',function(){checkDuplicates();});
+  el('B-sel-mode').addEventListener('click',function(){toggleSelMode();});
+  el('SEL-all-btn').addEventListener('click',function(){
+    var flt=el('SEL-list').value;
+    var words=flt==='all'?G.words.slice():G.words.filter(function(w){return w.lid===flt;});
+    var allSel=words.every(function(w){return selSet[w.id];});
+    if(allSel){selSet={};}else{words.forEach(function(w){selSet[w.id]=true;});}
+    listRender();updateSelCount();
+  });
+  el('SEL-del-btn').addEventListener('click',function(){selDeleteAll();});
+  el('SEL-move-btn').addEventListener('click',function(){selMoveAll();});
   el('SEL-list').addEventListener('change',listRender);
   el('IN-search').addEventListener('input',listRender);
 
