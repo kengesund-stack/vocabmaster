@@ -2311,18 +2311,16 @@ function qSelect(i){
     if(!Q.slow)Q.slow=[];
     Q.slow.push({id:q.id,word:q.word,meaning:q.meaning||'',lang:q.lang||'en',lid:q.lid,answerMs:answerMs});
   }
-  /* 連続正解カウント管理（2回連続正解で習得） */
+  /* 習得判定：初回正解で即習得。不正解後は2回連続正解で習得 */
   if(!Q.consec)Q.consec={};
-  if(ok){
-    Q.consec[q.id]=(Q.consec[q.id]||0)+1;
-  } else {
-    Q.consec[q.id]=0; /* 不正解でリセット */
-  }
-  var justMastered=(ok&&Q.consec[q.id]>=2);
+  var hadMiss=!!q._hadMiss;
+  if(!ok){ q._hadMiss=true; Q.consec[q.id]=0; }
+  else { Q.consec[q.id]=(Q.consec[q.id]||0)+1; }
+  var justMastered=ok&&(!hadMiss||Q.consec[q.id]>=2);
   if(justMastered)Q.mastered=(Q.mastered||0)+1;
 
   el('FB-tx').innerHTML=ok
-    ?(justMastered?'<span style="color:var(--gn)">✓ 正解！ 🎓 習得！</span>':'<span style="color:var(--gn)">✓ 正解！ あと1回！</span>')
+    ?(justMastered?'<span style="color:var(--gn)">✓ 正解！</span>':'<span style="color:var(--gn)">✓ 正解！ もう1回！</span>')
     :'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca);
   el('FB-dt').textContent=Q.testMode?'':(ok?'次回: '+(q.s&&q.s.i||1)+'日後':'1日後に再復習');
   el('FB').classList.add('on');
@@ -2349,9 +2347,9 @@ function qNext(){
   el('B-next').textContent='次へ →';
 
   var q=Q.q[Q.i];
-  /* 2回連続正解未達（consec < 2）なら、残りキューのランダム位置に再挿入 */
-  var consecCount=(Q.consec&&q)?(Q.consec[q.id]||0):2;
-  if(q && consecCount<2){
+  /* 不正解経験あり かつ 2回連続正解未達なら再挿入 */
+  var consecCount=(Q.consec&&q)?(Q.consec[q.id]||0):0;
+  if(q && q._hadMiss && consecCount<2){
     var remaining=Q.q.length-(Q.i+1); /* 現在位置より後の残り問題数 */
     if(remaining>0){
       /* 残り問題の中のランダムな位置に挿入（すぐ次には入れない：min 1問後） */
