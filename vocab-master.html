@@ -2112,13 +2112,17 @@ var Q={words:[],q:[],i:0,ok:0,ng:0,done:false,miss:[],ci:0,ca:'',testMode:false,
    学習報告書
    ============================================================ */
 function showReportModal(){
-  var html='<div class="modal-tl">📊 学習報告書を作成</div>';
-  html+='<div style="font-size:12px;color:var(--tx2);margin-bottom:14px">期間を選択してください</div>';
+  showReportStep1();
+}
+
+function showReportStep1(){
   var periods=[
-    {id:'day',label:'📅 日次報告書',sub:'本日の学習記録'},
-    {id:'week',label:'📆 週次報告書',sub:'過去7日間の記録'},
-    {id:'month',label:'🗓️ 月次報告書',sub:'過去30日間の記録'}
+    {id:'day',  label:'📅 日次報告書', sub:'本日の学習記録'},
+    {id:'week', label:'📆 週次報告書', sub:'過去7日間の記録'},
+    {id:'month',label:'🗓️ 月次報告書', sub:'過去30日間の記録'}
   ];
+  var html='<div class="modal-tl">📊 学習報告書を作成</div>';
+  html+='<div style="font-size:12px;color:var(--tx2);margin-bottom:14px">① 期間を選択</div>';
   periods.forEach(function(p){
     html+='<button class="rpt-btn" data-period="'+p.id+'" style="display:flex;align-items:center;gap:12px;width:100%;background:var(--sf2);border:none;border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer;font-family:inherit;text-align:left;-webkit-appearance:none;">'+
       '<div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--tx)">'+p.label+'</div>'+
@@ -2129,14 +2133,84 @@ function showReportModal(){
   el('modal-bg').classList.add('on');
   el('modal-ct').querySelectorAll('.rpt-btn').forEach(function(b){
     b.addEventListener('click',function(){
-      el('modal-bg').classList.remove('on');
-      generateReport(this.getAttribute('data-period'));
+      showReportStep2(this.getAttribute('data-period'));
     });
   });
 }
 
-function generateReport(period){
+function showReportStep2(period){
+  var periodLabels={day:'日次報告書',week:'週次報告書',month:'月次報告書'};
+  var html='<div class="modal-tl">📊 '+periodLabels[period]+'</div>';
+  html+='<div style="font-size:12px;color:var(--tx2);margin-bottom:14px">② 単語集を選択（複数可）</div>';
+
+  /* 全て */
+  html+='<button class="rpt-list-btn" data-lid="all" style="display:flex;align-items:center;gap:12px;width:100%;background:var(--sf2);border:2px solid rgba(255,255,255,.08);border-radius:12px;padding:13px 14px;margin-bottom:8px;cursor:pointer;font-family:inherit;text-align:left;-webkit-appearance:none;">'+
+    '<input type="checkbox" class="rpt-chk" data-lid="all" style="width:18px;height:18px;flex-shrink:0;accent-color:var(--ac)" checked>'+
+    '<div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--tx)">📚 すべての単語集</div>'+
+    '<div style="font-size:11px;color:var(--tx2);margin-top:2px">全リストを対象にする</div></div></button>';
+
+  G.lists.forEach(function(lst){
+    var l=LANGS[lst.lang||'en'];
+    var ws=G.words.filter(function(w){return w.lid===lst.id;});
+    html+='<button class="rpt-list-btn" data-lid="'+lst.id+'" style="display:flex;align-items:center;gap:12px;width:100%;background:var(--sf2);border:2px solid rgba(255,255,255,.08);border-radius:12px;padding:13px 14px;margin-bottom:8px;cursor:pointer;font-family:inherit;text-align:left;-webkit-appearance:none;">'+
+      '<input type="checkbox" class="rpt-chk" data-lid="'+lst.id+'" style="width:18px;height:18px;flex-shrink:0;accent-color:var(--ac)">'+
+      '<div style="font-size:22px;flex-shrink:0">'+(l?l.flag:'📗')+'</div>'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:14px;font-weight:600;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(lst.name)+'</div>'+
+        '<div style="font-size:11px;color:var(--tx2);margin-top:2px">'+ws.length+'単語</div>'+
+      '</div></button>';
+  });
+
+  html+='<button class="btn-primary" id="RPT-go" style="margin-top:4px">📄 報告書を作成</button>';
+  html+='<button class="btn-sec" id="RPT-back" style="margin-top:8px">← 戻る</button>';
+  el('modal-ct').innerHTML=html;
+
+  /* 「全て」チェックボックスの排他ロジック */
+  var allChk=el('modal-ct').querySelector('.rpt-chk[data-lid="all"]');
+  var listChks=Array.from(el('modal-ct').querySelectorAll('.rpt-chk:not([data-lid="all"])'));
+
+  el('modal-ct').querySelectorAll('.rpt-list-btn').forEach(function(btn){
+    btn.addEventListener('click',function(e){
+      if(e.target.tagName==='INPUT')return;
+      var chk=this.querySelector('.rpt-chk');
+      chk.checked=!chk.checked;
+      syncChks();
+      this.style.borderColor=chk.checked?'var(--ac)':'rgba(255,255,255,.08)';
+    });
+    btn.querySelector('.rpt-chk').addEventListener('change',function(){
+      syncChks();
+      btn.style.borderColor=this.checked?'var(--ac)':'rgba(255,255,255,.08)';
+    });
+  });
+
+  function syncChks(){
+    if(allChk.checked){
+      listChks.forEach(function(c){c.checked=false;c.closest('button').style.borderColor='rgba(255,255,255,.08)';});
+    } else {
+      var anyList=listChks.some(function(c){return c.checked;});
+      if(!anyList){allChk.checked=true;allChk.closest('button').style.borderColor='var(--ac)';}
+    }
+  }
+  /* 初期状態で「全て」をハイライト */
+  allChk.closest('button').style.borderColor='var(--ac)';
+
+  el('RPT-go').addEventListener('click',function(){
+    var lids=[];
+    if(allChk.checked){
+      lids=['all'];
+    } else {
+      listChks.forEach(function(c){if(c.checked)lids.push(c.getAttribute('data-lid'));});
+      if(!lids.length)lids=['all'];
+    }
+    el('modal-bg').classList.remove('on');
+    generateReport(period, lids);
+  });
+  el('RPT-back').addEventListener('click',function(){showReportStep1();});
+}
+
+function generateReport(period, lids){
   if(!G.logs)G.logs=[];
+  lids=lids||['all'];
   var now=new Date();
   var cutoff=new Date(now);
   var periodLabel='';
@@ -2144,7 +2218,30 @@ function generateReport(period){
   else if(period==='week'){cutoff.setDate(now.getDate()-6);cutoff.setHours(0,0,0,0);periodLabel='週次報告書（'+fmtDate(cutoff)+'〜'+fmtDate(now)+'）';}
   else{cutoff.setDate(now.getDate()-29);cutoff.setHours(0,0,0,0);periodLabel='月次報告書（'+fmtDate(cutoff)+'〜'+fmtDate(now)+'）';}
 
-  var logs=G.logs.filter(function(l){return new Date(l.ts)>=cutoff;});
+  /* 単語集フィルタ */
+  var filterAll=(lids.indexOf('all')>=0||!lids.length);
+  var listNames=[];
+  if(!filterAll){
+    lids.forEach(function(lid){
+      var lst=G.lists.find(function(x){return x.id===lid;});
+      if(lst)listNames.push(lst.name);
+    });
+  }
+
+  /* ログを期間＋単語集でフィルタ */
+  var logs=G.logs.filter(function(l){
+    if(new Date(l.ts)<cutoff)return false;
+    if(filterAll)return true;
+    /* lidsとログのlidsが重なるか確認 */
+    var logLids=l.lids||[];
+    /* 古いログはwordsから推定 */
+    if(!logLids.length&&l.words&&l.words.length){
+      var lidSet={};
+      l.words.forEach(function(wid){var w=G.words.find(function(x){return x.id===wid;});if(w&&w.lid)lidSet[w.lid]=true;});
+      logLids=Object.keys(lidSet);
+    }
+    return lids.some(function(lid){return logLids.indexOf(lid)>=0;});
+  });
 
   /* 集計 */
   var totalSessions=logs.length;
@@ -2237,7 +2334,7 @@ function generateReport(period){
   }).sort(function(a,b){return b.durMs-a.durMs;});
 
   /* HTML生成 */
-  var h=buildReportHTML(periodLabel, now, totalSessions, totalQ, totalOk, totalNg, avgAcc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, modeData, listData, period);
+  var h=buildReportHTML(periodLabel, now, totalSessions, totalQ, totalOk, totalNg, avgAcc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, modeData, listData, period, filterAll?[]:listNames);
 
   /* 別ウィンドウで開いて印刷 */
   var w=window.open('','_blank','width=900,height=700');
@@ -2253,7 +2350,7 @@ function fmtDateShort(s){
   var d=new Date(s);return (d.getMonth()+1)+'/'+d.getDate();
 }
 
-function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, modeData, listData, period){
+function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, modeData, listData, period, targetListNames){
 
   /* ── 時間フォーマット（ミリ秒 → 表示文字列） ── */
   function fmtDur(ms){
@@ -2461,6 +2558,8 @@ function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, 
     '<div class="page">'+
     '<h1>📊 VocabMaster 学習報告書</h1>'+
     '<div class="subtitle">'+escHtml(title)+' &nbsp;｜&nbsp; 作成日時：'+fmtDate(now)+' '+now.getHours()+'時'+now.getMinutes()+'分</div>'+
+    (targetListNames&&targetListNames.length?'<div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span style="font-size:9pt;color:#888">対象単語集：</span>'+targetListNames.map(function(n){return'<span style="display:inline-block;background:#7c5cfc22;color:#7c5cfc;border:1px solid #7c5cfc44;border-radius:6px;padding:2px 10px;font-size:9pt;font-weight:600">'+escHtml(n)+'</span>';}).join('')+'</div>':'')+
+
     '<div class="summary-grid">'+
       '<div class="summary-box"><div class="summary-n">'+sessions+'</div><div class="summary-l">セッション数</div></div>'+
       '<div class="summary-box"><div class="summary-n">'+totalQ+'</div><div class="summary-l">総出題数</div></div>'+
