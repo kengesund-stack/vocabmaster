@@ -338,6 +338,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
       <div class="lbl">処理モード</div>
       <div style="display:flex;gap:7px;margin-bottom:12px">
         <button class="opt-btn on" data-fmode="vocab" id="FM-vocab" style="flex:1;padding:8px">📋<br>単語リスト<br><span style="font-size:9px;opacity:.7">CSV/Excel</span></button>
+        <button class="opt-btn" data-fmode="json" id="FM-json" style="flex:1;padding:8px">📗<br>JSON読込<br><span style="font-size:9px;opacity:.7">外部JSON</span></button>
         <button class="opt-btn" data-fmode="extract" id="FM-extract" style="flex:1;padding:8px">✨<br>AIで抽出<br><span style="font-size:9px;opacity:.7">Word/PDF/TXT</span></button>
       </div>
       <div class="upload" id="B-upload">
@@ -345,7 +346,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         <div class="upload-tx">タップしてファイルを選択</div>
         <div class="upload-sub" id="UP-sub">CSV / Excel (.xlsx)</div>
       </div>
-      <input type="file" id="IN-file" accept=".csv,.xlsx,.xls,.txt" style="display:none">
+      <input type="file" id="IN-file" accept=".csv,.xlsx,.xls,.txt,.json" style="display:none">
       <div class="hint" id="UP-hint">CSV: 1列目=単語、2列目=日本語訳（任意）</div>
       <!-- AI抽出モードのオプション（ファイル用） -->
       <div id="FILE-ai-opts" style="display:none">
@@ -361,6 +362,23 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
           <button class="opt-btn on" data-type="words" id="FTY-words" style="flex:1;padding:7px">📝<br>単語のみ</button>
           <button class="opt-btn" data-type="phrases" id="FTY-phrases" style="flex:1;padding:7px">💬<br>熟語のみ</button>
           <button class="opt-btn" data-type="both" id="FTY-both" style="flex:1;padding:7px">✨<br>単語＋熟語</button>
+        </div>
+      </div>
+      <!-- JSONモードのオプション -->
+      <div id="FILE-json-opts" style="display:none">
+        <div style="background:var(--sf);border-radius:var(--r);padding:11px 13px;margin-bottom:10px;font-size:11px;color:var(--tx2);line-height:1.7">
+          📗 対応形式：<br>
+          <b style="color:var(--tx)">パターンC</b>（ネスト型）:<br>
+          <code style="color:var(--ac3);font-size:10px">{"book_title":"...", "content":{"vocabulary":[...],"phrases":[...]}}</code><br>
+          <b style="color:var(--tx)">シンプル型</b>:<br>
+          <code style="color:var(--ac3);font-size:10px">{"words":[...]} / [{"word":"...","meaning":"..."}]</code><br>
+          各要素のキー名は自動検出します（word/term/front + meaning/translation/back/definition）
+        </div>
+        <div class="lbl">取り込みセクション</div>
+        <div style="display:flex;gap:7px;margin-bottom:10px">
+          <button class="opt-btn on" data-jsec="all" id="JSEC-all" style="flex:1;padding:7px;font-size:11px">📦<br>すべて</button>
+          <button class="opt-btn" data-jsec="vocabulary" id="JSEC-vocab" style="flex:1;padding:7px;font-size:11px">📝<br>単語のみ</button>
+          <button class="opt-btn" data-jsec="phrases" id="JSEC-phrase" style="flex:1;padding:7px;font-size:11px">💬<br>熟語のみ</button>
         </div>
       </div>
     </div>
@@ -804,11 +822,25 @@ function setFileMode(mode){
   fileMode=mode;
   document.querySelectorAll('[data-fmode]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-fmode')===mode);});
   var isExtract=(mode==='extract');
+  var isJson=(mode==='json');
   el('FILE-ai-opts').style.display=isExtract?'block':'none';
-  el('UP-ic').textContent=isExtract?'📄':'📁';
-  el('UP-sub').textContent=isExtract?'Word (.docx) / PDF / TXT / CSV':'CSV / Excel (.xlsx)';
-  el('UP-hint').textContent=isExtract?'✨ AIがファイルの内容から単語・熟語を自動抽出し日本語訳を付与します':'CSV: 1列目=単語、2列目=日本語訳（任意）';
-  el('IN-file').accept=isExtract?'.txt,.csv,.docx,.pdf':'.csv,.xlsx,.xls,.txt';
+  el('FILE-json-opts').style.display=isJson?'block':'none';
+  if(isJson){
+    el('UP-ic').textContent='📗';
+    el('UP-sub').textContent='JSON ファイル (.json)';
+    el('UP-hint').textContent='book_title / content / vocabulary / phrases などを自動認識します';
+    el('IN-file').accept='.json';
+  } else if(isExtract){
+    el('UP-ic').textContent='📄';
+    el('UP-sub').textContent='Word (.docx) / PDF / TXT / CSV';
+    el('UP-hint').textContent='✨ AIがファイルの内容から単語・熟語を自動抽出し日本語訳を付与します';
+    el('IN-file').accept='.txt,.csv,.docx,.pdf';
+  } else {
+    el('UP-ic').textContent='📁';
+    el('UP-sub').textContent='CSV / Excel (.xlsx)';
+    el('UP-hint').textContent='CSV: 1列目=単語、2列目=日本語訳（任意）';
+    el('IN-file').accept='.csv,.xlsx,.xls,.txt';
+  }
 }
 
 function setFileLevel(level){
@@ -826,6 +858,13 @@ function handleFile(evt){
   var ext=f.name.split('.').pop().toLowerCase();
   var ni=el('IN-file-name');
   if(ni&&!ni.value)ni.value=f.name.replace(/\.[^.]+$/,'');
+
+  if(fileMode==='json'||ext==='json'){
+    var fr=new FileReader();
+    fr.onload=function(e){jsonImport(e.target.result, f.name);};
+    fr.readAsText(f,'UTF-8');
+    return;
+  }
 
   if(fileMode==='extract'){
     /* AI抽出モード: テキストを取り出してAIへ */
@@ -989,6 +1028,65 @@ function xlsxRead(file){
   s.onload=function(){loaded();doRead();};
   s.onerror=function(){loaded();toast('オフライン環境ではExcel非対応。CSVに変換してください。');};
   document.head.appendChild(s);
+}
+
+/* ---- JSON インポート ---- */
+var jsonSection='all'; /* all | vocabulary | phrases */
+
+function setJsonSection(sec){
+  jsonSection=sec;
+  document.querySelectorAll('[data-jsec]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-jsec')===sec);});
+}
+
+function jsonImport(text, fname){
+  try{
+    var d=JSON.parse(text);
+  }catch(e){toast('❌ JSONの解析に失敗しました。形式を確認してください。');return;}
+
+  /* book_title からリスト名を自動設定 */
+  var ni=el('IN-file-name');
+  if(ni){
+    var autoName=d.book_title||d.title||d.name||fname.replace(/\.[^.]+$/,'');
+    if(autoName&&!ni.value)ni.value=autoName;
+  }
+
+  /* 単語配列を取り出す汎用関数 */
+  function extractWords(arr){
+    if(!Array.isArray(arr))return[];
+    return arr.map(function(item){
+      var w=item.word||item.term||item.front||item.expression||item.vocab||'';
+      var m=item.meaning||item.translation||item.back||item.definition||item.japanese||item.ja||'';
+      return w?{word:String(w).trim(),meaning:String(m).trim()}:null;
+    }).filter(Boolean);
+  }
+
+  var words=[];
+
+  /* パターンC: {"content":{"vocabulary":[...],"phrases":[...]}} */
+  if(d.content&&typeof d.content==='object'){
+    var vocab=extractWords(d.content.vocabulary||d.content.words||[]);
+    var phrases=extractWords(d.content.phrases||d.content.expressions||[]);
+    if(jsonSection==='vocabulary'){words=vocab;}
+    else if(jsonSection==='phrases'){words=phrases;}
+    else{words=vocab.concat(phrases);}
+  }
+  /* {"words":[...]} または {"vocabulary":[...]} */
+  else if(Array.isArray(d.words)){words=extractWords(d.words);}
+  else if(Array.isArray(d.vocabulary)){words=extractWords(d.vocabulary);}
+  else if(Array.isArray(d.phrases)){words=extractWords(d.phrases);}
+  /* トップレベル配列 */
+  else if(Array.isArray(d)){words=extractWords(d);}
+
+  if(!words.length){toast('❌ 単語が見つかりません。JSONの形式を確認してください。');return;}
+
+  /* セクション別にリスト名サフィックスを付ける */
+  if(ni&&ni.value&&d.content){
+    if(jsonSection==='vocabulary')ni.value=ni.value+' [単語]';
+    else if(jsonSection==='phrases')ni.value=ni.value+' [熟語]';
+  }
+
+  toast('✅ '+words.length+'語を読み込みました');
+  needTranslate(words)?doTranslate(words,selLang):prvShow(words);
 }
 
 /* 言語×レベル別の検定基準 */
@@ -2159,6 +2257,9 @@ function bind(){
   });
   document.querySelectorAll('[data-type][id^="FTY-"]').forEach(function(b){
     b.addEventListener('click',function(){setFileType(this.getAttribute('data-type'));});
+  });
+  document.querySelectorAll('[data-jsec]').forEach(function(b){
+    b.addEventListener('click',function(){setJsonSection(this.getAttribute('data-jsec'));});
   });
   el('B-ai-extract').addEventListener('click',aiExtract);
   el('B-save').addEventListener('click',saveList);
