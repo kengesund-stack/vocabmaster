@@ -2635,7 +2635,7 @@ function showListSelectModal(mode){
       var nextCursor=Math.min(cursor+pool.length, ws.length);
       if(isStudy){
         Q._pendingCursor={lid:lid, next:nextCursor};
-        flashStart(pool,'list',lid);
+        flashStart(shuffle(pool.slice()),'list',lid);
       } else {
         var tpool=shuffle(pool.slice());
         Q={words:tpool,q:tpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:true,quizMode:'test',sessionStart:Date.now(),consec:{},mastered:0};
