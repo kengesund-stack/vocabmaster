@@ -1654,7 +1654,7 @@ function listMenu(lid){
     el('modal-bg').classList.remove('on');
     var pool=ws.filter(due);
     if(pool.length<2){toast('復習単語が少なすぎます（最低2単語）');return;}
-    var qs=shuffle(pool).slice(0,size);
+    var qs=(G.cfg.random?shuffle(pool):pool).slice(0,size);
     Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'due',sessionStart:Date.now(),consec:{},mastered:0};
     go('s-quiz');qRender();
   });
@@ -2059,8 +2059,9 @@ function flLaunchAutoQuiz(){
   if(window.speechSynthesis)window.speechSynthesis.cancel();
   var pool=FL.words.slice();
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
+  var qpool=G.cfg.random?shuffle(pool):pool;
   var pending=Q._pendingCursor;
-  Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0};
+  Q={words:qpool,q:qpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0};
   if(pending)Q._pendingCursor=pending;
   go('s-quiz');qRender();
 }
@@ -2099,8 +2100,9 @@ function flBindButtons(){
     if(window.speechSynthesis)window.speechSynthesis.cancel();
     var pool=FL.words.slice();
     if(pool.length<2){toast('クイズには最低2単語必要です');return;}
+    var qpool=G.cfg.random?shuffle(pool):pool;
     var pending=Q._pendingCursor;
-    Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0};
+    Q={words:qpool,q:qpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0};
     if(pending)Q._pendingCursor=pending;
     go('s-quiz');qRender();
   });
@@ -2635,7 +2637,8 @@ function showListSelectModal(mode){
         Q._pendingCursor={lid:lid, next:nextCursor};
         flashStart(pool,'list',lid);
       } else {
-        Q={words:pool,q:pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:true,quizMode:'test',sessionStart:Date.now(),consec:{},mastered:0};
+        var tpool=G.cfg.random?shuffle(pool.slice()):pool;
+        Q={words:tpool,q:tpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:true,quizMode:'test',sessionStart:Date.now(),consec:{},mastered:0};
         go('s-quiz');qRender();
       }
     });
