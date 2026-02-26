@@ -558,7 +558,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         <span style="font-size:13px;color:var(--tx2)">問</span>
       </div>
       <div class="set-row" id="ROW-random">
-        <span class="set-lbl">🔀 ランダム出題</span>
+        <span class="set-lbl">🔀 ランダム出題（未出題から）</span>
         <button class="toggle" id="TG-random"></button>
       </div>
       <div class="set-row" id="ROW-rev">
@@ -2663,27 +2663,15 @@ function showListSelectModal(mode){
       el('modal-bg').classList.remove('on');
       var size=Math.min(parseInt(G.cfg.size)||20, ws.length);
       var cursor=lst.cursor||0; if(cursor>=ws.length)cursor=0;
-
-      var pool;
-      if(G.cfg.random!==false){
-        /* ランダムON：カーソル位置のウィンドウ内からシャッフル */
-        pool=shuffle(ws.slice(cursor, cursor+size));
-        if(pool.length<2){cursor=0; pool=shuffle(ws.slice(0,size));}
-      } else {
-        /* ランダムOFF：カーソル位置から順番通り */
-        pool=ws.slice(cursor, cursor+size);
-        if(pool.length<2){cursor=0; pool=ws.slice(0,size);}
-      }
+      var pool=ws.slice(cursor, cursor+size);
+      if(pool.length<2){cursor=0; pool=ws.slice(0,size);}
       var nextCursor=Math.min(cursor+pool.length, ws.length);
       if(isStudy){
-        /* 予習→クイズ：フラッシュカードもランダム設定を反映 */
         Q._pendingCursor={lid:lid, next:nextCursor};
-        var studyPool=G.cfg.random!==false ? shuffle(pool.slice()) : pool.slice();
+        var studyPool=(G.cfg.random===false)?pool.slice():shuffle(pool.slice());
         flashStart(studyPool,'list',lid);
       } else {
-        /* テスト形式：忘却曲線ベース混入あり */
-        var tpool=G.cfg.random!==false ? shuffle(pool.slice()) : pool.slice();
-        tpool=injectReviewWords(tpool, ws, tpool.length);
+        var tpool=(G.cfg.random===false)?pool.slice():shuffle(pool.slice());
         Q={words:tpool,q:tpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:true,quizMode:'test',sessionStart:Date.now(),consec:{},mastered:0};
         go('s-quiz');qRender();
       }
@@ -2692,41 +2680,40 @@ function showListSelectModal(mode){
 }
 
 /* ============================================================
-   忘却曲線ベース：苦手単語の自動混入
-   セッション単語の最大30%を、過去に間違えた単語で置き換える
+   忘却曲線ベース：過去に間違えた単語を最大30%自動混入
+   ※元の単語オブジェクトへの参照をそのまま使う（SRS更新が壊れないよう）
    ============================================================ */
-function injectReviewWords(sessionWords, fullPool, size){
-  /* 全プールから：過去に間違えがあり、今のセッションに含まれていない単語を取得 */
+function injectReviewWords(sessionWords, fullPool){
+  var size=sessionWords.length;
+  var maxInject=Math.max(1, Math.min(5, Math.floor(size*0.3)));
+
+  /* セッション単語のIDセット */
   var sessionIds={};
   sessionWords.forEach(function(w){sessionIds[w.id]=true;});
 
-  /* 苦手スコア順にソート：間違い回数が多く・連続正解が少ないほど上位 */
+  /* フルプールから：間違えたことがあり、今回のセッションに入っていない単語 */
   var candidates=fullPool.filter(function(w){
     return !sessionIds[w.id] && w.s && (w.s.l||0)>0;
   }).sort(function(a,b){
-    /* 優先度スコア = 間違い回数 * 2 - 連続正解数 */
-    var sa=(a.s.l||0)*2 - (a.s.k||0);
-    var sb=(b.s.l||0)*2 - (b.s.k||0);
+    /* スコア高い＝より苦手：間違い多い＆連続正解少ない */
+    var sa=(a.s.l||0)*2-(a.s.k||0);
+    var sb=(b.s.l||0)*2-(b.s.k||0);
     return sb-sa;
   });
 
   if(!candidates.length) return sessionWords;
 
-  /* 最大30%（最低1問、最大5問）を混入 */
-  var maxInject=Math.max(1, Math.min(5, Math.floor(size*0.3)));
   var injectCount=Math.min(maxInject, candidates.length);
-  var toInject=candidates.slice(0,injectCount).map(function(w){
-    /* _isReview フラグで復習単語であることをマーク */
-    return Object.assign({},w,{_isReview:true});
-  });
+  /* 混入単語に_isReviewフラグをセット（元オブジェクトに直接）してからセッションに追加 */
+  var toInject=candidates.slice(0,injectCount);
+  toInject.forEach(function(w){w._isReview=true;});
 
-  /* セッション単語を末尾から削ってスペースを作り、混入単語をシャッフル挿入 */
+  /* セッション末尾を削って混入単語を入れ、シャッフル */
   var base=sessionWords.slice(0, size-injectCount);
-  var merged=shuffle(base.concat(toInject));
-  return merged;
+  return shuffle(base.concat(toInject));
 }
 
-
+function quizStart(mode,lid){
   var pool=[];
   if(mode==='due')pool=getDue();
   else if(mode==='all')pool=G.words.slice();
@@ -2735,15 +2722,14 @@ function injectReviewWords(sessionWords, fullPool, size){
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
   var size=Math.min(pool.length,parseInt(G.cfg.size)||20);
 
-  /* ランダムON→シャッフル / OFF→登録順 */
-  var ordered=G.cfg.random!==false ? shuffle(pool) : pool.slice();
-  var ws=ordered.slice(0,size);
+  /* ランダムON(デフォルト)→シャッフル / OFF→登録順 */
+  var ws=(G.cfg.random===false)?pool.slice(0,size):shuffle(pool).slice(0,size);
 
-  /* ── 忘却曲線ベース：過去に間違えた単語を最大30%混入 ── */
-  ws=injectReviewWords(ws, pool, size);
+  /* 忘却曲線：過去に間違えた単語を最大30%混入（元オブジェクト参照のまま） */
+  ws=injectReviewWords(ws, pool);
 
   Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now(),
-     consec:{},mastered:0}; /* consec: wordId→連続正解数 */
+     consec:{},mastered:0};
   go('s-quiz');qRender();
 }
 
@@ -2758,11 +2744,12 @@ function qRender(){
   el('QZ-mode-badge').style.display=Q.testMode?'inline-block':'none';
   var rev=G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
   var l=LANGS[q.lang||'en'];
-  /* 復習混入単語のバッジ表示 */
-  var reviewBadge=q._isReview
-    ? '<span style="display:inline-block;background:rgba(255,156,76,.18);color:var(--or);font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:7px;vertical-align:middle">🔁 復習</span>'
-    : '';
-  el('QZ-badge').innerHTML=(rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ')+reviewBadge;
+  var badgeBase=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
+  if(q._isReview){
+    el('QZ-badge').innerHTML=badgeBase+'<span style="display:inline-block;background:rgba(255,156,76,.2);color:var(--or);font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:6px">🔁 復習</span>';
+  } else {
+    el('QZ-badge').textContent=badgeBase;
+  }
   var displayWord=rev?(q.meaning||q.word):q.word;
   el('QZ-word').textContent=displayWord;
   Q.done=false;
@@ -2899,6 +2886,9 @@ function qNext(){
 
 function qResult(){
   el('FB').classList.remove('on');
+  /* _isReviewフラグをクリーンアップ（元オブジェクトから削除） */
+  Q.words.forEach(function(w){delete w._isReview;});
+  Q.q.forEach(function(w){delete w._isReview;});
   var tot=Q.ok+Q.ng,acc=tot?Math.round(Q.ok/tot*100):0;
   el('R-ok').textContent=Q.ok;el('R-ng').textContent=Q.ng;el('R-ac').textContent=acc+'%';
   var em='📚',tl='もう少しです！';
@@ -3062,6 +3052,9 @@ function bind(){
 
   el('B-quiz-exit').addEventListener('click',function(){
     if(window.speechSynthesis)window.speechSynthesis.cancel();
+    /* _isReviewフラグをクリーンアップ */
+    (Q.words||[]).forEach(function(w){delete w._isReview;});
+    (Q.q||[]).forEach(function(w){delete w._isReview;});
     el('FB').classList.remove('on');go('s-home');
   });
   el('B-next').addEventListener('click',qNext);
