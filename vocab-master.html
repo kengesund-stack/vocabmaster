@@ -625,6 +625,10 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     </div>
     <div class="set-sec">☁️ クラウド同期（オプション）</div>
     <div class="set-group">
+      <div class="set-row" id="ROW-cloudauto">
+        <span class="set-lbl">🔄 クラウド自動保存（5分ごと）</span>
+        <button class="toggle" id="TG-cloudauto"></button>
+      </div>
       <div class="set-row" style="cursor:default;flex-direction:column;align-items:stretch;gap:8px">
         <div style="font-size:11px;color:var(--tx2);line-height:1.6;padding:2px 0">同じClaudeアカウントでログインした別デバイスとデータを手動同期できます。</div>
         <button class="btn-primary" id="B-cloud-save" style="padding:10px;font-size:13px">☁️ クラウドに保存</button>
@@ -738,7 +742,38 @@ var LANGS={
 
 function mkDB(){return{words:[],lists:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:''},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
-function save(){sSet(G);}
+/* ランダム出題は常にtrue（強制） */
+if(G.cfg)G.cfg.random=true;
+function save(){sSet(G);scheduleAutoCloudSave();}
+
+/* ── 自動クラウド保存（デバウンス：最後のsave()から5分後） ── */
+var _autoSaveTimer=null;
+function scheduleAutoCloudSave(){
+  if(!(G.cfg&&G.cfg.cloudAuto))return; /* OFFまたは未設定なら何もしない */
+  if(!window.storage)return;           /* Claude.ai以外の環境では動作しない */
+  if(_autoSaveTimer)clearTimeout(_autoSaveTimer);
+  _autoSaveTimer=setTimeout(function(){
+    _autoSaveTimer=null;
+    cloudSaveQuiet();
+  },5*60*1000);
+}
+async function cloudSaveQuiet(){
+  /* サイレント自動保存：UIを触らず静かに保存する */
+  if(!(G.cfg&&G.cfg.cloudAuto)||!window.storage)return;
+  try{
+    var payload=JSON.stringify(G);
+    if(payload.length>4*1024*1024)return;
+    var result=await window.storage.set(CLOUD_KEY,payload);
+    if(result){
+      var now=new Date();
+      var ts=(now.getMonth()+1)+'/'+now.getDate()+' '+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
+      cloudStatus('🔄 自動保存 — '+ts,'var(--gn)');
+      if(document.getElementById('s-home')&&document.getElementById('s-home').classList.contains('on')){
+        toast('☁️ 自動保存しました');
+      }
+    }
+  }catch(e){/* 失敗はサイレントに無視 */}
+}
 
 /* ── ファイル保存（HTMLにデータ埋め込み） ── */
 function saveAsFile(){
@@ -2668,49 +2703,14 @@ function showListSelectModal(mode){
       var nextCursor=Math.min(cursor+pool.length, ws.length);
       if(isStudy){
         Q._pendingCursor={lid:lid, next:nextCursor};
-        var studyPool=(G.cfg.random===false)?pool.slice():shuffle(pool.slice());
-        flashStart(studyPool,'list',lid);
+        flashStart(shuffle(pool.slice()),'list',lid);
       } else {
-        var tpool=(G.cfg.random===false)?pool.slice():shuffle(pool.slice());
+        var tpool=shuffle(pool.slice());
         Q={words:tpool,q:tpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:true,quizMode:'test',sessionStart:Date.now(),consec:{},mastered:0};
         go('s-quiz');qRender();
       }
     });
   });
-}
-
-/* ============================================================
-   忘却曲線ベース：過去に間違えた単語を最大30%自動混入
-   ※元の単語オブジェクトへの参照をそのまま使う（SRS更新が壊れないよう）
-   ============================================================ */
-function injectReviewWords(sessionWords, fullPool){
-  var size=sessionWords.length;
-  var maxInject=Math.max(1, Math.min(5, Math.floor(size*0.3)));
-
-  /* セッション単語のIDセット */
-  var sessionIds={};
-  sessionWords.forEach(function(w){sessionIds[w.id]=true;});
-
-  /* フルプールから：間違えたことがあり、今回のセッションに入っていない単語 */
-  var candidates=fullPool.filter(function(w){
-    return !sessionIds[w.id] && w.s && (w.s.l||0)>0;
-  }).sort(function(a,b){
-    /* スコア高い＝より苦手：間違い多い＆連続正解少ない */
-    var sa=(a.s.l||0)*2-(a.s.k||0);
-    var sb=(b.s.l||0)*2-(b.s.k||0);
-    return sb-sa;
-  });
-
-  if(!candidates.length) return sessionWords;
-
-  var injectCount=Math.min(maxInject, candidates.length);
-  /* 混入単語に_isReviewフラグをセット（元オブジェクトに直接）してからセッションに追加 */
-  var toInject=candidates.slice(0,injectCount);
-  toInject.forEach(function(w){w._isReview=true;});
-
-  /* セッション末尾を削って混入単語を入れ、シャッフル */
-  var base=sessionWords.slice(0, size-injectCount);
-  return shuffle(base.concat(toInject));
 }
 
 function quizStart(mode,lid){
@@ -2721,15 +2721,9 @@ function quizStart(mode,lid){
   else if(mode==='list')pool=G.words.filter(function(w){return w.lid===lid;});
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
   var size=Math.min(pool.length,parseInt(G.cfg.size)||20);
-
-  /* ランダムON(デフォルト)→シャッフル / OFF→登録順 */
-  var ws=(G.cfg.random===false)?pool.slice(0,size):shuffle(pool).slice(0,size);
-
-  /* 忘却曲線：過去に間違えた単語を最大30%混入（元オブジェクト参照のまま） */
-  ws=injectReviewWords(ws, pool);
-
+  var ws=shuffle(pool).slice(0,size);
   Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now(),
-     consec:{},mastered:0};
+     consec:{},mastered:0}; /* consec: wordId→連続正解数 */
   go('s-quiz');qRender();
 }
 
@@ -2744,12 +2738,7 @@ function qRender(){
   el('QZ-mode-badge').style.display=Q.testMode?'inline-block':'none';
   var rev=G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
   var l=LANGS[q.lang||'en'];
-  var badgeBase=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
-  if(q._isReview){
-    el('QZ-badge').innerHTML=badgeBase+'<span style="display:inline-block;background:rgba(255,156,76,.2);color:var(--or);font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:6px">🔁 復習</span>';
-  } else {
-    el('QZ-badge').textContent=badgeBase;
-  }
+  el('QZ-badge').textContent=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
   var displayWord=rev?(q.meaning||q.word):q.word;
   el('QZ-word').textContent=displayWord;
   Q.done=false;
@@ -2886,9 +2875,6 @@ function qNext(){
 
 function qResult(){
   el('FB').classList.remove('on');
-  /* _isReviewフラグをクリーンアップ（元オブジェクトから削除） */
-  Q.words.forEach(function(w){delete w._isReview;});
-  Q.q.forEach(function(w){delete w._isReview;});
   var tot=Q.ok+Q.ng,acc=tot?Math.round(Q.ok/tot*100):0;
   el('R-ok').textContent=Q.ok;el('R-ng').textContent=Q.ng;el('R-ac').textContent=acc+'%';
   var em='📚',tl='もう少しです！';
@@ -2957,6 +2943,7 @@ function settingsLoad(){
   el('TG-flashauto').classList.toggle('on',!!G.cfg.flashAuto);
   el('TG-autoQuiz').classList.toggle('on',!!G.cfg.autoQuiz);
   el('IN-flash-sec').value=G.cfg.flashSec||2;
+  el('TG-cloudauto').classList.toggle('on',!!(G.cfg&&G.cfg.cloudAuto));
   var sm=G.cfg.spkMode||'both';
   ['both','foreign','ja'].forEach(function(m){el('SPK-'+m).classList.toggle('on',sm===m);});
   el('IN-duck-vol').value=G.cfg.duckVol!=null?G.cfg.duckVol:15;
@@ -3052,9 +3039,6 @@ function bind(){
 
   el('B-quiz-exit').addEventListener('click',function(){
     if(window.speechSynthesis)window.speechSynthesis.cancel();
-    /* _isReviewフラグをクリーンアップ */
-    (Q.words||[]).forEach(function(w){delete w._isReview;});
-    (Q.q||[]).forEach(function(w){delete w._isReview;});
     el('FB').classList.remove('on');go('s-home');
   });
   el('B-next').addEventListener('click',qNext);
@@ -3231,6 +3215,15 @@ function bind(){
   });
   el('B-cloud-save').addEventListener('click',function(){cloudSave();});
   el('B-cloud-load').addEventListener('click',function(){cloudLoad();});
+  el('TG-cloudauto').addEventListener('click',function(){
+    if(!G.cfg)G.cfg={};
+    G.cfg.cloudAuto=!this.classList.contains('on');
+    this.classList.toggle('on',G.cfg.cloudAuto);
+    save();
+    if(G.cfg.cloudAuto){toast('🔄 自動保存をONにしました');cloudSaveQuiet();}
+    else{toast('自動保存をOFFにしました');if(_autoSaveTimer){clearTimeout(_autoSaveTimer);_autoSaveTimer=null;}}
+  });
+  el('ROW-cloudauto').addEventListener('click',function(e){if(e.target!==el('TG-cloudauto'))el('TG-cloudauto').click();});
   el('modal-bg').addEventListener('click',function(e){if(e.target===this)this.classList.remove('on');});
 }
 
