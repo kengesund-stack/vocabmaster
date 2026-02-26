@@ -721,8 +721,10 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],logs:[],cfg:{size:20,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:''},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:''},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
+/* 既存データにrandomキーがなければtrueで補完 */
+if(G.cfg&&G.cfg.random===undefined)G.cfg.random=true;
 function save(){sSet(G);}
 
 /* SRS */
@@ -2337,13 +2339,20 @@ function generateReport(period, lids){
   }).sort(function(a,b){return b.durMs-a.durMs;});
 
   /* HTML生成 */
-  var h=buildReportHTML(periodLabel, now, totalSessions, totalQ, totalOk, totalNg, avgAcc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, modeData, listData, period, filterAll?[]:listNames);
+  var h=buildReportHTML(periodLabel, now, totalSessions, totalQ, totalOk, totalNg, avgAcc, totalDurMs, dayKeys, dayMap, logs, modeData, listData, period, filterAll?[]:listNames);
+
+  /* 単語レポートHTML生成 */
+  var hw=buildWordReportHTML(periodLabel, now, missArr, slowArr, listData, filterAll?[]:listNames);
 
   /* 別ウィンドウで開いて印刷 */
   var w=window.open('','_blank','width=900,height=700');
   if(!w){toast('ポップアップをブロックされました。ブラウザの設定を確認してください');return;}
   w.document.write(h);
   w.document.close();
+
+  /* 単語レポートウィンドウ */
+  var ww=window.open('','_blank','width=900,height=700');
+  if(ww){ww.document.write(hw);ww.document.close();}
 }
 
 function fmtDate(d){
@@ -2353,7 +2362,7 @@ function fmtDateShort(s){
   var d=new Date(s);return (d.getMonth()+1)+'/'+d.getDate();
 }
 
-function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, dayKeys, dayMap, missArr, slowArr, logs, modeData, listData, period, targetListNames){
+function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, dayKeys, dayMap, logs, modeData, listData, period, targetListNames){
 
   /* ── 時間フォーマット（ミリ秒 → 表示文字列） ── */
   function fmtDur(ms){
@@ -2500,36 +2509,6 @@ function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, 
   });
   if(!dayRows)dayRows='<tr><td colspan="7" style="text-align:center;color:#888">この期間の記録はありません</td></tr>';
 
-  /* ── 苦手単語テーブル ── */
-  var missRows='';
-  if(missArr.length){
-    missArr.forEach(function(w,i){
-      missRows+='<tr><td>'+(i+1)+'</td><td>'+escHtml(w.word)+'</td><td>'+escHtml(w.meaning)+'</td><td>'+(langNames[w.lang]||w.lang)+'</td><td style="color:#fc5c7d;font-weight:700">'+w.count+'回</td></tr>';
-    });
-  }else{
-    missRows='<tr><td colspan="5" style="text-align:center;color:#888">間違いはありませんでした🎉</td></tr>';
-  }
-
-  /* ── 準苦手ランキングテーブル ── */
-  var slowRows='';
-  if(slowArr&&slowArr.length){
-    slowArr.forEach(function(w,i){
-      var avgSec=(w.avgMs/1000).toFixed(1);
-      var secClr=w.avgMs>=15000?'#fc5c7d':w.avgMs>=10000?'#ffd700':'#ffa040';
-      var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
-      slowRows+='<tr>'+
-        '<td style="text-align:center">'+(medal||'<span style="color:#888">'+(i+1)+'</span>')+'</td>'+
-        '<td><strong>'+escHtml(w.word)+'</strong></td>'+
-        '<td>'+escHtml(w.meaning)+'</td>'+
-        '<td>'+(langNames[w.lang]||w.lang)+'</td>'+
-        '<td style="color:'+secClr+';font-weight:700;text-align:center">'+avgSec+'秒</td>'+
-        '<td style="color:#aaa;text-align:center">'+w.count+'回</td>'+
-        '</tr>';
-    });
-  }else{
-    slowRows='<tr><td colspan="6" style="text-align:center;color:#888">5秒以上かかった単語はありません 👍</td></tr>';
-  }
-
   return '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">'+
     '<title>'+escHtml(title)+'</title>'+
     '<style>'+
@@ -2573,30 +2552,106 @@ function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, 
     graphSection+
     '<h2>📋 日別学習記録</h2>'+
     '<table><tr><th>日付</th><th>セッション</th><th>出題数</th><th>正解</th><th>不正解</th><th>正答率</th><th>学習時間</th></tr>'+dayRows+'</table>'+
-    /* ── 使用単語集テーブル ── */
-    (listData&&listData.length?
-      '<h2>📚 使用した単語集</h2>'+
-      '<table><tr><th>単語集名</th><th>言語</th><th>セッション</th><th>出題数</th><th>正答率</th><th>学習時間</th></tr>'+
-      listData.map(function(d){
-        var l=LANGS[d.lang||'en'];
-        var clr=d.acc>=80?'#4cff91':d.acc>=60?'#ffd700':'#fc5c7d';
-        return '<tr>'+
-          '<td><strong>'+(escHtml(d.name))+'</strong></td>'+
-          '<td>'+(l?l.flag+' '+l.name:'—')+'</td>'+
-          '<td style="text-align:center">'+d.sessions+'</td>'+
-          '<td style="text-align:center">'+d.total+'</td>'+
-          '<td style="text-align:center;color:'+clr+';font-weight:700">'+d.acc+'%</td>'+
-          '<td>'+fmtDur(d.durMs)+'</td>'+
+    '<div class="footer">VocabMaster — 学習報告書 ｜ 出力日時: '+fmtDate(now)+'</div>'+
+    '</div></body></html>';
+}
+
+/* ── 単語レポートHTML生成 ── */
+function buildWordReportHTML(title, now, missArr, slowArr, listData, targetListNames){
+  var langNames={en:'英語',de:'ドイツ語',fr:'フランス語',es:'スペイン語',it:'イタリア語'};
+
+  /* 苦手単語テーブル */
+  var missRows='';
+  if(missArr&&missArr.length){
+    missArr.forEach(function(w,i){
+      missRows+='<tr><td style="text-align:center">'+(i+1)+'</td><td><strong>'+escHtml(w.word)+'</strong></td><td>'+escHtml(w.meaning)+'</td><td>'+(langNames[w.lang]||w.lang)+'</td><td style="color:#fc5c7d;font-weight:700;text-align:center">'+w.count+'回</td></tr>';
+    });
+  }else{
+    missRows='<tr><td colspan="5" style="text-align:center;color:#888;padding:16px">間違いはありませんでした 🎉</td></tr>';
+  }
+
+  /* 準苦手ランキングテーブル */
+  var slowRows='';
+  if(slowArr&&slowArr.length){
+    slowArr.forEach(function(w,i){
+      var avgSec=(w.avgMs/1000).toFixed(1);
+      var secClr=w.avgMs>=15000?'#e53935':w.avgMs>=10000?'#f57c00':'#ff8c42';
+      var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+      slowRows+='<tr>'+
+        '<td style="text-align:center">'+(medal||'<span style="color:#aaa">'+(i+1)+'</span>')+'</td>'+
+        '<td><strong>'+escHtml(w.word)+'</strong></td>'+
+        '<td>'+escHtml(w.meaning)+'</td>'+
+        '<td>'+(langNames[w.lang]||w.lang)+'</td>'+
+        '<td style="color:'+secClr+';font-weight:700;text-align:center">'+avgSec+'秒</td>'+
+        '<td style="text-align:center;color:#888">'+w.count+'回</td>'+
         '</tr>';
-      }).join('')+
-      '</table>'
+    });
+  }else{
+    slowRows='<tr><td colspan="6" style="text-align:center;color:#888;padding:16px">5秒以上かかった単語はありません 👍</td></tr>';
+  }
+
+  /* 単語集別テーブル */
+  var listRows='';
+  if(listData&&listData.length){
+    listData.forEach(function(d){
+      var l=LANGS[d.lang||'en'];
+      var clr=d.acc>=80?'#2e7d32':d.acc>=60?'#f57c00':'#c62828';
+      listRows+='<tr>'+
+        '<td><strong>'+escHtml(d.name)+'</strong></td>'+
+        '<td>'+(l?l.flag+' '+l.name:'—')+'</td>'+
+        '<td style="text-align:center">'+d.sessions+'</td>'+
+        '<td style="text-align:center">'+d.total+'</td>'+
+        '<td style="text-align:center;color:'+clr+';font-weight:700">'+d.acc+'%</td>'+
+        '<td>'+fmtDur(d.durMs)+'</td>'+
+        '</tr>';
+    });
+  }else{
+    listRows='<tr><td colspan="6" style="text-align:center;color:#888;padding:16px">データがありません</td></tr>';
+  }
+
+  return '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">'+
+    '<title>単語レポート — '+escHtml(title)+'</title>'+
+    '<style>'+
+    '@page{size:A4;margin:15mm 15mm 20mm 15mm}'+
+    'body{font-family:"Helvetica Neue",Arial,"Hiragino Kaku Gothic ProN",sans-serif;color:#222;background:#fff;margin:0;padding:0;font-size:10pt}'+
+    '.page{max-width:800px;margin:0 auto;padding:24px 20px}'+
+    'h1{font-size:18pt;font-weight:700;color:#222;margin:0 0 4px}'+
+    'h2{font-size:12pt;font-weight:700;color:#333;margin:28px 0 10px;border-left:4px solid #e53935;padding-left:10px}'+
+    'h2.slow{border-left-color:#ff8c42}'+
+    'h2.list{border-left-color:#7c5cfc}'+
+    '.subtitle{font-size:9pt;color:#888;margin-bottom:20px}'+
+    '.badge{display:inline-block;background:#7c5cfc22;color:#7c5cfc;border:1px solid #7c5cfc44;border-radius:6px;padding:2px 10px;font-size:9pt;font-weight:600;margin:0 3px 3px 0}'+
+    'table{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:9.5pt}'+
+    'th{background:#e53935;color:#fff;padding:8px 10px;text-align:left;font-weight:600;font-size:9pt}'+
+    'th.slow-th{background:#ff8c42}'+
+    'th.list-th{background:#7c5cfc}'+
+    'td{padding:7px 10px;border-bottom:1px solid #f0f0f0}'+
+    'tr:nth-child(even) td{background:#fafafa}'+
+    'tr:last-child td{border-bottom:none}'+
+    '.footer{text-align:center;font-size:8pt;color:#bbb;margin-top:28px;padding-top:12px;border-top:1px solid #eee}'+
+    '.no-print{margin-bottom:16px;display:flex;gap:10px}'+
+    '.btn-print{padding:10px 24px;background:#e53935;color:#fff;border:none;border-radius:8px;font-size:12pt;font-weight:600;cursor:pointer;font-family:inherit}'+
+    '.btn-close{padding:10px 24px;background:#888;color:#fff;border:none;border-radius:8px;font-size:12pt;cursor:pointer;font-family:inherit}'+
+    '@media print{.no-print{display:none!important}th{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'+
+    '</style></head><body>'+
+    '<div class="page">'+
+    '<div class="no-print">'+
+      '<button class="btn-print" onclick="window.print()">🖨️ 印刷 / PDF保存</button>'+
+      '<button class="btn-close" onclick="window.close()">✕ 閉じる</button>'+
+    '</div>'+
+    '<h1>📝 単語レポート</h1>'+
+    '<div class="subtitle">'+escHtml(title)+' ｜ 作成日時：'+fmtDate(now)+' '+now.getHours()+'時'+String(now.getMinutes()).padStart(2,'0')+'分</div>'+
+    (targetListNames&&targetListNames.length?
+      '<div style="margin-bottom:16px">'+targetListNames.map(function(n){return'<span class="badge">'+escHtml(n)+'</span>';}).join('')+'</div>'
     :'')+
+    '<h2>📚 使用した単語集</h2>'+
+    '<table><tr><th class="list-th">単語集名</th><th class="list-th">言語</th><th class="list-th">セッション</th><th class="list-th">出題数</th><th class="list-th">正答率</th><th class="list-th">学習時間</th></tr>'+listRows+'</table>'+
     '<h2>❌ 苦手単語一覧（不正解が多い順）</h2>'+
     '<table><tr><th>#</th><th>単語</th><th>意味</th><th>言語</th><th>間違い回数</th></tr>'+missRows+'</table>'+
-    '<h2>⏱️ 準苦手ランキング（回答に時間がかかった単語）</h2>'+
-    '<div style="font-size:9pt;color:#888;margin:-6px 0 10px;padding-left:2px">正解はしたが5秒以上かかった単語 ／ 平均回答時間の長い順</div>'+
+    '<h2 class="slow">⏱️ 準苦手ランキング（回答に時間がかかった単語）</h2>'+
+    '<div style="font-size:9pt;color:#888;margin:-6px 0 10px">正解したが5秒以上かかった単語 ／ 平均回答時間の長い順</div>'+
     '<table><tr><th class="slow-th">#</th><th class="slow-th">単語</th><th class="slow-th">意味</th><th class="slow-th">言語</th><th class="slow-th">平均回答時間</th><th class="slow-th">計測回数</th></tr>'+slowRows+'</table>'+
-    '<div class="footer">VocabMaster — 学習報告書 ｜ 出力日時: '+fmtDate(now)+'</div>'+
+    '<div class="footer">VocabMaster 単語レポート ｜ 出力日時: '+fmtDate(now)+'</div>'+
     '</div></body></html>';
 }
 
