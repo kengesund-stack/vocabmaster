@@ -2338,21 +2338,18 @@ function generateReport(period, lids){
     return {lid:lid, name:lst?lst.name:'（削除済みリスト）', lang:lst?lst.lang:'', sessions:r.sessions, total:r.total, ok:r.ok, acc:acc2, durMs:r.durMs};
   }).sort(function(a,b){return b.durMs-a.durMs;});
 
-  /* HTML生成 */
-  var h=buildReportHTML(periodLabel, now, totalSessions, totalQ, totalOk, totalNg, avgAcc, totalDurMs, dayKeys, dayMap, logs, modeData, listData, period, filterAll?[]:listNames);
+  /* HTML生成（1ウィンドウ・タブ切り替え） */
+  var h=buildCombinedReportHTML(periodLabel, now,
+    totalSessions, totalQ, totalOk, totalNg, avgAcc, totalDurMs,
+    dayKeys, dayMap, logs, modeData, listData, period,
+    filterAll?[]:listNames,
+    missArr, slowArr);
 
-  /* 単語レポートHTML生成 */
-  var hw=buildWordReportHTML(periodLabel, now, missArr, slowArr, listData, filterAll?[]:listNames);
-
-  /* 別ウィンドウで開いて印刷 */
+  /* 別ウィンドウを1つだけ開く */
   var w=window.open('','_blank','width=900,height=700');
   if(!w){toast('ポップアップをブロックされました。ブラウザの設定を確認してください');return;}
   w.document.write(h);
   w.document.close();
-
-  /* 単語レポートウィンドウ */
-  var ww=window.open('','_blank','width=900,height=700');
-  if(ww){ww.document.write(hw);ww.document.close();}
 }
 
 function fmtDate(d){
@@ -2362,85 +2359,63 @@ function fmtDateShort(s){
   var d=new Date(s);return (d.getMonth()+1)+'/'+d.getDate();
 }
 
-function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, dayKeys, dayMap, logs, modeData, listData, period, targetListNames){
+function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, dayKeys, dayMap, logs, modeData, listData, period, targetListNames, missArr, slowArr){
 
-  /* ── 時間フォーマット（ミリ秒 → 表示文字列） ── */
   function fmtDur(ms){
     if(!ms||ms<1000)return '0分';
-    var s=Math.round(ms/1000), m=Math.floor(s/60), h=Math.floor(m/60);
+    var s=Math.round(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);
     if(h>0)return h+'時間'+(m%60)+'分';
     if(m>0)return m+'分'+(s%60>0?s%60+'秒':'');
     return s+'秒';
   }
 
-  /* ── SVG：学習時間(棒)+正答率(折れ線) 複合グラフ ── */
-  function makeComboSVG(labels, durMins, accPcts){
+  /* ── SVG：複合グラフ ── */
+  function makeComboSVG(labels,durMins,accPcts){
     var n=labels.length;
     if(!n)return '<p style="color:#888;font-size:9pt;margin:8px 0">データがありません</p>';
-    var GW=560, GH=120, PAD_L=36, PAD_R=36, PAD_B=22, PAD_T=14;
-    var IW=GW-PAD_L-PAD_R, IH=GH-PAD_T-PAD_B;
-    var bw=Math.min(36, Math.floor(IW/n)-3);
-    var step=IW/n;
+    var GW=560,GH=120,PAD_L=36,PAD_R=36,PAD_B=22,PAD_T=14;
+    var IW=GW-PAD_L-PAD_R,IH=GH-PAD_T-PAD_B;
+    var bw=Math.min(36,Math.floor(IW/n)-3),step=IW/n;
     var maxDur=Math.max.apply(null,durMins.concat([1]));
-    /* y軸グリッド（左：分、右：%） */
     var grid='',yLbls='';
     [0,0.25,0.5,0.75,1].forEach(function(r){
       var y=PAD_T+IH-Math.round(r*IH);
-      var isDash=(r>0&&r<1);
-      grid+='<line x1="'+PAD_L+'" y1="'+y+'" x2="'+(GW-PAD_R)+'" y2="'+y+'" stroke="'+(r===0||r===1?'#ccc':'#eee')+'" stroke-width="'+(r===0||r===1?'1':'0.5')+'" stroke-dasharray="'+(isDash?'3,3':'0')+'"/>';
+      grid+='<line x1="'+PAD_L+'" y1="'+y+'" x2="'+(GW-PAD_R)+'" y2="'+y+'" stroke="'+(r===0||r===1?'#ccc':'#eee')+'" stroke-width="'+(r===0||r===1?'1':'0.5')+'" stroke-dasharray="'+(r>0&&r<1?'3,3':'0')+'"/>';
       yLbls+='<text x="'+(PAD_L-4)+'" y="'+(y+3)+'" text-anchor="end" font-size="7" fill="#888">'+Math.round(maxDur*r)+'</text>';
       yLbls+='<text x="'+(GW-PAD_R+4)+'" y="'+(y+3)+'" text-anchor="start" font-size="7" fill="#5c9cf8">'+(100*r|0)+'%</text>';
     });
-    /* 棒（学習時間） */
-    var bars='',barLbls='',xlbls='';
-    var lineP='',lineDots='';
+    var bars='',barLbls='',xlbls='',lineP='',lineDots='';
     durMins.forEach(function(v,i){
       var bh=maxDur?Math.max(v>0?2:0,Math.round(v/maxDur*IH)):0;
-      var cx=(PAD_L+i*step+step/2);
-      var bx=cx-bw/2;
-      var by=PAD_T+IH-bh;
+      var cx=PAD_L+i*step+step/2,bx=cx-bw/2,by=PAD_T+IH-bh;
       bars+='<rect x="'+bx.toFixed(1)+'" y="'+by+'" width="'+bw+'" height="'+bh+'" fill="#7c5cfc" rx="2" opacity="0.75"/>';
       if(bh>13)barLbls+='<text x="'+cx.toFixed(1)+'" y="'+(by-2)+'" text-anchor="middle" font-size="6.5" fill="#7c5cfc">'+v+'分</text>';
-      /* X軸ラベル間引き */
       var show=(n<=14)||(i%Math.ceil(n/14)===0)||(i===n-1);
       if(show)xlbls+='<text x="'+cx.toFixed(1)+'" y="'+(GH-4)+'" text-anchor="middle" font-size="7" fill="#888">'+labels[i]+'</text>';
-      /* 折れ線点 */
-      var acc=accPcts[i];
-      var ly=PAD_T+IH-Math.round(acc/100*IH);
-      lineDots+='<circle cx="'+cx.toFixed(1)+'" cy="'+ly+'" r="2.5" fill="'+(acc>=80?'#4cff91':acc>=60?'#ffd700':'#fc5c7d')+'" stroke="#fff" stroke-width="1"/>';
-      if(i>0){
-        var px=PAD_L+(i-1)*step+step/2;
-        var py=PAD_T+IH-Math.round(accPcts[i-1]/100*IH);
-        lineP+='<line x1="'+px.toFixed(1)+'" y1="'+py+'" x2="'+cx.toFixed(1)+'" y2="'+ly+'" stroke="#5c9cf8" stroke-width="1.5" opacity="0.8"/>';
-      }
+      var ap=accPcts[i],ly=PAD_T+IH-Math.round(ap/100*IH);
+      lineDots+='<circle cx="'+cx.toFixed(1)+'" cy="'+ly+'" r="2.5" fill="'+(ap>=80?'#4cff91':ap>=60?'#ffd700':'#fc5c7d')+'" stroke="#fff" stroke-width="1"/>';
+      if(i>0){var px=PAD_L+(i-1)*step+step/2,py=PAD_T+IH-Math.round(accPcts[i-1]/100*IH);lineP+='<line x1="'+px.toFixed(1)+'" y1="'+py+'" x2="'+cx.toFixed(1)+'" y2="'+ly+'" stroke="#5c9cf8" stroke-width="1.5" opacity="0.8"/>';}
     });
-    /* 凡例 */
-    var legend=
-      '<text x="'+(PAD_L+4)+'" y="'+(PAD_T-4)+'" font-size="7" fill="#7c5cfc">■ 学習時間（分）</text>'+
-      '<text x="'+(PAD_L+80)+'" y="'+(PAD_T-4)+'" font-size="7" fill="#5c9cf8">— 正答率</text>';
+    var legend='<text x="'+(PAD_L+4)+'" y="'+(PAD_T-4)+'" font-size="7" fill="#7c5cfc">■ 学習時間（分）</text><text x="'+(PAD_L+80)+'" y="'+(PAD_T-4)+'" font-size="7" fill="#5c9cf8">— 正答率</text>';
     return '<div style="overflow-x:auto"><svg viewBox="0 0 '+GW+' '+GH+'" style="width:100%;max-height:160px;display:block">'+grid+bars+barLbls+lineP+lineDots+xlbls+yLbls+legend+'</svg></div>';
   }
 
-  /* ── SVG：モード別学習時間（色分け棒グラフ） ── */
   function makeModeSVG(modeData){
     if(!modeData||!modeData.length)return '';
-    var n=modeData.length;
-    var GW=560, GH=100, PAD_L=42, PAD_R=10, PAD_B=22, PAD_T=10;
-    var IW=GW-PAD_L-PAD_R, IH=GH-PAD_T-PAD_B;
-    var bw=Math.min(60, Math.floor(IW/n)-8);
-    var step=IW/n;
+    var n=modeData.length,GW=560,GH=100,PAD_L=10,PAD_R=10,PAD_B=22,PAD_T=10;
+    var IW=GW-PAD_L-PAD_R,IH=GH-PAD_T-PAD_B;
+    var step=IW/n,bw=Math.min(60,step-12);
     var maxMs=Math.max.apply(null,modeData.map(function(m){return m.ms;}).concat([1]));
-    var grid='',yLbls='',bars='',barLbls='',xlbls='';
+    var grid='',yLbls='';
     [0,0.5,1].forEach(function(r){
       var y=PAD_T+IH-Math.round(r*IH);
-      grid+='<line x1="'+PAD_L+'" y1="'+y+'" x2="'+(GW-PAD_R)+'" y2="'+y+'" stroke="'+(r===0?'#ccc':'#eee')+'" stroke-width="'+(r===0?'1':'0.5')+'" stroke-dasharray="'+(r>0?'3,3':'0')+'"/>';
-      yLbls+='<text x="'+(PAD_L-3)+'" y="'+(y+3)+'" text-anchor="end" font-size="7" fill="#888">'+fmtDur(Math.round(maxMs*r))+'</text>';
+      grid+='<line x1="'+PAD_L+'" y1="'+y+'" x2="'+(GW-PAD_R)+'" y2="'+y+'" stroke="'+(r===0||r===1?'#ccc':'#eee')+'" stroke-width="1"/>';
+      if(r>0)yLbls+='<text x="'+(PAD_L-2)+'" y="'+(y+3)+'" text-anchor="end" font-size="7" fill="#888">'+fmtDur(maxMs*r)+'</text>';
     });
+    var bars='',barLbls='',xlbls='';
     modeData.forEach(function(m,i){
       var bh=maxMs?Math.max(m.ms>0?2:0,Math.round(m.ms/maxMs*IH)):0;
-      var cx=PAD_L+i*step+step/2;
-      var bx=cx-bw/2;
-      var by=PAD_T+IH-bh;
+      var cx=PAD_L+i*step+step/2,bx=cx-bw/2,by=PAD_T+IH-bh;
       bars+='<rect x="'+bx.toFixed(1)+'" y="'+by+'" width="'+bw+'" height="'+bh+'" fill="'+m.color+'" rx="3" opacity="0.85"/>';
       if(bh>13)barLbls+='<text x="'+cx.toFixed(1)+'" y="'+(by-2)+'" text-anchor="middle" font-size="7" fill="'+m.color+'">'+fmtDur(m.ms)+'</text>';
       xlbls+='<text x="'+cx.toFixed(1)+'" y="'+(GH-4)+'" text-anchor="middle" font-size="7.5" fill="#555">'+m.label+'</text>';
@@ -2448,212 +2423,173 @@ function buildReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, 
     return '<div style="overflow-x:auto"><svg viewBox="0 0 '+GW+' '+GH+'" style="width:100%;max-height:130px;display:block">'+grid+bars+barLbls+xlbls+yLbls+'</svg></div>';
   }
 
-  /* ── 各集計単位のラベルと値を period に応じて選択 ── */
-  var comboLabels, comboDurMins, comboAccPcts;
-  if(period==='day'){
-    comboLabels=dayKeys.map(function(d){return fmtDateShort(d);});
-    comboDurMins=dayKeys.map(function(d){return Math.round((dayMap[d].durMs||0)/60000);});
-    comboAccPcts=dayKeys.map(function(d){var r=dayMap[d];return r.total?Math.round(r.ok/r.total*100):0;});
-  } else if(period==='week'){
-    /* 週報：日別を使う */
+  /* グラフデータ */
+  var comboLabels=[],comboDurMins=[],comboAccPcts=[];
+  if(period==='day'||period==='week'){
     comboLabels=dayKeys.map(function(d){return fmtDateShort(d);});
     comboDurMins=dayKeys.map(function(d){return Math.round((dayMap[d].durMs||0)/60000);});
     comboAccPcts=dayKeys.map(function(d){var r=dayMap[d];return r.total?Math.round(r.ok/r.total*100):0;});
   } else {
-    /* 月報：週別集計 */
     var weekMap={};
     dayKeys.forEach(function(d){
-      var dt=new Date(d),dow=dt.getDay()||7;
-      var mon=new Date(dt);mon.setDate(dt.getDate()-(dow-1));
+      var dt=new Date(d),dow=dt.getDay()||7,mon=new Date(dt);
+      mon.setDate(dt.getDate()-(dow-1));
       var wk=mon.toISOString().slice(0,10);
       if(!weekMap[wk])weekMap[wk]={durMs:0,ok:0,total:0};
       weekMap[wk].durMs+=(dayMap[d].durMs||0);
       weekMap[wk].ok+=dayMap[d].ok; weekMap[wk].total+=dayMap[d].total;
     });
     var wkKeys=Object.keys(weekMap).sort();
-    comboLabels=wkKeys.map(function(k){var d=new Date(k);return (d.getMonth()+1)+'/'+(d.getDate())+'〜';});
+    comboLabels=wkKeys.map(function(k){var d=new Date(k);return(d.getMonth()+1)+'/'+(d.getDate())+'〜';});
     comboDurMins=wkKeys.map(function(k){return Math.round(weekMap[k].durMs/60000);});
     comboAccPcts=wkKeys.map(function(k){var r=weekMap[k];return r.total?Math.round(r.ok/r.total*100):0;});
   }
-
   var comboSVG=makeComboSVG(comboLabels,comboDurMins,comboAccPcts);
   var modeSVG=makeModeSVG(modeData);
-
-  /* ── グラフセクション ── */
   var graphSection='';
   if(dayKeys.length>0){
     graphSection=
       '<h2>📊 学習状況グラフ</h2>'+
       '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:12px;margin-bottom:14px">'+
-        '<div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:6px">⏱️ 学習時間（棒）＋ 📈 正答率（折れ線）</div>'+
-        comboSVG+
+        '<div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:6px">⏱️ 学習時間（棒）＋ 📈 正答率（折れ線）</div>'+comboSVG+
       '</div>'+
-      (modeSVG?
-        '<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:12px;margin-bottom:14px">'+
-          '<div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:6px">🎯 モード別学習時間</div>'+
-          modeSVG+
-        '</div>'
-      :'');
+      (modeSVG?'<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:12px;margin-bottom:14px"><div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:6px">🎯 モード別学習時間</div>'+modeSVG+'</div>':'');
   }
 
-  /* ── 日別テーブル ── */
+  /* 日別テーブル */
+  var langNames={en:'英語',de:'ドイツ語',fr:'フランス語',es:'スペイン語',it:'イタリア語'};
   var dayRows='';
-  var langNames={en:'英語',de:'ドイツ語',fr:'フランス語',es:'スペイン語',it:'イタリア語'};
   dayKeys.forEach(function(d){
-    var r=dayMap[d];
-    var a=r.total?Math.round(r.ok/r.total*100):0;
-    var clr=a>=80?'#4cff91':a>=60?'#ffd700':'#fc5c7d';
+    var r=dayMap[d],a=r.total?Math.round(r.ok/r.total*100):0;
+    var clr=a>=80?'#2e7d32':a>=60?'#f57c00':'#c62828';
     dayRows+='<tr><td>'+d.replace(/-/g,'/')+'</td><td>'+r.sessions+'</td><td>'+r.total+'</td><td>'+r.ok+'</td><td>'+r.ng+'</td>'+
-      '<td><span style="color:'+clr+';font-weight:700">'+a+'%</span></td>'+
-      '<td>'+fmtDur(r.durMs||0)+'</td></tr>';
+      '<td><span style="color:'+clr+';font-weight:700">'+a+'%</span></td><td>'+fmtDur(r.durMs||0)+'</td></tr>';
   });
-  if(!dayRows)dayRows='<tr><td colspan="7" style="text-align:center;color:#888">この期間の記録はありません</td></tr>';
+  if(!dayRows)dayRows='<tr><td colspan="7" style="text-align:center;color:#888;padding:14px">この期間の記録はありません</td></tr>';
 
-  return '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">'+
-    '<title>'+escHtml(title)+'</title>'+
-    '<style>'+
-    '@page{size:A4;margin:15mm 15mm 20mm 15mm}'+
-    'body{font-family:"Hiragino Sans","Yu Gothic","Meiryo",sans-serif;font-size:11pt;color:#1a1a2e;background:#fff;margin:0;padding:0}'+
-    '.page{max-width:180mm;margin:0 auto;padding:0}'+
-    'h1{font-size:18pt;color:#1a1a2e;border-bottom:3px solid #7c5cfc;padding-bottom:8px;margin-bottom:6px}'+
-    '.subtitle{color:#666;font-size:10pt;margin-bottom:20px}'+
-    '.summary-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:22px}'+
-    '.summary-box{background:#f8f8ff;border:1px solid #e0e0f0;border-radius:8px;padding:10px;text-align:center}'+
-    '.summary-n{font-size:18pt;font-weight:700;color:#7c5cfc}'+
-    '.summary-l{font-size:8pt;color:#666;margin-top:4px}'+
-    'h2{font-size:13pt;color:#1a1a2e;border-left:4px solid #7c5cfc;padding-left:10px;margin:22px 0 10px}'+
-    'table{width:100%;border-collapse:collapse;font-size:9.5pt;margin-bottom:8px}'+
-    'th{background:#7c5cfc;color:#fff;padding:7px 8px;text-align:left;font-weight:600}'+
-    '.slow-th{background:#ff8c42!important}'+
-    'td{padding:6px 8px;border-bottom:1px solid #eee}'+
-    'tr:nth-child(even) td{background:#f8f8ff}'+
-    '.footer{margin-top:20px;padding-top:12px;border-top:1px solid #ddd;font-size:8pt;color:#999;text-align:center}'+
-    '.no-print{display:flex;gap:10px;justify-content:center;margin:20px 0;padding:16px;background:#f0f0ff;border-radius:8px}'+
-    '.btn-print{padding:10px 24px;background:#7c5cfc;color:#fff;border:none;border-radius:8px;font-size:12pt;font-weight:600;cursor:pointer;font-family:inherit}'+
-    '.btn-close{padding:10px 24px;background:#888;color:#fff;border:none;border-radius:8px;font-size:12pt;cursor:pointer;font-family:inherit}'+
-    '@media print{.no-print{display:none!important}body{color:#000}th{background:#7c5cfc!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.slow-th{background:#ff8c42!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}'+
-    '</style></head><body>'+
-    '<div class="no-print">'+
-      '<button class="btn-print" onclick="window.print()">🖨️ 印刷 / PDF保存</button>'+
-      '<button class="btn-close" onclick="window.close()">✕ 閉じる</button>'+
-    '</div>'+
-    '<div class="page">'+
-    '<h1>📊 VocabMaster 学習報告書</h1>'+
-    '<div class="subtitle">'+escHtml(title)+' &nbsp;｜&nbsp; 作成日時：'+fmtDate(now)+' '+now.getHours()+'時'+now.getMinutes()+'分</div>'+
-    (targetListNames&&targetListNames.length?'<div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span style="font-size:9pt;color:#888">対象単語集：</span>'+targetListNames.map(function(n){return'<span style="display:inline-block;background:#7c5cfc22;color:#7c5cfc;border:1px solid #7c5cfc44;border-radius:6px;padding:2px 10px;font-size:9pt;font-weight:600">'+escHtml(n)+'</span>';}).join('')+'</div>':'')+
-
-    '<div class="summary-grid">'+
-      '<div class="summary-box"><div class="summary-n">'+sessions+'</div><div class="summary-l">セッション数</div></div>'+
-      '<div class="summary-box"><div class="summary-n">'+totalQ+'</div><div class="summary-l">総出題数</div></div>'+
-      '<div class="summary-box"><div class="summary-n" style="color:#4cff91">'+ok+'</div><div class="summary-l">正解数</div></div>'+
-      '<div class="summary-box"><div class="summary-n" style="color:#'+(acc>=80?'4cff91':acc>=60?'ffd700':'fc5c7d')+'">'+acc+'%</div><div class="summary-l">平均正答率</div></div>'+
-      '<div class="summary-box"><div class="summary-n" style="color:#7c5cfc;font-size:14pt">'+fmtDur(totalDurMs)+'</div><div class="summary-l">総学習時間</div></div>'+
-    '</div>'+
-    graphSection+
-    '<h2>📋 日別学習記録</h2>'+
-    '<table><tr><th>日付</th><th>セッション</th><th>出題数</th><th>正解</th><th>不正解</th><th>正答率</th><th>学習時間</th></tr>'+dayRows+'</table>'+
-    '<div class="footer">VocabMaster — 学習報告書 ｜ 出力日時: '+fmtDate(now)+'</div>'+
-    '</div></body></html>';
-}
-
-/* ── 単語レポートHTML生成 ── */
-function buildWordReportHTML(title, now, missArr, slowArr, listData, targetListNames){
-  var langNames={en:'英語',de:'ドイツ語',fr:'フランス語',es:'スペイン語',it:'イタリア語'};
-
-  /* 苦手単語テーブル */
-  var missRows='';
-  if(missArr&&missArr.length){
-    missArr.forEach(function(w,i){
-      missRows+='<tr><td style="text-align:center">'+(i+1)+'</td><td><strong>'+escHtml(w.word)+'</strong></td><td>'+escHtml(w.meaning)+'</td><td>'+(langNames[w.lang]||w.lang)+'</td><td style="color:#fc5c7d;font-weight:700;text-align:center">'+w.count+'回</td></tr>';
-    });
-  }else{
-    missRows='<tr><td colspan="5" style="text-align:center;color:#888;padding:16px">間違いはありませんでした 🎉</td></tr>';
-  }
-
-  /* 準苦手ランキングテーブル */
-  var slowRows='';
-  if(slowArr&&slowArr.length){
-    slowArr.forEach(function(w,i){
-      var avgSec=(w.avgMs/1000).toFixed(1);
-      var secClr=w.avgMs>=15000?'#e53935':w.avgMs>=10000?'#f57c00':'#ff8c42';
-      var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
-      slowRows+='<tr>'+
-        '<td style="text-align:center">'+(medal||'<span style="color:#aaa">'+(i+1)+'</span>')+'</td>'+
-        '<td><strong>'+escHtml(w.word)+'</strong></td>'+
-        '<td>'+escHtml(w.meaning)+'</td>'+
-        '<td>'+(langNames[w.lang]||w.lang)+'</td>'+
-        '<td style="color:'+secClr+';font-weight:700;text-align:center">'+avgSec+'秒</td>'+
-        '<td style="text-align:center;color:#888">'+w.count+'回</td>'+
-        '</tr>';
-    });
-  }else{
-    slowRows='<tr><td colspan="6" style="text-align:center;color:#888;padding:16px">5秒以上かかった単語はありません 👍</td></tr>';
-  }
-
-  /* 単語集別テーブル */
+  /* 単語集テーブル */
   var listRows='';
   if(listData&&listData.length){
     listData.forEach(function(d){
       var l=LANGS[d.lang||'en'];
       var clr=d.acc>=80?'#2e7d32':d.acc>=60?'#f57c00':'#c62828';
-      listRows+='<tr>'+
-        '<td><strong>'+escHtml(d.name)+'</strong></td>'+
-        '<td>'+(l?l.flag+' '+l.name:'—')+'</td>'+
-        '<td style="text-align:center">'+d.sessions+'</td>'+
-        '<td style="text-align:center">'+d.total+'</td>'+
-        '<td style="text-align:center;color:'+clr+';font-weight:700">'+d.acc+'%</td>'+
-        '<td>'+fmtDur(d.durMs)+'</td>'+
-        '</tr>';
+      listRows+='<tr><td><strong>'+escHtml(d.name)+'</strong></td><td>'+(l?l.flag+' '+l.name:'—')+'</td>'+
+        '<td style="text-align:center">'+d.sessions+'</td><td style="text-align:center">'+d.total+'</td>'+
+        '<td style="text-align:center;color:'+clr+';font-weight:700">'+d.acc+'%</td><td>'+fmtDur(d.durMs)+'</td></tr>';
     });
-  }else{
-    listRows='<tr><td colspan="6" style="text-align:center;color:#888;padding:16px">データがありません</td></tr>';
+  } else {
+    listRows='<tr><td colspan="6" style="text-align:center;color:#888;padding:14px">データがありません</td></tr>';
   }
 
-  return '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">'+
-    '<title>単語レポート — '+escHtml(title)+'</title>'+
-    '<style>'+
-    '@page{size:A4;margin:15mm 15mm 20mm 15mm}'+
-    'body{font-family:"Helvetica Neue",Arial,"Hiragino Kaku Gothic ProN",sans-serif;color:#222;background:#fff;margin:0;padding:0;font-size:10pt}'+
-    '.page{max-width:800px;margin:0 auto;padding:24px 20px}'+
-    'h1{font-size:18pt;font-weight:700;color:#222;margin:0 0 4px}'+
-    'h2{font-size:12pt;font-weight:700;color:#333;margin:28px 0 10px;border-left:4px solid #e53935;padding-left:10px}'+
-    'h2.slow{border-left-color:#ff8c42}'+
-    'h2.list{border-left-color:#7c5cfc}'+
-    '.subtitle{font-size:9pt;color:#888;margin-bottom:20px}'+
-    '.badge{display:inline-block;background:#7c5cfc22;color:#7c5cfc;border:1px solid #7c5cfc44;border-radius:6px;padding:2px 10px;font-size:9pt;font-weight:600;margin:0 3px 3px 0}'+
-    'table{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:9.5pt}'+
-    'th{background:#e53935;color:#fff;padding:8px 10px;text-align:left;font-weight:600;font-size:9pt}'+
-    'th.slow-th{background:#ff8c42}'+
-    'th.list-th{background:#7c5cfc}'+
-    'td{padding:7px 10px;border-bottom:1px solid #f0f0f0}'+
-    'tr:nth-child(even) td{background:#fafafa}'+
-    'tr:last-child td{border-bottom:none}'+
-    '.footer{text-align:center;font-size:8pt;color:#bbb;margin-top:28px;padding-top:12px;border-top:1px solid #eee}'+
-    '.no-print{margin-bottom:16px;display:flex;gap:10px}'+
-    '.btn-print{padding:10px 24px;background:#e53935;color:#fff;border:none;border-radius:8px;font-size:12pt;font-weight:600;cursor:pointer;font-family:inherit}'+
-    '.btn-close{padding:10px 24px;background:#888;color:#fff;border:none;border-radius:8px;font-size:12pt;cursor:pointer;font-family:inherit}'+
-    '@media print{.no-print{display:none!important}th{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'+
-    '</style></head><body>'+
-    '<div class="page">'+
-    '<div class="no-print">'+
-      '<button class="btn-print" onclick="window.print()">🖨️ 印刷 / PDF保存</button>'+
-      '<button class="btn-close" onclick="window.close()">✕ 閉じる</button>'+
+  /* 苦手単語テーブル */
+  var missRows='';
+  if(missArr&&missArr.length){
+    missArr.forEach(function(w,i){
+      missRows+='<tr><td style="text-align:center">'+(i+1)+'</td><td><strong>'+escHtml(w.word)+'</strong></td>'+
+        '<td>'+escHtml(w.meaning)+'</td><td>'+(langNames[w.lang]||w.lang)+'</td>'+
+        '<td style="color:#c62828;font-weight:700;text-align:center">'+w.count+'回</td></tr>';
+    });
+  } else {
+    missRows='<tr><td colspan="5" style="text-align:center;color:#888;padding:14px">間違いはありませんでした 🎉</td></tr>';
+  }
+
+  /* 準苦手テーブル */
+  var slowRows='';
+  if(slowArr&&slowArr.length){
+    slowArr.forEach(function(w,i){
+      var avgSec=(w.avgMs/1000).toFixed(1);
+      var secClr=w.avgMs>=15000?'#c62828':w.avgMs>=10000?'#f57c00':'#e65100';
+      var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+      slowRows+='<tr><td style="text-align:center">'+(medal||'<span style="color:#aaa">'+(i+1)+'</span>')+'</td>'+
+        '<td><strong>'+escHtml(w.word)+'</strong></td><td>'+escHtml(w.meaning)+'</td>'+
+        '<td>'+(langNames[w.lang]||w.lang)+'</td>'+
+        '<td style="color:'+secClr+';font-weight:700;text-align:center">'+avgSec+'秒</td>'+
+        '<td style="text-align:center;color:#888">'+w.count+'回</td></tr>';
+    });
+  } else {
+    slowRows='<tr><td colspan="6" style="text-align:center;color:#888;padding:14px">5秒以上かかった単語はありません 👍</td></tr>';
+  }
+
+  var badges=(targetListNames&&targetListNames.length)?
+    '<div style="margin-bottom:12px">'+targetListNames.map(function(n){return'<span style="display:inline-block;background:#7c5cfc22;color:#7c5cfc;border:1px solid #7c5cfc44;border-radius:6px;padding:2px 10px;font-size:9pt;font-weight:600;margin:0 3px 3px 0">'+escHtml(n)+'</span>';}).join('')+'</div>':'';
+
+  /* ── 学習報告書ページ ── */
+  var page1=
+    '<div id="tab-summary" class="tab-content" style="display:block">'+
+    '<h1>📊 VocabMaster 学習報告書</h1>'+
+    '<div class="subtitle">'+escHtml(title)+' ｜ 作成：'+fmtDate(now)+' '+now.getHours()+'時'+String(now.getMinutes()).padStart(2,'0')+'分</div>'+
+    badges+
+    '<div class="summary-grid">'+
+      '<div class="summary-box"><div class="summary-n">'+sessions+'</div><div class="summary-l">セッション数</div></div>'+
+      '<div class="summary-box"><div class="summary-n">'+totalQ+'</div><div class="summary-l">総出題数</div></div>'+
+      '<div class="summary-box"><div class="summary-n" style="color:#2e7d32">'+ok+'</div><div class="summary-l">正解数</div></div>'+
+      '<div class="summary-box"><div class="summary-n" style="color:#'+(acc>=80?'2e7d32':acc>=60?'f57c00':'c62828')+'">'+acc+'%</div><div class="summary-l">平均正答率</div></div>'+
+      '<div class="summary-box"><div class="summary-n" style="color:#7c5cfc;font-size:14pt">'+fmtDur(totalDurMs)+'</div><div class="summary-l">総学習時間</div></div>'+
     '</div>'+
+    graphSection+
+    '<h2>📋 日別学習記録</h2>'+
+    '<table><tr><th>日付</th><th>セッション</th><th>出題数</th><th>正解</th><th>不正解</th><th>正答率</th><th>学習時間</th></tr>'+dayRows+'</table>'+
+    '</div>';
+
+  /* ── 単語レポートページ ── */
+  var page2=
+    '<div id="tab-words" class="tab-content" style="display:none">'+
     '<h1>📝 単語レポート</h1>'+
-    '<div class="subtitle">'+escHtml(title)+' ｜ 作成日時：'+fmtDate(now)+' '+now.getHours()+'時'+String(now.getMinutes()).padStart(2,'0')+'分</div>'+
-    (targetListNames&&targetListNames.length?
-      '<div style="margin-bottom:16px">'+targetListNames.map(function(n){return'<span class="badge">'+escHtml(n)+'</span>';}).join('')+'</div>'
-    :'')+
-    '<h2>📚 使用した単語集</h2>'+
-    '<table><tr><th class="list-th">単語集名</th><th class="list-th">言語</th><th class="list-th">セッション</th><th class="list-th">出題数</th><th class="list-th">正答率</th><th class="list-th">学習時間</th></tr>'+listRows+'</table>'+
-    '<h2>❌ 苦手単語一覧（不正解が多い順）</h2>'+
-    '<table><tr><th>#</th><th>単語</th><th>意味</th><th>言語</th><th>間違い回数</th></tr>'+missRows+'</table>'+
-    '<h2 class="slow">⏱️ 準苦手ランキング（回答に時間がかかった単語）</h2>'+
-    '<div style="font-size:9pt;color:#888;margin:-6px 0 10px">正解したが5秒以上かかった単語 ／ 平均回答時間の長い順</div>'+
-    '<table><tr><th class="slow-th">#</th><th class="slow-th">単語</th><th class="slow-th">意味</th><th class="slow-th">言語</th><th class="slow-th">平均回答時間</th><th class="slow-th">計測回数</th></tr>'+slowRows+'</table>'+
-    '<div class="footer">VocabMaster 単語レポート ｜ 出力日時: '+fmtDate(now)+'</div>'+
-    '</div></body></html>';
+    '<div class="subtitle">'+escHtml(title)+' ｜ 作成：'+fmtDate(now)+' '+now.getHours()+'時'+String(now.getMinutes()).padStart(2,'0')+'分</div>'+
+    badges+
+    '<h2 style="border-left-color:#7c5cfc">📚 使用した単語集</h2>'+
+    '<table><tr><th style="background:#7c5cfc">単語集名</th><th style="background:#7c5cfc">言語</th><th style="background:#7c5cfc">セッション</th><th style="background:#7c5cfc">出題数</th><th style="background:#7c5cfc">正答率</th><th style="background:#7c5cfc">学習時間</th></tr>'+listRows+'</table>'+
+    '<h2 style="border-left-color:#c62828">❌ 苦手単語（不正解が多い順）</h2>'+
+    '<table><tr><th style="background:#c62828">#</th><th style="background:#c62828">単語</th><th style="background:#c62828">意味</th><th style="background:#c62828">言語</th><th style="background:#c62828">間違い回数</th></tr>'+missRows+'</table>'+
+    '<h2 style="border-left-color:#e65100">⏱️ 準苦手ランキング（回答に時間がかかった単語）</h2>'+
+    '<div style="font-size:9pt;color:#888;margin:-8px 0 10px">正解したが5秒以上かかった単語 ／ 平均回答時間の長い順</div>'+
+    '<table><tr><th style="background:#e65100">#</th><th style="background:#e65100">単語</th><th style="background:#e65100">意味</th><th style="background:#e65100">言語</th><th style="background:#e65100">平均回答時間</th><th style="background:#e65100">計測回数</th></tr>'+slowRows+'</table>'+
+    '</div>';
+
+  return '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
+    '<title>'+escHtml(title)+'</title>'+
+    '<style>'+
+    '@page{size:A4;margin:12mm 12mm 18mm 12mm}'+
+    'body{font-family:"Hiragino Sans","Yu Gothic","Meiryo",Arial,sans-serif;font-size:10.5pt;color:#1a1a2e;background:#fff;margin:0;padding:0}'+
+    '.topbar{display:flex;gap:8px;align-items:center;padding:12px 20px;background:#1a1a2e;position:sticky;top:0;z-index:10}'+
+    '.tab-btn{padding:8px 20px;border:none;border-radius:8px;font-size:11pt;font-weight:600;cursor:pointer;font-family:inherit;background:rgba(255,255,255,.15);color:#fff}'+
+    '.tab-btn.active{background:#7c5cfc;color:#fff}'+
+    '.btn-print{padding:8px 18px;background:#4caf50;color:#fff;border:none;border-radius:8px;font-size:11pt;font-weight:600;cursor:pointer;font-family:inherit;margin-left:auto}'+
+    '.btn-close{padding:8px 14px;background:#888;color:#fff;border:none;border-radius:8px;font-size:11pt;cursor:pointer;font-family:inherit}'+
+    '.tab-content{max-width:800px;margin:0 auto;padding:20px 20px 40px}'+
+    'h1{font-size:18pt;color:#1a1a2e;border-bottom:3px solid #7c5cfc;padding-bottom:8px;margin-bottom:6px}'+
+    'h2{font-size:12pt;color:#1a1a2e;border-left:4px solid #7c5cfc;padding-left:10px;margin:22px 0 10px}'+
+    '.subtitle{color:#666;font-size:9.5pt;margin-bottom:14px}'+
+    '.summary-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:20px}'+
+    '.summary-box{background:#f8f8ff;border:1px solid #e0e0f0;border-radius:8px;padding:10px;text-align:center}'+
+    '.summary-n{font-size:17pt;font-weight:700;color:#7c5cfc}'+
+    '.summary-l{font-size:8pt;color:#666;margin-top:4px}'+
+    'table{width:100%;border-collapse:collapse;font-size:9.5pt;margin-bottom:8px}'+
+    'th{background:#1a1a2e;color:#fff;padding:7px 8px;text-align:left;font-weight:600}'+
+    'td{padding:6px 8px;border-bottom:1px solid #eee}'+
+    'tr:nth-child(even) td{background:#f8f8ff}'+
+    '.footer{margin-top:20px;padding-top:10px;border-top:1px solid #ddd;font-size:8pt;color:#aaa;text-align:center}'+
+    '@media print{.topbar{display:none!important}.tab-content{display:block!important}h1{page-break-before:always}h1:first-child{page-break-before:avoid}th{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'+
+    '</style>'+
+    '<script>'+
+    'function showTab(id){'+
+      'document.querySelectorAll(".tab-content").forEach(function(el){el.style.display="none";});'+
+      'document.getElementById(id).style.display="block";'+
+      'document.querySelectorAll(".tab-btn").forEach(function(b){b.classList.remove("active");});'+
+      'document.querySelector("[data-tab="+id+"]").classList.add("active");'+
+    '}'+
+    '<\/script>'+
+    '</head><body>'+
+    '<div class="topbar no-print">'+
+      '<button class="tab-btn active" data-tab="tab-summary" onclick="showTab(\'tab-summary\')">📊 学習報告書</button>'+
+      '<button class="tab-btn" data-tab="tab-words" onclick="showTab(\'tab-words\')">📝 単語レポート</button>'+
+      '<button class="btn-print" onclick="window.print()">🖨️ 印刷</button>'+
+      '<button class="btn-close" onclick="window.close()">✕</button>'+
+    '</div>'+
+    page1+page2+
+    '</body></html>';
 }
+
 
 function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
