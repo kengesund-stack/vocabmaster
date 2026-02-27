@@ -574,6 +574,15 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         <button class="toggle" id="TG-autonext"></button>
       </div>
       <div class="set-row" style="cursor:default">
+        <span class="set-lbl">🔁 不正解時の再出題回数</span>
+        <div style="display:flex;gap:5px">
+          <button class="opt-btn" data-rq="0" id="RQ-0" style="padding:5px 10px;font-size:12px">なし</button>
+          <button class="opt-btn" data-rq="1" id="RQ-1" style="padding:5px 10px;font-size:12px">1回</button>
+          <button class="opt-btn" data-rq="2" id="RQ-2" style="padding:5px 10px;font-size:12px">2回</button>
+          <button class="opt-btn" data-rq="3" id="RQ-3" style="padding:5px 10px;font-size:12px">3回</button>
+        </div>
+      </div>
+      <div class="set-row" style="cursor:default">
         <span class="set-lbl">⏱️ 自動進行の待機時間</span>
         <div style="display:flex;align-items:center;gap:6px">
           <input type="number" id="IN-autonext-sec" min="0.5" max="10" step="0.5" value="1.5"
@@ -799,7 +808,7 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:''},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 function save(){sSet(G);scheduleAutoCloudSave();}
 
@@ -2881,20 +2890,15 @@ function qNext(){
   el('B-next').textContent='次へ →';
 
   var q=Q.q[Q.i];
-  /* 不正解経験あり かつ 2回連続正解未達なら再挿入 */
-  var consecCount=(Q.consec&&q)?(Q.consec[q.id]||0):0;
-  if(q && q._hadMiss && consecCount<2){
-    var remaining=Q.q.length-(Q.i+1); /* 現在位置より後の残り問題数 */
-    if(remaining>0){
-      /* 残り問題の中のランダムな位置に挿入（すぐ次には入れない：min 1問後） */
-      var insertOffset=1+Math.floor(Math.random()*Math.min(remaining, Math.max(1, Math.ceil(remaining*0.5)+1)));
-      var insertAt=Q.i+1+insertOffset;
-      if(insertAt>Q.q.length)insertAt=Q.q.length;
-      Q.q.splice(insertAt,0,q);
-    } else {
-      /* 残り0問なら末尾に追加して続行 */
-      Q.q.push(q);
-    }
+  /* 不正解経験あり かつ 再出題回数が上限未満の場合のみ再出題 */
+  var requeueMax=G.cfg.requeueMax!=null?G.cfg.requeueMax:1;
+  if(!Q.requeued)Q.requeued={};
+  var remaining=Q.q.length-(Q.i+1);
+  if(q && q._hadMiss && (Q.requeued[q.id]||0)<requeueMax && remaining>0){
+    Q.requeued[q.id]=(Q.requeued[q.id]||0)+1;
+    /* 残り問題のうち1〜3問後のランダムな位置に挿入 */
+    var insertOffset=1+Math.floor(Math.random()*Math.min(remaining,3));
+    Q.q.splice(Q.i+1+insertOffset,0,q);
   }
 
   Q.i++;
@@ -2975,6 +2979,8 @@ function settingsLoad(){
   var sm=G.cfg.spkMode||'both';
   ['both','foreign','ja'].forEach(function(m){el('SPK-'+m).classList.toggle('on',sm===m);});
   el('IN-duck-vol').value=G.cfg.duckVol!=null?G.cfg.duckVol:15;
+  var rq=G.cfg.requeueMax!=null?G.cfg.requeueMax:1;
+  [0,1,2,3].forEach(function(n){el('RQ-'+n).classList.toggle('on',rq===n);});
   updateKeyStatus();
 }
 
@@ -3119,6 +3125,12 @@ function bind(){
   el('ROW-flashauto').addEventListener('click',function(e){if(e.target!==el('TG-flashauto'))el('TG-flashauto').click();});
   el('TG-autoQuiz').addEventListener('click',function(){G.cfg.autoQuiz=!this.classList.contains('on');this.classList.toggle('on',G.cfg.autoQuiz);save();});
   el('ROW-autoQuiz').addEventListener('click',function(e){if(e.target!==el('TG-autoQuiz'))el('TG-autoQuiz').click();});
+  [0,1,2,3].forEach(function(n){
+    el('RQ-'+n).addEventListener('click',function(){
+      G.cfg.requeueMax=n; save();
+      [0,1,2,3].forEach(function(x){el('RQ-'+x).classList.toggle('on',x===n);});
+    });
+  });
   ['both','foreign','ja'].forEach(function(m){
     el('SPK-'+m).addEventListener('click',function(){
       G.cfg.spkMode=m;save();
