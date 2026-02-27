@@ -455,6 +455,23 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     <button class="flt-btn" data-lang="es">🇪🇸 スペイン語</button>
     <button class="flt-btn" data-lang="it">🇮🇹 イタリア語</button>
   </div>
+  <div class="filter-bar" id="STATUS-filter" style="padding-top:6px">
+    <button class="flt-btn on" data-status="all">📋 すべて</button>
+    <button class="flt-btn" data-status="studied">✅ 学習済み</button>
+    <button class="flt-btn" data-status="missed">❌ 間違い</button>
+    <button class="flt-btn" data-status="dontknow">❓ 不明</button>
+    <button class="flt-btn" data-status="new">🆕 未学習</button>
+  </div>
+  <div style="display:flex;align-items:center;gap:7px;padding:6px 16px 0;flex-shrink:0">
+    <span style="font-size:11px;color:var(--tx2);white-space:nowrap">並び替え:</span>
+    <div class="filter-bar" id="SORT-filter" style="padding:0;flex:1;overflow-x:scroll">
+      <button class="flt-btn on" data-sort="default">登録順</button>
+      <button class="flt-btn" data-sort="missed">間違い多</button>
+      <button class="flt-btn" data-sort="slow">時間がかかる</button>
+      <button class="flt-btn" data-sort="level-asc">レベル低↑</button>
+      <button class="flt-btn" data-sort="level-desc">レベル高↑</button>
+    </div>
+  </div>
   <div class="scroll" style="padding-top:10px">
     <div id="L-words"></div>
     <div style="height:14px"></div>
@@ -810,7 +827,7 @@ var LANGS={
 
 function mkDB(){return{words:[],lists:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
-function save(){sSet(G);scheduleAutoCloudSave();}
+function save(){sSet(G);clearWordLogCache();scheduleAutoCloudSave();}
 
 /* ── ファイル保存（HTMLにデータ埋め込み） ── */
 function saveAsFile(){
@@ -846,6 +863,37 @@ function answer(w,ok){
 }
 function getDue(){return G.words.filter(due);}
 function getWeak(){return G.words.filter(function(w){return w.s&&(w.s.l||0)>0;}).sort(function(a,b){return(b.s.l||0)-(a.s.l||0);});}
+
+/* 単語ごとのログ集計キャッシュ */
+var _wordLogCache=null;
+function getWordLogCache(){
+  if(_wordLogCache)return _wordLogCache;
+  var c={};
+  (G.logs||[]).forEach(function(log){
+    (log.miss||[]).forEach(function(m){
+      if(!c[m.id])c[m.id]={miss:0,dontknow:0,slowMs:0,slowCnt:0};
+      c[m.id].miss++;
+    });
+    (log.slow||[]).forEach(function(m){
+      if(!c[m.id])c[m.id]={miss:0,dontknow:0,slowMs:0,slowCnt:0};
+      c[m.id].slowMs+=(m.answerMs||0);
+      c[m.id].slowCnt++;
+    });
+  });
+  _wordLogCache=c;
+  return c;
+}
+function clearWordLogCache(){_wordLogCache=null;}
+
+/* 単語のステータスを返す: 'new' | 'studied' | 'missed' | 'dontknow' */
+function wordStatus(w){
+  if(!w.lr)return 'new';   /* 一度も回答していない */
+  var s=w.s||{};
+  /* 直近に「わからない」を選んだ = k===0 かつ l>0 かつ intervalが1日 */
+  if((s.l||0)>0&&(s.k||0)===0)return 'dontknow';
+  if((s.l||0)>0)return 'missed';  /* 過去に不正解あり */
+  return 'studied';  /* 正解のみ */
+}
 
 /* NAV */
 var SCREENS=['s-home','s-add','s-list','s-flash','s-quiz','s-result','s-settings'];
@@ -1655,6 +1703,8 @@ function saveList(){
 
 /* WORD LIST */
 var listLangFilter='all';
+var listStatusFilter='all';
+var listSort='default';
 function listFilterRebuild(){
   var sel=el('SEL-list'),cur=sel.value;
   sel.innerHTML='<option value="all">すべて</option>';
@@ -1671,15 +1721,56 @@ function listRender(){
   var words=flt==='all'?G.words.slice():G.words.filter(function(w){return w.lid===flt;});
   if(listLangFilter!=='all')words=words.filter(function(w){return(w.lang||'en')===listLangFilter;});
   if(srch)words=words.filter(function(w){return w.word.toLowerCase().indexOf(srch)>=0||w.meaning.toLowerCase().indexOf(srch)>=0;});
+
+  /* ステータスフィルター */
+  if(listStatusFilter!=='all'){
+    words=words.filter(function(w){return wordStatus(w)===listStatusFilter;});
+  }
+
+  /* ソート */
+  var cache=getWordLogCache();
+  if(listSort==='missed'){
+    words=words.slice().sort(function(a,b){
+      var am=(a.s&&a.s.l)||0, bm=(b.s&&b.s.l)||0;
+      return bm-am;
+    });
+  } else if(listSort==='slow'){
+    words=words.slice().sort(function(a,b){
+      var ca=cache[a.id], cb=cache[b.id];
+      var aa=ca&&ca.slowCnt?ca.slowMs/ca.slowCnt:0;
+      var ba=cb&&cb.slowCnt?cb.slowMs/cb.slowCnt:0;
+      return ba-aa;
+    });
+  } else if(listSort==='level-asc'){
+    words=words.slice().sort(function(a,b){return lvl(a)-lvl(b);});
+  } else if(listSort==='level-desc'){
+    words=words.slice().sort(function(a,b){return lvl(b)-lvl(a);});
+  }
+
   if(!words.length){c.innerHTML='<div class="empty"><div class="empty-ic">🔍</div><div class="empty-tl">単語なし</div></div>';return;}
   var lb=['初','入','中','中上','上','習得'],h='';
   words.forEach(function(w){
     var v=lvl(w);
     var l=LANGS[w.lang||'en'];
+    var st=wordStatus(w);
+    var stIcon='';
+    if(st==='studied')stIcon='<span title="学習済み" style="font-size:13px;margin-left:4px">✅</span>';
+    else if(st==='missed')stIcon='<span title="間違いあり('+((w.s&&w.s.l)||0)+'回)" style="font-size:13px;margin-left:4px">❌</span>';
+    else if(st==='dontknow')stIcon='<span title="わからない" style="font-size:13px;margin-left:4px">❓</span>';
+    else stIcon='<span title="未学習" style="font-size:13px;margin-left:4px;opacity:.35">🆕</span>';
     var chk=selModeOn?'<input type="checkbox" class="word-sel-chk" data-wid="'+esc(w.id)+'"'+(selSet[w.id]?' checked':'')+' style="width:18px;height:18px;flex-shrink:0;margin-right:4px;accent-color:var(--ac)">':'';
+    /* 間違い回数の補助テキスト */
+    var sub='';
+    if(st==='missed'||st==='dontknow'){
+      var lc=cache[w.id];
+      var parts=[];
+      if((w.s&&w.s.l)||0)parts.push('間違い'+(w.s.l)+'回');
+      if(lc&&lc.slowCnt)parts.push('遅い回答'+lc.slowCnt+'回');
+      if(parts.length)sub='<span style="font-size:10px;color:var(--rd);margin-left:6px">'+parts.join(' · ')+'</span>';
+    }
     h+='<button class="word-item" data-wid="'+esc(w.id)+'" style="'+(selModeOn&&selSet[w.id]?'background:rgba(124,92,252,.18);border-color:var(--ac);':'')+'">'+
       chk+
-      '<div class="wi-inf"><div class="wi-en">'+(l?'<span style="font-size:11px;margin-right:4px">'+l.flag+'</span>':'')+esc(w.word)+'</div>'+
+      '<div class="wi-inf"><div class="wi-en">'+(l?'<span style="font-size:11px;margin-right:4px">'+l.flag+'</span>':'')+esc(w.word)+stIcon+sub+'</div>'+
       '<div class="wi-ja">'+(w.meaning?esc(w.meaning):'訳なし')+'</div></div>'+
       '<div class="wi-lvl l'+v+'">'+lb[v]+'</div></button>';
   });
@@ -3044,6 +3135,26 @@ function bind(){
     b.addEventListener('click',function(){
       listLangFilter=this.getAttribute('data-lang');
       el('LANG-filter').querySelectorAll('.flt-btn').forEach(function(x){x.classList.remove('on');});
+      this.classList.add('on');
+      listRender();
+    });
+  });
+
+  /* ステータスフィルター */
+  el('STATUS-filter').querySelectorAll('.flt-btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      listStatusFilter=this.getAttribute('data-status');
+      el('STATUS-filter').querySelectorAll('.flt-btn').forEach(function(x){x.classList.remove('on');});
+      this.classList.add('on');
+      listRender();
+    });
+  });
+
+  /* ソート */
+  el('SORT-filter').querySelectorAll('.flt-btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      listSort=this.getAttribute('data-sort');
+      el('SORT-filter').querySelectorAll('.flt-btn').forEach(function(x){x.classList.remove('on');});
       this.classList.add('on');
       listRender();
     });
