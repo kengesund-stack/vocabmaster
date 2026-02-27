@@ -1720,15 +1720,22 @@ function listMenu(lid){
     '<button class="btn-sec" id="LM-edit" style="margin-top:0">✏️ リストを編集</button>';
   el('modal-bg').classList.add('on');
 
-  /* カーソル位置からpoolを作る共通関数 */
-  function makePool(fromCursor){
-    var cur=fromCursor?0:(lst.cursor||0);
+  /* カーソル位置以降の全未習単語からランダム抽出する共通関数 */
+  function makePool(fromStart){
+    var cur=fromStart?0:(lst.cursor||0);
     if(cur>=total)cur=0;
-    var slice=ws.slice(cur, cur+size);
-    if(slice.length<2&&total>=2){cur=0;slice=ws.slice(0,size);}
-    /* ランダム設定が有効なら出題順をシャッフル（カーソルは進める） */
-    var pool=G.cfg.random ? shuffle(slice) : slice.slice();
-    return {pool:pool, nextCursor:Math.min(cur+slice.length, total)};
+    /* cursor以降の全単語を対象にシャッフルしてsize件取る */
+    var remaining=ws.slice(cur);
+    var pool=G.cfg.random ? shuffle(remaining).slice(0,size) : remaining.slice(0,size);
+    if(pool.length<2&&total>=2){
+      /* 残りが少なすぎる場合は先頭から */
+      cur=0;
+      var all=G.cfg.random ? shuffle(ws.slice()) : ws.slice();
+      pool=all.slice(0,size);
+    }
+    /* nextCursorは「取り出した件数分」だけ進める（登録順での位置） */
+    var nextCursor=Math.min(cur+size, total);
+    return {pool:pool, nextCursor:nextCursor};
   }
 
   el('LM-flash').addEventListener('click',function(){
@@ -1742,7 +1749,7 @@ function listMenu(lid){
     el('modal-bg').classList.remove('on');
     var r=makePool(false);
     if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
-    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0};
+    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{}};
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     go('s-quiz');qRender();
   });
@@ -1750,7 +1757,7 @@ function listMenu(lid){
     el('modal-bg').classList.remove('on');
     var r=makePool(true);
     if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
-    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0};
+    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{}};
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     go('s-quiz');qRender();
   });
@@ -1760,7 +1767,7 @@ function listMenu(lid){
     var pool=ws.filter(due);
     if(pool.length<2){toast('復習単語が少なすぎます（最低2単語）');return;}
     var qs=(G.cfg.random ? shuffle(pool) : pool).slice(0,size);
-    Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'due',sessionStart:Date.now(),consec:{},mastered:0};
+    Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'due',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{}};
     go('s-quiz');qRender();
   });
   el('LM-list').addEventListener('click',function(){
@@ -2166,7 +2173,7 @@ function flLaunchAutoQuiz(){
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
   var qpool=G.cfg.random ? shuffle(pool) : pool;
   var pending=Q._pendingCursor;
-  Q={words:qpool,q:qpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0};
+  Q={words:qpool,q:qpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{}};
   if(pending)Q._pendingCursor=pending;
   go('s-quiz');qRender();
 }
@@ -2207,7 +2214,7 @@ function flBindButtons(){
     if(pool.length<2){toast('クイズには最低2単語必要です');return;}
     var qpool=G.cfg.random ? shuffle(pool) : pool;
     var pending=Q._pendingCursor;
-    Q={words:qpool,q:qpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0};
+    Q={words:qpool,q:qpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{}};
     if(pending)Q._pendingCursor=pending;
     go('s-quiz');qRender();
   });
@@ -2735,15 +2742,23 @@ function showListSelectModal(mode){
       el('modal-bg').classList.remove('on');
       var size=Math.min(parseInt(G.cfg.size)||20, ws.length);
       var cursor=lst.cursor||0; if(cursor>=ws.length)cursor=0;
-      var pool=ws.slice(cursor, cursor+size);
-      if(pool.length<2){cursor=0; pool=ws.slice(0,size);}
-      var nextCursor=Math.min(cursor+pool.length, ws.length);
+      var remaining=ws.slice(cursor);
+      var pool;
+      if(G.cfg.random){
+        pool=shuffle(remaining).slice(0,size);
+      } else {
+        pool=remaining.slice(0,size);
+      }
+      if(pool.length<2){
+        pool=G.cfg.random ? shuffle(ws.slice()).slice(0,size) : ws.slice(0,size);
+      }
+      var nextCursor=Math.min(cursor+size, ws.length);
       if(isStudy){
         Q._pendingCursor={lid:lid, next:nextCursor};
         flashStart((G.cfg.random ? shuffle(pool.slice()) : pool.slice()),'list',lid);
       } else {
         var tpool=G.cfg.random ? shuffle(pool.slice()) : pool.slice();
-        Q={words:tpool,q:tpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:true,quizMode:'test',sessionStart:Date.now(),consec:{},mastered:0};
+        Q={words:tpool,q:tpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:true,quizMode:'test',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{}};
         go('s-quiz');qRender();
       }
     });
@@ -2760,7 +2775,7 @@ function quizStart(mode,lid){
   var size=Math.min(pool.length,parseInt(G.cfg.size)||20);
   var ws=(G.cfg.random ? shuffle(pool) : pool).slice(0,size);
   Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now(),
-     consec:{},mastered:0}; /* consec: wordId→連続正解数 */
+     consec:{},mastered:0,masteredIds:{}}; /* consec: wordId→連続正解数 */
   go('s-quiz');qRender();
 }
 
@@ -2856,11 +2871,12 @@ function qSelect(i){
   }
   /* 習得判定：初回正解で即習得。不正解後は2回連続正解で習得 */
   if(!Q.consec)Q.consec={};
+  if(!Q.masteredIds)Q.masteredIds={};
   var hadMiss=!!q._hadMiss;
   if(!ok){ q._hadMiss=true; Q.consec[q.id]=0; }
   else { Q.consec[q.id]=(Q.consec[q.id]||0)+1; }
-  var justMastered=ok&&(!hadMiss||Q.consec[q.id]>=2);
-  if(justMastered)Q.mastered=(Q.mastered||0)+1;
+  var justMastered=ok&&(!hadMiss||Q.consec[q.id]>=2)&&!Q.masteredIds[q.id];
+  if(justMastered){Q.masteredIds[q.id]=true;Q.mastered=(Q.mastered||0)+1;}
 
   el('FB-tx').innerHTML=ok
     ?(justMastered?'<span style="color:var(--gn)">✓ 正解！</span>':'<span style="color:var(--gn)">✓ 正解！ もう1回！</span>')
