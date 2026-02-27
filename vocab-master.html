@@ -558,7 +558,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         <span style="font-size:13px;color:var(--tx2)">問</span>
       </div>
       <div class="set-row" id="ROW-random">
-        <span class="set-lbl">🔀 ランダム出題</span>
+        <span class="set-lbl">🔀 ランダム出題（未出題から）</span>
         <button class="toggle" id="TG-random"></button>
       </div>
       <div class="set-row" id="ROW-rev">
@@ -625,9 +625,13 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     </div>
     <div class="set-sec">☁️ クラウド同期（オプション）</div>
     <div class="set-group">
+      <div class="set-row" id="ROW-cloudauto">
+        <span class="set-lbl">🔄 クラウド自動保存（5分ごと）</span>
+        <button class="toggle" id="TG-cloudauto"></button>
+      </div>
       <div class="set-row" style="cursor:default;flex-direction:column;align-items:stretch;gap:8px">
         <div style="font-size:11px;color:var(--tx2);line-height:1.6;padding:2px 0">同じClaudeアカウントでログインした別デバイスとデータを手動同期できます。</div>
-        <button class="btn-primary" id="B-cloud-save" style="padding:10px;font-size:13px">☁️ クラウドに保存</button>
+        <button class="btn-primary" id="B-cloud-save" style="padding:10px;font-size:13px">☁️ 今すぐ保存</button>
         <button class="btn-sec" id="B-cloud-load" style="padding:10px;font-size:13px;margin-top:0">📥 クラウドから読み込む</button>
         <div id="CLOUD-status" style="font-size:11px;text-align:center;color:var(--tx2);padding:2px 0;min-height:16px"></div>
       </div>
@@ -672,6 +676,39 @@ function sSet(v){
 var CLOUD_KEY='vocabmaster-sync-v1';
 function cloudStatus(msg,clr){var el=document.getElementById('CLOUD-status');if(el){el.textContent=msg;el.style.color=clr||'var(--tx2)';}}
 
+/* ── 自動保存：デバウンス（最後のsave()から5分後に実行、重複しない） ── */
+var _autoSaveTimer=null;
+var AUTO_SAVE_DELAY=5*60*1000; /* 5分 */
+
+function scheduleAutoCloudSave(){
+  if(!G.cfg.cloudAuto) return;       /* 自動保存OFFなら何もしない */
+  if(!window.storage) return;        /* ストレージが使えない環境 */
+  if(_autoSaveTimer) clearTimeout(_autoSaveTimer);
+  _autoSaveTimer=setTimeout(function(){
+    _autoSaveTimer=null;
+    cloudSaveAuto();
+  }, AUTO_SAVE_DELAY);
+}
+
+async function cloudSaveAuto(){
+  /* サイレント保存（ボタンUI操作なし・トースト最小限） */
+  if(!window.storage||!G.cfg.cloudAuto) return;
+  try{
+    var payload=JSON.stringify(G);
+    if(payload.length>4*1024*1024) return; /* 大きすぎる場合はスキップ */
+    var result=await window.storage.set(CLOUD_KEY, payload);
+    if(result){
+      var now=new Date();
+      var ts=now.getFullYear()+'/'+(now.getMonth()+1)+'/'+now.getDate()+' '+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
+      cloudStatus('🔄 自動保存完了 — '+ts,'var(--gn)');
+      /* ホーム画面にいる場合のみトーストを出す（クイズ中は邪魔しない） */
+      if(document.getElementById('s-home').classList.contains('on')){
+        toast('☁️ 自動保存しました');
+      }
+    }
+  }catch(e){ /* 自動保存失敗はサイレントに無視 */ }
+}
+
 async function cloudSave(){
   if(!window.storage){cloudStatus('⚠️ このブラウザ環境では使用できません','var(--rd)');return;}
   var btn=document.getElementById('B-cloud-save');
@@ -692,8 +729,34 @@ async function cloudSave(){
   }catch(e){
     cloudStatus('⚠️ エラー: '+e.message,'var(--rd)');
   }finally{
-    if(btn){btn.disabled=false;btn.textContent='☁️ クラウドに保存';}
+    if(btn){btn.disabled=false;btn.textContent='☁️ 今すぐ保存';}
   }
+}
+
+/* 起動時クラウドチェック：ローカルより新しいデータがあれば通知 */
+async function cloudCheckOnStartup(){
+  if(!window.storage) return;
+  try{
+    var result=await window.storage.get(CLOUD_KEY);
+    if(!result||!result.value) return;
+    var remote=JSON.parse(result.value);
+    var remoteWords=(remote.words||[]).length;
+    var localWords=G.words.length;
+    /* クラウドの単語数がローカルより多い場合のみ提案 */
+    if(remoteWords>localWords){
+      setTimeout(function(){
+        var msg='☁️ クラウドにより多くのデータがあります\n\nクラウド: '+remoteWords+'単語 / ローカル: '+localWords+'単語\n\nクラウドから読み込みますか？\n（現在のローカルデータは上書きされます）';
+        if(confirm(msg)){
+          var savedKey=(G.cfg&&G.cfg.key)||'';
+          G=remote;
+          if(savedKey&&(!G.cfg||!G.cfg.key)){if(!G.cfg)G.cfg={};G.cfg.key=savedKey;}
+          sSet(G);
+          homeRefresh();
+          toast('📥 クラウドから読み込みました（'+remoteWords+'単語）');
+        }
+      }, 800);
+    }
+  }catch(e){ /* 起動時チェック失敗はサイレントに無視 */ }
 }
 
 async function cloudLoad(){
@@ -738,7 +801,9 @@ var LANGS={
 
 function mkDB(){return{words:[],lists:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:''},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
-function save(){sSet(G);}
+/* ランダム出題は常にtrue（強制） */
+if(G.cfg)G.cfg.random=true;
+function save(){sSet(G);scheduleAutoCloudSave();}
 
 /* ── ファイル保存（HTMLにデータ埋め込み） ── */
 function saveAsFile(){
@@ -2663,27 +2728,14 @@ function showListSelectModal(mode){
       el('modal-bg').classList.remove('on');
       var size=Math.min(parseInt(G.cfg.size)||20, ws.length);
       var cursor=lst.cursor||0; if(cursor>=ws.length)cursor=0;
-
-      var pool;
-      if(G.cfg.random!==false){
-        /* ランダムON：カーソル位置のウィンドウ内からシャッフル */
-        pool=shuffle(ws.slice(cursor, cursor+size));
-        if(pool.length<2){cursor=0; pool=shuffle(ws.slice(0,size));}
-      } else {
-        /* ランダムOFF：カーソル位置から順番通り */
-        pool=ws.slice(cursor, cursor+size);
-        if(pool.length<2){cursor=0; pool=ws.slice(0,size);}
-      }
+      var pool=ws.slice(cursor, cursor+size);
+      if(pool.length<2){cursor=0; pool=ws.slice(0,size);}
       var nextCursor=Math.min(cursor+pool.length, ws.length);
       if(isStudy){
-        /* 予習→クイズ：フラッシュカードもランダム設定を反映 */
         Q._pendingCursor={lid:lid, next:nextCursor};
-        var studyPool=G.cfg.random!==false ? shuffle(pool.slice()) : pool.slice();
-        flashStart(studyPool,'list',lid);
+        flashStart(shuffle(pool.slice()),'list',lid);
       } else {
-        /* テスト形式：忘却曲線ベース混入あり */
-        var tpool=G.cfg.random!==false ? shuffle(pool.slice()) : pool.slice();
-        tpool=injectReviewWords(tpool, ws, tpool.length);
+        var tpool=shuffle(pool.slice());
         Q={words:tpool,q:tpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:true,quizMode:'test',sessionStart:Date.now(),consec:{},mastered:0};
         go('s-quiz');qRender();
       }
@@ -2691,42 +2743,7 @@ function showListSelectModal(mode){
   });
 }
 
-/* ============================================================
-   忘却曲線ベース：苦手単語の自動混入
-   セッション単語の最大30%を、過去に間違えた単語で置き換える
-   ============================================================ */
-function injectReviewWords(sessionWords, fullPool, size){
-  /* 全プールから：過去に間違えがあり、今のセッションに含まれていない単語を取得 */
-  var sessionIds={};
-  sessionWords.forEach(function(w){sessionIds[w.id]=true;});
-
-  /* 苦手スコア順にソート：間違い回数が多く・連続正解が少ないほど上位 */
-  var candidates=fullPool.filter(function(w){
-    return !sessionIds[w.id] && w.s && (w.s.l||0)>0;
-  }).sort(function(a,b){
-    /* 優先度スコア = 間違い回数 * 2 - 連続正解数 */
-    var sa=(a.s.l||0)*2 - (a.s.k||0);
-    var sb=(b.s.l||0)*2 - (b.s.k||0);
-    return sb-sa;
-  });
-
-  if(!candidates.length) return sessionWords;
-
-  /* 最大30%（最低1問、最大5問）を混入 */
-  var maxInject=Math.max(1, Math.min(5, Math.floor(size*0.3)));
-  var injectCount=Math.min(maxInject, candidates.length);
-  var toInject=candidates.slice(0,injectCount).map(function(w){
-    /* _isReview フラグで復習単語であることをマーク */
-    return Object.assign({},w,{_isReview:true});
-  });
-
-  /* セッション単語を末尾から削ってスペースを作り、混入単語をシャッフル挿入 */
-  var base=sessionWords.slice(0, size-injectCount);
-  var merged=shuffle(base.concat(toInject));
-  return merged;
-}
-
-
+function quizStart(mode,lid){
   var pool=[];
   if(mode==='due')pool=getDue();
   else if(mode==='all')pool=G.words.slice();
@@ -2734,14 +2751,7 @@ function injectReviewWords(sessionWords, fullPool, size){
   else if(mode==='list')pool=G.words.filter(function(w){return w.lid===lid;});
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
   var size=Math.min(pool.length,parseInt(G.cfg.size)||20);
-
-  /* ランダムON→シャッフル / OFF→登録順 */
-  var ordered=G.cfg.random!==false ? shuffle(pool) : pool.slice();
-  var ws=ordered.slice(0,size);
-
-  /* ── 忘却曲線ベース：過去に間違えた単語を最大30%混入 ── */
-  ws=injectReviewWords(ws, pool, size);
-
+  var ws=shuffle(pool).slice(0,size);
   Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now(),
      consec:{},mastered:0}; /* consec: wordId→連続正解数 */
   go('s-quiz');qRender();
@@ -2758,11 +2768,7 @@ function qRender(){
   el('QZ-mode-badge').style.display=Q.testMode?'inline-block':'none';
   var rev=G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
   var l=LANGS[q.lang||'en'];
-  /* 復習混入単語のバッジ表示 */
-  var reviewBadge=q._isReview
-    ? '<span style="display:inline-block;background:rgba(255,156,76,.18);color:var(--or);font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:7px;vertical-align:middle">🔁 復習</span>'
-    : '';
-  el('QZ-badge').innerHTML=(rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ')+reviewBadge;
+  el('QZ-badge').textContent=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
   var displayWord=rev?(q.meaning||q.word):q.word;
   el('QZ-word').textContent=displayWord;
   Q.done=false;
@@ -2967,6 +2973,7 @@ function settingsLoad(){
   el('TG-flashauto').classList.toggle('on',!!G.cfg.flashAuto);
   el('TG-autoQuiz').classList.toggle('on',!!G.cfg.autoQuiz);
   el('IN-flash-sec').value=G.cfg.flashSec||2;
+  el('TG-cloudauto').classList.toggle('on',!!G.cfg.cloudAuto);
   var sm=G.cfg.spkMode||'both';
   ['both','foreign','ja'].forEach(function(m){el('SPK-'+m).classList.toggle('on',sm===m);});
   el('IN-duck-vol').value=G.cfg.duckVol!=null?G.cfg.duckVol:15;
@@ -3238,6 +3245,19 @@ function bind(){
   });
   el('B-cloud-save').addEventListener('click',function(){cloudSave();});
   el('B-cloud-load').addEventListener('click',function(){cloudLoad();});
+  el('TG-cloudauto').addEventListener('click',function(){
+    G.cfg.cloudAuto=!this.classList.contains('on');
+    this.classList.toggle('on',G.cfg.cloudAuto);
+    save();
+    if(G.cfg.cloudAuto){
+      toast('🔄 自動保存をONにしました');
+      cloudSaveAuto(); /* ONにした瞬間に即1回保存 */
+    } else {
+      toast('自動保存をOFFにしました');
+      if(_autoSaveTimer){clearTimeout(_autoSaveTimer);_autoSaveTimer=null;}
+    }
+  });
+  el('ROW-cloudauto').addEventListener('click',function(e){if(e.target!==el('TG-cloudauto'))el('TG-cloudauto').click();});
   el('modal-bg').addEventListener('click',function(e){if(e.target===this)this.classList.remove('on');});
 }
 
@@ -3321,6 +3341,8 @@ window.onload=function(){
     }catch(e){/* 無効なハッシュは無視 */}
   }
   bind();loadSample();homeRefresh();updateLevelHint();
+  /* 起動時クラウドチェック（自動保存ONの場合のみ） */
+  if(G.cfg&&G.cfg.cloudAuto) cloudCheckOnStartup();
 };
 </script>
 </body>
