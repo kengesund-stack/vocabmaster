@@ -269,11 +269,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
       <div class="stat"><div class="stat-n" id="H-streak">0</div><div class="stat-l">連続日数</div></div>
     </div>
     <button class="due-btn" id="B-quiz-due">
-      <div class="due-txt">
-        <h3>今日の復習</h3>
-        <p>忘却曲線に基づく最適タイミング</p>
-        <span id="H-eb-badge" style="display:none;font-size:10px;background:rgba(255,215,0,.25);color:#ffd700;border-radius:8px;padding:2px 7px;margin-top:4px;display:inline-block">🧠+0</span>
-      </div>
+      <div class="due-txt"><h3>今日の復習</h3><p>忘却曲線に基づく最適タイミング</p></div>
       <div class="due-n" id="H-due">0</div>
     </button>
     <div class="act-grid">
@@ -459,6 +455,22 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     <button class="flt-btn" data-lang="es">🇪🇸 スペイン語</button>
     <button class="flt-btn" data-lang="it">🇮🇹 イタリア語</button>
   </div>
+  <div style="display:flex;gap:6px;padding:7px 16px 0;flex-shrink:0">
+    <select id="SEL-status" style="flex:1;background:var(--sf);border:1px solid rgba(255,255,255,.1);border-radius:9px;color:var(--tx);font-family:inherit;font-size:12px;padding:6px 8px;outline:none;-webkit-appearance:none;text-align:center">
+      <option value="all">すべて</option>
+      <option value="new">🆕 未学習</option>
+      <option value="ok">✅ 習得済み</option>
+      <option value="ng">❌ 要復習</option>
+      <option value="unknown">❓ 不明</option>
+    </select>
+    <select id="SEL-sort" style="flex:1;background:var(--sf);border:1px solid rgba(255,255,255,.1);border-radius:9px;color:var(--tx);font-family:inherit;font-size:12px;padding:6px 8px;outline:none;-webkit-appearance:none;text-align:center">
+      <option value="default">追加順</option>
+      <option value="alpha">A-Z順</option>
+      <option value="level_asc">レベル↑</option>
+      <option value="level_desc">レベル↓</option>
+      <option value="miss">間違い順</option>
+    </select>
+  </div>
   <div class="scroll" style="padding-top:10px">
     <div id="L-words"></div>
     <div style="height:14px"></div>
@@ -485,7 +497,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     <button class="fl-play-btn" id="FL-play">▶</button>
     <button class="fl-ctrl-btn" id="FL-next">››</button>
   </div>
-  <button class="btn-primary" id="FL-to-quiz" style="margin:0 16px calc(var(--sb) + 16px);flex-shrink:0">⚡ このままクイズへ</button>
+  <div style="padding:0 16px calc(var(--sb) + 16px);flex-shrink:0;width:100%"><button class="btn-primary" id="FL-to-quiz" style="margin:0">⚡ このままクイズへ</button></div>
   <div id="FL-auto-quiz-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.75);z-index:100;flex-direction:column;align-items:center;justify-content:center;gap:16px">
     <div style="font-size:20px;font-weight:700;color:#fff">🎉 予習完了！</div>
     <div style="font-size:15px;color:rgba(255,255,255,.8)" id="FL-aq-msg">3秒後にクイズを開始します</div>
@@ -861,21 +873,14 @@ function answer(w,ok){
   if(Q.testMode)return; /* テストモードはSRS更新しない */
   if(!w.s)w.s={i:1,e:EASE0,d:null,k:0,l:0};
   var s=w.s;
-  if(ok){
-    s.k=(s.k||0)+1;if(s.k<=1)s.i=1;else if(s.k===2)s.i=3;else s.i=Math.round(s.i*s.e);s.e=Math.min(3.0,s.e+0.1);
-    /* エビングハウス: 正解時に次のインターバルへ進める */
-    if(G.cfg.ebbing) ebbingAdvance(w.id);
-  }
-  else{
-    s.l=(s.l||0)+1;s.k=0;s.i=1;s.e=Math.max(EMIN,s.e-0.2);
-    /* エビングハウス: 不正解時にスケジュール登録 */
-    if(G.cfg.ebbing) ebbingMarkMiss(w.id, w.word, w.meaning||'', w.lang||'en');
-  }
+  if(ok){s.k=(s.k||0)+1;if(s.k<=1)s.i=1;else if(s.k===2)s.i=3;else s.i=Math.round(s.i*s.e);s.e=Math.min(3.0,s.e+0.1);
+    if(G.cfg.ebbing) ebbingAdvance(w.id);}
+  else{s.l=(s.l||0)+1;s.k=0;s.i=1;s.e=Math.max(EMIN,s.e-0.2);
+    if(G.cfg.ebbing) ebbingMarkMiss(w.id, w.word, w.meaning||'', w.lang||'en');}
   s.i=Math.max(1,Math.min(s.i,365));
   var dt=new Date();dt.setDate(dt.getDate()+s.i);s.d=dt.toISOString();w.lr=new Date().toISOString();save();
 }
 function getDue(){return G.words.filter(due);}
-
 /* ── エビングハウス忘却曲線 ── */
 /* 間違い/わからなかった単語に復習スケジュールを設定する */
 /* 復習インターバル (日数): 1, 3, 7, 14, 30 */
@@ -1136,6 +1141,43 @@ function setLang(lang){
 function parsePaste(){
   var txt=el('IN-paste-text').value.trim();
   if(!txt){toast('テキストを入力してください');return;}
+
+  /* JSON自動認識 */
+  var trimmed=txt.replace(/^\s+/,'');
+  if(trimmed.charAt(0)==='{' || trimmed.charAt(0)==='['){
+    try{
+      var jd=JSON.parse(txt);
+      var LANG_KEY_MAP={german:'de',deutsch:'de',french:'fr',français:'fr',spanish:'es',italiano:'it',english:'en'};
+      if(typeof jd==='object'&&!Array.isArray(jd)){
+        Object.keys(jd).forEach(function(k){
+          var lk=k.toLowerCase();
+          Object.keys(LANG_KEY_MAP).forEach(function(lmk){
+            if(lk===lmk){selLang=LANG_KEY_MAP[lmk];document.querySelectorAll('.lang-sel-btn').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-lang')===selLang);});}
+          });
+        });
+      }
+      function extractJW(arr){
+        if(!Array.isArray(arr))return[];
+        return arr.map(function(item){
+          var w=item.word||item.term||item.front||item.expression||item.vocab||item.german||item.deutsch||item.french||item.spanish||item.english||'';
+          var m=item.meaning||item.translation||item.back||item.definition||item.japanese||item.ja||'';
+          return w?{word:String(w).trim(),meaning:String(m).trim()}:null;
+        }).filter(Boolean);
+      }
+      var jwords=[];
+      if(jd.content&&typeof jd.content==='object'){
+        jwords=extractJW(jd.content.vocabulary||jd.content.words||[]).concat(extractJW(jd.content.phrases||[]));
+      } else if(Array.isArray(jd.words)){jwords=extractJW(jd.words);}
+      else if(Array.isArray(jd.vocabulary)){jwords=extractJW(jd.vocabulary);}
+      else if(Array.isArray(jd)){jwords=extractJW(jd);}
+      if(!jwords.length&&typeof jd==='object'){
+        Object.values(jd).forEach(function(v){if(Array.isArray(v)&&!jwords.length){var w=extractJW(v);if(w.length)jwords=w;}});
+      }
+      if(jwords.length){toast('JSON形式を認識（'+jwords.length+'語）');needTranslate(jwords)?doTranslate(jwords,selLang):prvShow(jwords);return;}
+      else{toast('JSONを認識しましたが単語が見つかりません');return;}
+    }catch(e){}
+  }
+
   var words=[];
   txt.split('\n').forEach(function(line){
     line=line.trim();if(!line)return;
@@ -1790,16 +1832,40 @@ function listFilterRebuild(){
   G.lists.forEach(function(l){var o=document.createElement('option');o.value=l.id;o.textContent=(LANGS[l.lang]?LANGS[l.lang].flag+' ':'')+l.name;sel.appendChild(o);});
   sel.value=cur||'all';
 }
+function wordStatus(w){
+  /* ステータスを返す: new/ok/ng/unknown */
+  if(!w.s||w.s.k===undefined)return 'new';
+  if((w.s.l||0)>0&&(w.s.k||0)<2)return 'ng';
+  if(w.s.k>=1&&w.s.i>=3)return 'ok';
+  if(!w.s.d)return 'new';
+  return 'unknown';
+}
+function statusMark(w){
+  var st=wordStatus(w);
+  if(st==='ok')return'<span title="習得済み" style="font-size:13px;margin-left:4px">✅</span>';
+  if(st==='ng')return'<span title="要復習" style="font-size:13px;margin-left:4px">❌</span>';
+  if(st==='new')return'<span title="未学習" style="font-size:13px;margin-left:4px">🆕</span>';
+  return'<span title="不明" style="font-size:13px;margin-left:4px">❓</span>';
+}
 function listRender(){
   /* 選択モードのツールバー表示を同期 */
   var _tb=document.getElementById('SEL-toolbar');
   if(_tb)_tb.style.display=selModeOn?'block':'none';
   var flt=(el('SEL-list')||{}).value||'all';
   var srch=((el('IN-search')||{}).value||'').toLowerCase();
+  var statusFlt=((el('SEL-status')||{}).value)||'all';
+  var sortMode=((el('SEL-sort')||{}).value)||'default';
   var c=el('L-words');
   var words=flt==='all'?G.words.slice():G.words.filter(function(w){return w.lid===flt;});
   if(listLangFilter!=='all')words=words.filter(function(w){return(w.lang||'en')===listLangFilter;});
-  if(srch)words=words.filter(function(w){return w.word.toLowerCase().indexOf(srch)>=0||w.meaning.toLowerCase().indexOf(srch)>=0;});
+  if(srch)words=words.filter(function(w){return w.word.toLowerCase().indexOf(srch)>=0||(w.meaning||'').toLowerCase().indexOf(srch)>=0;});
+  /* ステータスフィルタ */
+  if(statusFlt!=='all')words=words.filter(function(w){return wordStatus(w)===statusFlt;});
+  /* ソート */
+  if(sortMode==='alpha'){words=words.slice().sort(function(a,b){return a.word.localeCompare(b.word);});}
+  else if(sortMode==='level_asc'){words=words.slice().sort(function(a,b){return lvl(a)-lvl(b);});}
+  else if(sortMode==='level_desc'){words=words.slice().sort(function(a,b){return lvl(b)-lvl(a);});}
+  else if(sortMode==='miss'){words=words.slice().sort(function(a,b){return((b.s&&b.s.l)||0)-((a.s&&a.s.l)||0);});}
   if(!words.length){c.innerHTML='<div class="empty"><div class="empty-ic">🔍</div><div class="empty-tl">単語なし</div></div>';return;}
   var lb=['初','入','中','中上','上','習得'],h='';
   words.forEach(function(w){
@@ -1808,7 +1874,7 @@ function listRender(){
     var chk=selModeOn?'<input type="checkbox" class="word-sel-chk" data-wid="'+esc(w.id)+'"'+(selSet[w.id]?' checked':'')+' style="width:18px;height:18px;flex-shrink:0;margin-right:4px;accent-color:var(--ac)">':'';
     h+='<button class="word-item" data-wid="'+esc(w.id)+'" style="'+(selModeOn&&selSet[w.id]?'background:rgba(124,92,252,.18);border-color:var(--ac);':'')+'">'+
       chk+
-      '<div class="wi-inf"><div class="wi-en">'+(l?'<span style="font-size:11px;margin-right:4px">'+l.flag+'</span>':'')+esc(w.word)+'</div>'+
+      '<div class="wi-inf"><div class="wi-en">'+(l?'<span style="font-size:11px;margin-right:4px">'+l.flag+'</span>':'')+esc(w.word)+statusMark(w)+'</div>'+
       '<div class="wi-ja">'+(w.meaning?esc(w.meaning):'訳なし')+'</div></div>'+
       '<div class="wi-lvl l'+v+'">'+lb[v]+'</div></button>';
   });
@@ -2581,10 +2647,10 @@ function generateReport(period, lids){
     return {lid:lid, name:lst?lst.name:'（削除済みリスト）', lang:lst?lst.lang:'', sessions:r.sessions, total:r.total, ok:r.ok, acc:acc2, durMs:r.durMs};
   }).sort(function(a,b){return b.durMs-a.durMs;});
 
-  /* HTML生成（1ウィンドウ・タブ切り替え） */
   /* エビングハウス今後30日予測 */
   var ebbingForecast = getEbbingForecast();
 
+  /* HTML生成（1ウィンドウ・タブ切り替え） */
   var h=buildCombinedReportHTML(periodLabel, now,
     totalSessions, totalQ, totalOk, totalNg, avgAcc, totalDurMs,
     dayKeys, dayMap, logs, modeData, listData, period,
@@ -2606,7 +2672,99 @@ function fmtDateShort(s){
 }
 
 function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, dayKeys, dayMap, logs, modeData, listData, period, targetListNames, missArr, slowArr, ebbingForecast){
+
   ebbingForecast = ebbingForecast || [];
+
+  function makeEbbingHTML(forecast){
+    if(!forecast||!forecast.length)forecast=[];
+    var hasDue=forecast.some(function(d){return d.words.length>0;});
+    var maxN=Math.max.apply(null,forecast.map(function(d){return d.words.length;}).concat([1]));
+    var GW=580, GH=130, PL=30, PR=10, PB=28, PT=14;
+    var IW=GW-PL-PR, IH=GH-PT-PB;
+    var step=IW/31;
+    /* グリッド */
+    var grid='';
+    [0,0.5,1].forEach(function(r){
+      var y=PT+IH-Math.round(r*IH);
+      grid+='<line x1="'+PL+'" y1="'+y+'" x2="'+(GW-PR)+'" y2="'+y+'" stroke="#dde" stroke-width="'+(r===0||r===1?'1':'0.5')+'" stroke-dasharray="'+(r>0&&r<1?'3,3':'0')+'"/>';
+      if(r>0||r===0) grid+='<text x="'+(PL-3)+'" y="'+(y+3)+'" text-anchor="end" font-size="7" fill="#888">'+Math.round(maxN*r)+'</text>';
+    });
+    /* 折れ線と点 */
+    var pts=[];
+    forecast.forEach(function(d,i){
+      var cx=PL+i*step+step/2;
+      var cy=PT+IH-(d.words.length/maxN*IH);
+      pts.push({cx:cx,cy:cy,n:d.words.length,diff:d.diff,words:d.words});
+    });
+    var line='';
+    for(var i=1;i<pts.length;i++){
+      var p=pts[i-1],q=pts[i];
+      if(p.n>0||q.n>0){
+        line+='<line x1="'+p.cx.toFixed(1)+'" y1="'+p.cy.toFixed(1)+'" x2="'+q.cx.toFixed(1)+'" y2="'+q.cy.toFixed(1)+'" stroke="#7c5cfc" stroke-width="2" opacity="0.8"/>';
+      }
+    }
+    var dots='';
+    pts.forEach(function(p){
+      if(p.n>0){
+        dots+='<circle cx="'+p.cx.toFixed(1)+'" cy="'+p.cy.toFixed(1)+'" r="4" fill="'+(p.diff===0?'#fc5c7d':'#7c5cfc')+'" stroke="#fff" stroke-width="1.5" class="eb-dot" data-diff="'+p.diff+'" style="cursor:pointer"/>';
+      }
+    });
+    /* X軸ラベル (週ごと) */
+    var xlbls='';
+    [0,7,14,21,28,30].forEach(function(d){
+      var cx=PL+d*step+step/2;
+      var dt=new Date(); dt.setDate(dt.getDate()+d);
+      var label=d===0?'今日':(dt.getMonth()+1)+'/'+(dt.getDate());
+      xlbls+='<text x="'+cx.toFixed(1)+'" y="'+(GH-4)+'" text-anchor="middle" font-size="7.5" fill="'+(d===0?'#fc5c7d':'#555')+'">'+label+'</text>';
+    });
+    /* データなしのとき空グラフ + メッセージ */
+    if(!hasDue){
+      return '<div style="overflow-x:auto">'+
+        '<svg viewBox="0 0 '+GW+' '+GH+'" style="width:100%;max-height:160px;display:block">'+grid+xlbls+'</svg>'+
+        '</div><p style="color:#888;font-size:9pt;margin-top:4px">📭 現在、忘却曲線の復習予定はありません。クイズで間違えた単語が登録されると表示されます。</p>';
+    }
+    var svgHtml='<svg id="ebbing-svg" viewBox="0 0 '+GW+' '+GH+'" style="width:100%;max-height:160px;display:block;cursor:default">'+grid+line+dots+xlbls+'</svg>';
+
+    /* ツールチップ用データをJSON埋め込み */
+    var tooltipData=JSON.stringify(pts.map(function(p){return{diff:p.diff,n:p.n,words:p.words};}));
+
+    var html='<div style="overflow-x:auto;position:relative" id="ebbing-chart-wrap">'+svgHtml+
+      '<div id="eb-tooltip" style="display:none;position:absolute;background:#1a1a2e;border:1px solid #7c5cfc;border-radius:10px;padding:10px 14px;font-size:9.5pt;min-width:180px;max-width:280px;z-index:100;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.3)">'+
+        '<div id="eb-tip-title" style="font-weight:700;color:#7c5cfc;margin-bottom:6px"></div>'+
+        '<div id="eb-tip-list" style="color:#dde;line-height:1.8"></div>'+
+      '</div>'+
+    '</div>'+
+    '<script>(function(){'+
+      'var data='+tooltipData+';'+
+      'var svg=document.getElementById("ebbing-svg");'+
+      'var wrap=document.getElementById("ebbing-chart-wrap");'+
+      'var tip=document.getElementById("eb-tooltip");'+
+      'if(!svg||!tip)return;'+
+      'svg.querySelectorAll(".eb-dot").forEach(function(dot){'+
+        'dot.addEventListener("mouseover",function(e){'+
+          'var diff=parseInt(this.getAttribute("data-diff"));'+
+          'var d=data.find(function(x){return x.diff===diff;});'+
+          'if(!d||!d.n)return;'+
+          'var dt=new Date(); dt.setDate(dt.getDate()+diff);'+
+          'var label=diff===0?"今日（期限切れ含む）":(dt.getMonth()+1)+"月"+(dt.getDate())+"日（"+diff+"日後）";'+
+          'document.getElementById("eb-tip-title").textContent=label+" — "+d.n+"単語";'+
+          'document.getElementById("eb-tip-list").innerHTML=d.words.map(function(w){'+
+            'return "<span style=\"color:#ffd700;font-weight:600\">"+w.word+"</span> <span style=\"color:#aac;font-size:8.5pt\">"+w.meaning+"</span>";'+
+          '}).join("<br>");'+
+          'tip.style.display="block";'+
+          'var rect=wrap.getBoundingClientRect();'+
+          'var dotRect=this.getBoundingClientRect();'+
+          'var tx=dotRect.left-rect.left+8;'+
+          'var ty=dotRect.top-rect.top-10;'+
+          'if(tx+280>rect.width)tx=tx-290;'+
+          'tip.style.left=tx+"px"; tip.style.top=ty+"px";'+
+        '});'+
+        'dot.addEventListener("mouseleave",function(){tip.style.display="none";});'+
+      '});'+
+    '})();<\/script>';
+    return html;
+  }
+  var ebbingHTML = makeEbbingHTML(ebbingForecast);
 
   function fmtDur(ms){
     if(!ms||ms<1000)return '0分';
@@ -2693,93 +2851,6 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
   }
   var comboSVG=makeComboSVG(comboLabels,comboDurMins,comboAccPcts);
   var modeSVG=makeModeSVG(modeData);
-  /* ── エビングハウス予測グラフ (インタラクティブ) ── */
-  function makeEbbingHTML(forecast){
-    if(!forecast||!forecast.length)return '';
-    var hasDue=forecast.some(function(d){return d.words.length>0;});
-    if(!hasDue)return '<p style="color:#888;font-size:9pt">忘却曲線の復習予定はありません</p>';
-    var maxN=Math.max.apply(null,forecast.map(function(d){return d.words.length;}).concat([1]));
-    var GW=580, GH=130, PL=30, PR=10, PB=28, PT=14;
-    var IW=GW-PL-PR, IH=GH-PT-PB;
-    var step=IW/31;
-    /* グリッド */
-    var grid='';
-    [0,0.5,1].forEach(function(r){
-      var y=PT+IH-Math.round(r*IH);
-      grid+='<line x1="'+PL+'" y1="'+y+'" x2="'+(GW-PR)+'" y2="'+y+'" stroke="#dde" stroke-width="'+(r===0||r===1?'1':'0.5')+'" stroke-dasharray="'+(r>0&&r<1?'3,3':'0')+'"/>';
-      if(r>0||r===0) grid+='<text x="'+(PL-3)+'" y="'+(y+3)+'" text-anchor="end" font-size="7" fill="#888">'+Math.round(maxN*r)+'</text>';
-    });
-    /* 折れ線と点 */
-    var pts=[];
-    forecast.forEach(function(d,i){
-      var cx=PL+i*step+step/2;
-      var cy=PT+IH-(d.words.length/maxN*IH);
-      pts.push({cx:cx,cy:cy,n:d.words.length,diff:d.diff,words:d.words});
-    });
-    var line='';
-    for(var i=1;i<pts.length;i++){
-      var p=pts[i-1],q=pts[i];
-      if(p.n>0||q.n>0){
-        line+='<line x1="'+p.cx.toFixed(1)+'" y1="'+p.cy.toFixed(1)+'" x2="'+q.cx.toFixed(1)+'" y2="'+q.cy.toFixed(1)+'" stroke="#7c5cfc" stroke-width="2" opacity="0.8"/>';
-      }
-    }
-    var dots='';
-    pts.forEach(function(p){
-      if(p.n>0){
-        dots+='<circle cx="'+p.cx.toFixed(1)+'" cy="'+p.cy.toFixed(1)+'" r="4" fill="'+(p.diff===0?'#fc5c7d':'#7c5cfc')+'" stroke="#fff" stroke-width="1.5" class="eb-dot" data-diff="'+p.diff+'" style="cursor:pointer"/>';
-      }
-    });
-    /* X軸ラベル (週ごと) */
-    var xlbls='';
-    [0,7,14,21,28,30].forEach(function(d){
-      var cx=PL+d*step+step/2;
-      var dt=new Date(); dt.setDate(dt.getDate()+d);
-      var label=d===0?'今日':(dt.getMonth()+1)+'/'+(dt.getDate());
-      xlbls+='<text x="'+cx.toFixed(1)+'" y="'+(GH-4)+'" text-anchor="middle" font-size="7.5" fill="'+(d===0?'#fc5c7d':'#555')+'">'+label+'</text>';
-    });
-    var svgHtml='<svg id="ebbing-svg" viewBox="0 0 '+GW+' '+GH+'" style="width:100%;max-height:160px;display:block;cursor:default">'+grid+line+dots+xlbls+'</svg>';
-
-    /* ツールチップ用データをJSON埋め込み */
-    var tooltipData=JSON.stringify(pts.map(function(p){return{diff:p.diff,n:p.n,words:p.words};}));
-
-    var html='<div style="overflow-x:auto;position:relative" id="ebbing-chart-wrap">'+svgHtml+
-      '<div id="eb-tooltip" style="display:none;position:absolute;background:#1a1a2e;border:1px solid #7c5cfc;border-radius:10px;padding:10px 14px;font-size:9.5pt;min-width:180px;max-width:280px;z-index:100;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.3)">'+
-        '<div id="eb-tip-title" style="font-weight:700;color:#7c5cfc;margin-bottom:6px"></div>'+
-        '<div id="eb-tip-list" style="color:#dde;line-height:1.8"></div>'+
-      '</div>'+
-    '</div>'+
-    '<script>(function(){'+
-      'var data='+tooltipData+';'+
-      'var svg=document.getElementById("ebbing-svg");'+
-      'var wrap=document.getElementById("ebbing-chart-wrap");'+
-      'var tip=document.getElementById("eb-tooltip");'+
-      'if(!svg||!tip)return;'+
-      'svg.querySelectorAll(".eb-dot").forEach(function(dot){'+
-        'dot.addEventListener("mouseover",function(e){'+
-          'var diff=parseInt(this.getAttribute("data-diff"));'+
-          'var d=data.find(function(x){return x.diff===diff;});'+
-          'if(!d||!d.n)return;'+
-          'var dt=new Date(); dt.setDate(dt.getDate()+diff);'+
-          'var label=diff===0?"今日（期限切れ含む）":(dt.getMonth()+1)+"月"+(dt.getDate())+"日（"+diff+"日後）";'+
-          'document.getElementById("eb-tip-title").textContent=label+" — "+d.n+"単語";'+
-          'document.getElementById("eb-tip-list").innerHTML=d.words.map(function(w){'+
-            'return "<span style=\"color:#ffd700;font-weight:600\">"+w.word+"</span> <span style=\"color:#aac;font-size:8.5pt\">"+w.meaning+"</span>";'+
-          '}).join("<br>");'+
-          'tip.style.display="block";'+
-          'var rect=wrap.getBoundingClientRect();'+
-          'var dotRect=this.getBoundingClientRect();'+
-          'var tx=dotRect.left-rect.left+8;'+
-          'var ty=dotRect.top-rect.top-10;'+
-          'if(tx+280>rect.width)tx=tx-290;'+
-          'tip.style.left=tx+"px"; tip.style.top=ty+"px";'+
-        '});'+
-        'dot.addEventListener("mouseleave",function(){tip.style.display="none";});'+
-      '});'+
-    '})();<\/script>';
-    return html;
-  }
-  var ebbingHTML = makeEbbingHTML(ebbingForecast);
-
   var graphSection='';
   if(dayKeys.length>0){
     graphSection=
@@ -2861,13 +2932,11 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
       '<div class="summary-box"><div class="summary-n" style="color:#7c5cfc;font-size:14pt">'+fmtDur(totalDurMs)+'</div><div class="summary-l">総学習時間</div></div>'+
     '</div>'+
     graphSection+
-    (ebbingHTML ?
-      '<h2>🧠 エビングハウス忘却曲線 — 今後30日の復習予定</h2>'+
-      '<div style="background:#f0f0ff;border:1px solid #d0d0f0;border-radius:8px;padding:12px;margin-bottom:14px">'+
-        '<div style="font-size:9pt;color:#555;margin-bottom:8px">📍 横軸: 今後の日付 ／ 縦軸: 復習すべき単語数 ／ 点にカーソルを合わせると単語一覧が表示されます</div>'+
-        ebbingHTML+
-      '</div>'
-    : '') +
+    '<h2>🧠 エビングハウス忘却曲線 — 今後30日の復習予定</h2>'+
+    '<div style="background:#f0f0ff;border:1px solid #d0d0f0;border-radius:8px;padding:12px;margin-bottom:14px">'+
+      '<div style="font-size:9pt;color:#555;margin-bottom:8px">📍 横軸: 今後の日付 ／ 縦軸: 復習すべき単語数 ／ 点にカーソルを合わせると単語一覧が表示されます</div>'+
+      ebbingHTML+
+    '</div>'+
     '<h2>📋 日別学習記録</h2>'+
     '<table><tr><th>日付</th><th>セッション</th><th>出題数</th><th>正解</th><th>不正解</th><th>正答率</th><th>学習時間</th></tr>'+dayRows+'</table>'+
     '</div>';
@@ -2905,7 +2974,6 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
     '.summary-box{background:#f8f8ff;border:1px solid #e0e0f0;border-radius:8px;padding:10px;text-align:center}'+
     '.summary-n{font-size:17pt;font-weight:700;color:#7c5cfc}'+
     '.summary-l{font-size:8pt;color:#666;margin-top:4px}'+
-    '#eb-tooltip{color:#f0f0ff}'+
     'table{width:100%;border-collapse:collapse;font-size:9.5pt;margin-bottom:8px}'+
     'th{background:#1a1a2e;color:#fff;padding:7px 8px;text-align:left;font-weight:600}'+
     'td{padding:6px 8px;border-bottom:1px solid #eee}'+
@@ -2997,7 +3065,6 @@ function quizStart(mode,lid){
   var pool=[];
   if(mode==='due'){
     pool=getDue();
-    /* エビングハウス期限切れ単語を追加（重複排除） */
     if(G.cfg.ebbing){
       var ebDue=getEbbingDue();
       var poolIds=pool.map(function(w){return w.id;});
@@ -3013,6 +3080,11 @@ function quizStart(mode,lid){
   Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now(),
      consec:{},mastered:0,masteredIds:{}}; /* consec: wordId→連続正解数 */
   go('s-quiz');qRender();
+}
+
+function isPhrase(word){
+  /* スペースを含む場合は熟語とみなす */
+  return word && word.trim().indexOf(' ')>=0;
 }
 
 function qRender(){
@@ -3045,7 +3117,15 @@ function qRender(){
   }
 
   var ca=rev?q.word:(q.meaning||'（訳なし）');
-  var sameLang=G.words.filter(function(w){return w.id!==q.id&&(w.lang||'en')===(q.lang||'en');});
+  /* 熟語/単語を区別してダミー選択肢を選ぶ */
+  var qIsPhrase=isPhrase(q.word);
+  var sameLang=G.words.filter(function(w){
+    return w.id!==q.id&&(w.lang||'en')===(q.lang||'en')&&isPhrase(w.word)===qIsPhrase;
+  });
+  /* 同種類が3件未満なら言語・タイプを緩和 */
+  if(sameLang.length<3){
+    sameLang=G.words.filter(function(w){return w.id!==q.id&&(w.lang||'en')===(q.lang||'en');});
+  }
   var others=sameLang.length>=3?sameLang:G.words.filter(function(w){return w.id!==q.id;});
   var dist=shuffle(others).slice(0,3).map(function(w){return rev?w.word:(w.meaning||w.word);});
   var choices=shuffle([ca].concat(dist).slice(0,4));
@@ -3076,7 +3156,6 @@ function qDontKnow(){
   q._answerMs=answerMs;
   /* 不正解と同じ扱い（SRS更新・miss追加） */
   answer(q,false);
-  /* エビングハウス: わからない → 登録 (answerの中で呼ばれるが念のため) */
   Q.ng++;
   Q.miss.push(q);
   /* hadMissフラグ → 2回連続正解が必要になる */
@@ -3147,7 +3226,9 @@ function qNext(){
   var requeueMax=G.cfg.requeueMax!=null?G.cfg.requeueMax:1;
   if(!Q.requeued)Q.requeued={};
   var remaining=Q.q.length-(Q.i+1);
-  if(q && q._hadMiss && (Q.requeued[q.id]||0)<requeueMax && remaining>0){
+  /* masteredIds にある（2回連続正解済み）場合は再出題しない */
+  var alreadyMastered=Q.masteredIds&&Q.masteredIds[q&&q.id];
+  if(q && q._hadMiss && !alreadyMastered && (Q.requeued[q.id]||0)<requeueMax && remaining>0){
     Q.requeued[q.id]=(Q.requeued[q.id]||0)+1;
     /* 残り問題のうち1〜3問後のランダムな位置に挿入 */
     var insertOffset=1+Math.floor(Math.random()*Math.min(remaining,3));
@@ -3234,8 +3315,8 @@ function settingsLoad(){
   el('IN-duck-vol').value=G.cfg.duckVol!=null?G.cfg.duckVol:15;
   var rq=G.cfg.requeueMax!=null?G.cfg.requeueMax:1;
   [0,1,2,3].forEach(function(n){el('RQ-'+n).classList.toggle('on',rq===n);});
-  el('TG-ebbing').classList.toggle('on', G.cfg.ebbing!==false);
-  el('IN-ebbing-max').value = G.cfg.ebbingMax || 5;
+  if(el('TG-ebbing'))el('TG-ebbing').classList.toggle('on', G.cfg.ebbing!==false);
+  if(el('IN-ebbing-max'))el('IN-ebbing-max').value = G.cfg.ebbingMax || 5;
   updateKeyStatus();
 }
 
@@ -3325,6 +3406,9 @@ function bind(){
   el('SEL-move-btn').addEventListener('click',function(){selMoveAll();});
   el('SEL-list').addEventListener('change',listRender);
   el('IN-search').addEventListener('input',listRender);
+  /* 状態・ソートドロップダウン */
+  if(el('SEL-status'))el('SEL-status').addEventListener('change',listRender);
+  if(el('SEL-sort'))el('SEL-sort').addEventListener('change',listRender);
 
   el('B-quiz-exit').addEventListener('click',function(){
     if(window.speechSynthesis)window.speechSynthesis.cancel();
@@ -3525,19 +3609,18 @@ function bind(){
   el('ROW-cloudauto').addEventListener('click',function(e){if(e.target!==el('TG-cloudauto'))el('TG-cloudauto').click();});
 
   /* ── エビングハウス忘却曲線設定 ── */
-  el('TG-ebbing').addEventListener('click',function(){
+  if(el('TG-ebbing'))el('TG-ebbing').addEventListener('click',function(){
     G.cfg.ebbing=!this.classList.contains('on');
     this.classList.toggle('on',G.cfg.ebbing);
     save();
     toast(G.cfg.ebbing?'🧠 忘却曲線による追加復習をONにしました':'忘却曲線による追加復習をOFFにしました');
   });
-  el('ROW-ebbing').addEventListener('click',function(e){if(e.target!==el('TG-ebbing'))el('TG-ebbing').click();});
-  el('IN-ebbing-max').addEventListener('input',function(){
+  if(el('ROW-ebbing'))el('ROW-ebbing').addEventListener('click',function(e){if(el('TG-ebbing')&&e.target!==el('TG-ebbing'))el('TG-ebbing').click();});
+  if(el('IN-ebbing-max'))el('IN-ebbing-max').addEventListener('input',function(){
     var v=parseInt(this.value)||5;
     if(v<1)v=1; if(v>20)v=20;
     G.cfg.ebbingMax=v; save();
   });
-
   el('modal-bg').addEventListener('click',function(e){if(e.target===this)this.classList.remove('on');});
 }
 
