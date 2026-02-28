@@ -507,7 +507,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     <button class="fl-play-btn" id="FL-play">▶</button>
     <button class="fl-ctrl-btn" id="FL-next">››</button>
   </div>
-  <button class="btn-primary" id="FL-to-quiz" style="margin:0 16px calc(var(--sb) + 16px);flex-shrink:0">⚡ このままクイズへ</button>
+  <div style="padding:0 16px calc(var(--sb) + 16px);flex-shrink:0;width:100%;box-sizing:border-box"><button class="btn-primary" id="FL-to-quiz">⚡ このままクイズへ</button></div>
   <div id="FL-auto-quiz-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.75);z-index:100;flex-direction:column;align-items:center;justify-content:center;gap:16px">
     <div style="font-size:20px;font-weight:700;color:#fff">🎉 予習完了！</div>
     <div style="font-size:15px;color:rgba(255,255,255,.8)" id="FL-aq-msg">3秒後にクイズを開始します</div>
@@ -1735,55 +1735,28 @@ function listRender(){
   var words=flt==='all'?G.words.slice():G.words.filter(function(w){return w.lid===flt;});
   if(listLangFilter!=='all')words=words.filter(function(w){return(w.lang||'en')===listLangFilter;});
   if(srch)words=words.filter(function(w){return w.word.toLowerCase().indexOf(srch)>=0||w.meaning.toLowerCase().indexOf(srch)>=0;});
-  if(listStatusFilter!=='all'){
-    words=words.filter(function(w){return wordStatus(w)===listStatusFilter;});
-  }
+  if(listStatusFilter!=='all'){words=words.filter(function(w){return wordStatus(w)===listStatusFilter;});}
   var cache=getWordLogCache();
-  if(listSort==='missed'){
-    words=words.slice().sort(function(a,b){return ((b.s&&b.s.l)||0)-((a.s&&a.s.l)||0);});
-  } else if(listSort==='slow'){
-    words=words.slice().sort(function(a,b){
-      var ca=cache[a.id],cb=cache[b.id];
-      var aa=ca&&ca.slowCnt?ca.slowMs/ca.slowCnt:0;
-      var ba=cb&&cb.slowCnt?cb.slowMs/cb.slowCnt:0;
-      return ba-aa;
-    });
-  } else if(listSort==='level-asc'){
-    words=words.slice().sort(function(a,b){return lvl(a)-lvl(b);});
-  } else if(listSort==='level-desc'){
-    words=words.slice().sort(function(a,b){return lvl(b)-lvl(a);});
-  } else if(listSort==='alpha'){
-    words=words.slice().sort(function(a,b){return a.word.localeCompare(b.word);});
-  }
+  if(listSort==='missed'){words=words.slice().sort(function(a,b){return ((b.s&&b.s.l)||0)-((a.s&&a.s.l)||0);});}
+  else if(listSort==='slow'){words=words.slice().sort(function(a,b){var ca=cache[a.id],cb=cache[b.id];var aa=ca&&ca.slowCnt?ca.slowMs/ca.slowCnt:0;var ba=cb&&cb.slowCnt?cb.slowMs/cb.slowCnt:0;return ba-aa;});}
+  else if(listSort==='level-asc'){words=words.slice().sort(function(a,b){return lvl(a)-lvl(b);});}
+  else if(listSort==='level-desc'){words=words.slice().sort(function(a,b){return lvl(b)-lvl(a);});}
+  else if(listSort==='alpha'){words=words.slice().sort(function(a,b){return a.word.localeCompare(b.word);});}
   if(!words.length){c.innerHTML='<div class="empty"><div class="empty-ic">🔍</div><div class="empty-tl">単語なし</div></div>';return;}
   var lb=['初','入','中','中上','上','習得'],h='';
   words.forEach(function(w){
-    var v=lvl(w);
-    var l=LANGS[w.lang||'en'];
-    var st=wordStatus(w);
-    var stIcon='';
-    if(st==='studied')stIcon='<span title="学習済み" style="font-size:12px;margin-left:3px">✅</span>';
-    else if(st==='missed'){var mc=(w.s&&w.s.l)||0;stIcon='<span title="間違い'+mc+'回" style="font-size:12px;margin-left:3px">❌</span><span style="font-size:10px;color:var(--rd);margin-left:1px">×'+mc+'</span>';}
-    else if(st==='dontknow')stIcon='<span title="わからない" style="font-size:12px;margin-left:3px">❓</span>';
-    else stIcon='<span title="未学習" style="font-size:12px;margin-left:3px;opacity:.3">🆕</span>';
+    var v=lvl(w);var l=LANGS[w.lang||'en'];
+    var st=wordStatus(w);var stIcon='';
+    if(st==='studied')stIcon='<span style="font-size:12px;margin-left:3px">✅</span>';
+    else if(st==='missed'){var mc=(w.s&&w.s.l)||0;stIcon='<span style="font-size:12px;margin-left:3px">❌</span><span style="font-size:10px;color:var(--rd);margin-left:1px">×'+mc+'</span>';}
+    else if(st==='dontknow')stIcon='<span style="font-size:12px;margin-left:3px">❓</span>';
+    else stIcon='<span style="font-size:12px;margin-left:3px;opacity:.3">🆕</span>';
     var chk=selModeOn?'<input type="checkbox" class="word-sel-chk" data-wid="'+esc(w.id)+'"'+(selSet[w.id]?' checked':'')+' style="width:18px;height:18px;flex-shrink:0;margin-right:4px;accent-color:var(--ac)">':'';
-    h+='<button class="word-item" data-wid="'+esc(w.id)+'" style="'+(selModeOn&&selSet[w.id]?'background:rgba(124,92,252,.18);border-color:var(--ac);':'')+'">'+
-      chk+
-      '<div class="wi-inf"><div class="wi-en">'+(l?'<span style="font-size:11px;margin-right:3px">'+l.flag+'</span>':'')+esc(w.word)+stIcon+'</div>'+
-      '<div class="wi-ja">'+(w.meaning?esc(w.meaning):'訳なし')+'</div></div>'+
-      '<div class="wi-lvl l'+v+'">'+lb[v]+'</div></button>';
+    h+='<button class="word-item" data-wid="'+esc(w.id)+'" style="'+(selModeOn&&selSet[w.id]?'background:rgba(124,92,252,.18);border-color:var(--ac);':'')+'">'+chk+'<div class="wi-inf"><div class="wi-en">'+(l?'<span style="font-size:11px;margin-right:3px">'+l.flag+'</span>':'')+esc(w.word)+stIcon+'</div><div class="wi-ja">'+(w.meaning?esc(w.meaning):'訳なし')+'</div></div><div class="wi-lvl l'+v+'">'+lb[v]+'</div></button>';
   });
   c.innerHTML=h;
-  c.querySelectorAll('.word-item').forEach(function(b){
-    b.addEventListener('click',function(e){
-      var wid=this.getAttribute('data-wid');
-      if(selModeOn){selWordToggle(wid);this.style.background=selSet[wid]?'rgba(124,92,252,.18)':'';this.style.borderColor=selSet[wid]?'var(--ac)':'';}
-      else{wordDetail(wid);}
-    });
-  });
-  c.querySelectorAll('.word-sel-chk').forEach(function(chk){
-    chk.addEventListener('click',function(e){e.stopPropagation();selWordToggle(this.getAttribute('data-wid'));var btn=this.closest('.word-item');if(btn){btn.style.background=selSet[this.getAttribute('data-wid')]?'rgba(124,92,252,.18)':'';btn.style.borderColor=selSet[this.getAttribute('data-wid')]?'var(--ac)':'';}});
-  });
+  c.querySelectorAll('.word-item').forEach(function(b){b.addEventListener('click',function(e){var wid=this.getAttribute('data-wid');if(selModeOn){selWordToggle(wid);this.style.background=selSet[wid]?'rgba(124,92,252,.18)':'';this.style.borderColor=selSet[wid]?'var(--ac)':'';}else{wordDetail(wid);}});});
+  c.querySelectorAll('.word-sel-chk').forEach(function(chk){chk.addEventListener('click',function(e){e.stopPropagation();selWordToggle(this.getAttribute('data-wid'));var btn=this.closest('.word-item');if(btn){btn.style.background=selSet[this.getAttribute('data-wid')]?'rgba(124,92,252,.18)':'';btn.style.borderColor=selSet[this.getAttribute('data-wid')]?'var(--ac)':'';}});});
 }
 function listMenu(lid){
   var lst=G.lists.find(function(x){return x.id===lid;}); if(!lst)return;
@@ -2995,10 +2968,10 @@ function qNext(){
   el('B-next').textContent='次へ →';
 
   var q=Q.q[Q.i];
+  /* 不正解経験あり かつ 再出題回数が上限未満の場合のみ再出題 */
   var requeueMax=G.cfg.requeueMax!=null?G.cfg.requeueMax:1;
   if(!Q.requeued)Q.requeued={};
   var remaining=Q.q.length-(Q.i+1);
-  /* 習得済み（正解確定）なら再出題しない */
   var alreadyMastered=Q.masteredIds&&Q.masteredIds[q.id];
   if(q && q._hadMiss && !alreadyMastered && (Q.requeued[q.id]||0)<requeueMax && remaining>0){
     Q.requeued[q.id]=(Q.requeued[q.id]||0)+1;
@@ -3128,21 +3101,10 @@ function bind(){
     b.addEventListener('click',function(){setLang(this.getAttribute('data-lang'));});
   });
 
-  /* 言語フィルター */
-  el('SEL-lang-filter').addEventListener('change',function(){
-    listLangFilter=this.value;
-    listRender();
-  });
-  /* ステータスフィルター */
-  el('SEL-status-filter').addEventListener('change',function(){
-    listStatusFilter=this.value;
-    listRender();
-  });
-  /* ソート */
-  el('SEL-sort').addEventListener('change',function(){
-    listSort=this.value;
-    listRender();
-  });
+  /* フィルター・ソート */
+  el('SEL-lang-filter').addEventListener('change',function(){listLangFilter=this.value;listRender();});
+  el('SEL-status-filter').addEventListener('change',function(){listStatusFilter=this.value;listRender();});
+  el('SEL-sort').addEventListener('change',function(){listSort=this.value;listRender();});
 
   el('B-parse').addEventListener('click',parsePaste);
   el('B-upload').addEventListener('click',function(){el('IN-file').click();});
