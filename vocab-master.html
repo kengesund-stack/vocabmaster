@@ -329,9 +329,9 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     <div id="TP-paste">
       <div class="lbl">リスト名</div>
       <input class="inp" id="IN-paste-name" type="text" placeholder="例: ドイツ語基礎単語">
-      <div class="lbl">単語リスト（1行1単語 /「単語,訳」形式 / JSONテキストも可）</div>
+      <div class="lbl">単語リスト（1行1単語 または「単語,訳」形式）</div>
       <textarea class="inp ta" id="IN-paste-text" placeholder="例:&#10;Haus&#10;Schule,学校&#10;arbeiten&#10;schön,美しい"></textarea>
-      <div class="hint">JSONファイルの内容をそのまま貼り付けると自動認識します。訳なしの単語はAPIキー設定でAI自動翻訳できます</div>
+      <div class="hint">訳なしの単語はAPIキー設定でAI自動翻訳できます</div>
       <button class="btn-primary" id="B-parse">🔍 解析する</button>
     </div>
 
@@ -1007,17 +1007,6 @@ function setLang(lang){
 function parsePaste(){
   var txt=el('IN-paste-text').value.trim();
   if(!txt){toast('テキストを入力してください');return;}
-
-  /* JSONテキストを自動検出 */
-  if(txt.charAt(0)==='{' || txt.charAt(0)==='['){
-    try{
-      JSON.parse(txt); /* 構文チェックのみ */
-      var ni=el('IN-paste-name');
-      jsonImport(txt, (ni&&ni.value.trim())||'貼り付けリスト');
-      return;
-    }catch(e){ /* 無効JSONは通常の行パースへ */ }
-  }
-
   var words=[];
   txt.split('\n').forEach(function(line){
     line=line.trim();if(!line)return;
@@ -1271,7 +1260,7 @@ function jsonImport(text, fname){
   function extractWords(arr){
     if(!Array.isArray(arr))return[];
     return arr.map(function(item){
-      var w=item.word||item.term||item.front||item.expression||item.vocab||'';
+      var w=item.word||item.term||item.front||item.expression||item.vocab||item.german||item.deutsch||item.french||item.français||item.spanish||item.español||item.italian||item.italiano||item.english||'';
       var m=item.meaning||item.translation||item.back||item.definition||item.japanese||item.ja||'';
       return w?{word:String(w).trim(),meaning:String(m).trim()}:null;
     }).filter(Boolean);
