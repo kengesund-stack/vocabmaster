@@ -1720,6 +1720,9 @@ function wordStatus(w){
   return 'studied';
 }
 
+/* スペースを含む → 熟語、含まない → 単語 */
+function isPhrase(word){return word&&word.trim().indexOf(' ')>=0;}
+
 function listFilterRebuild(){
   var sel=el('SEL-list'),cur=sel.value;
   sel.innerHTML='<option value="all">すべて</option>';
@@ -2871,8 +2874,17 @@ function qRender(){
   }
 
   var ca=rev?q.word:(q.meaning||'（訳なし）');
-  var sameLang=G.words.filter(function(w){return w.id!==q.id&&(w.lang||'en')===(q.lang||'en');});
-  var others=sameLang.length>=3?sameLang:G.words.filter(function(w){return w.id!==q.id;});
+  /* 熟語(スペースあり)か単語かを判定し、同種のものを選択肢に使う */
+  var qIsPhrase=isPhrase(q.word);
+  var sameLang=G.words.filter(function(w){
+    return w.id!==q.id &&
+           (w.lang||'en')===(q.lang||'en') &&
+           isPhrase(w.word)===qIsPhrase;
+  });
+  /* 同種で3件未満なら種別を無視して同言語から、それでも不足なら全体から */
+  var others=sameLang.length>=3 ? sameLang :
+    G.words.filter(function(w){return w.id!==q.id&&(w.lang||'en')===(q.lang||'en');});
+  if(others.length<3) others=G.words.filter(function(w){return w.id!==q.id;});
   var dist=shuffle(others).slice(0,3).map(function(w){return rev?w.word:(w.meaning||w.word);});
   var choices=shuffle([ca].concat(dist).slice(0,4));
   while(choices.length<4)choices.push('---');
