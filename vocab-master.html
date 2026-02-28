@@ -447,29 +447,38 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
   <div class="srch-wrap">
     <input class="srch" id="IN-search" type="search" placeholder="単語を検索...">
   </div>
-  <div class="filter-bar" id="LANG-filter">
-    <button class="flt-btn on" data-lang="all">すべて</button>
-    <button class="flt-btn" data-lang="en">🇬🇧 英語</button>
-    <button class="flt-btn" data-lang="de">🇩🇪 ドイツ語</button>
-    <button class="flt-btn" data-lang="fr">🇫🇷 フランス語</button>
-    <button class="flt-btn" data-lang="es">🇪🇸 スペイン語</button>
-    <button class="flt-btn" data-lang="it">🇮🇹 イタリア語</button>
-  </div>
-  <div class="filter-bar" id="STATUS-filter" style="padding-top:6px">
-    <button class="flt-btn on" data-status="all">📋 すべて</button>
-    <button class="flt-btn" data-status="studied">✅ 学習済み</button>
-    <button class="flt-btn" data-status="missed">❌ 間違い</button>
-    <button class="flt-btn" data-status="dontknow">❓ 不明</button>
-    <button class="flt-btn" data-status="new">🆕 未学習</button>
-  </div>
-  <div style="display:flex;align-items:center;gap:7px;padding:6px 16px 0;flex-shrink:0">
-    <span style="font-size:11px;color:var(--tx2);white-space:nowrap">並び替え:</span>
-    <div class="filter-bar" id="SORT-filter" style="padding:0;flex:1;overflow-x:scroll">
-      <button class="flt-btn on" data-sort="default">登録順</button>
-      <button class="flt-btn" data-sort="missed">間違い多</button>
-      <button class="flt-btn" data-sort="slow">時間がかかる</button>
-      <button class="flt-btn" data-sort="level-asc">レベル低↑</button>
-      <button class="flt-btn" data-sort="level-desc">レベル高↑</button>
+  <div style="display:flex;flex-direction:column;gap:7px;padding:8px 16px 2px;flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:9px">
+      <span style="font-size:11px;color:var(--tx2);white-space:nowrap;width:52px">言語:</span>
+      <select id="SEL-lang-filter" style="flex:1;background:var(--sf);border:1px solid rgba(255,255,255,.1);border-radius:9px;color:var(--tx);font-family:inherit;font-size:13px;padding:7px 10px;outline:none;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239090aa' d='M6 8L0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px">
+        <option value="all">🌐 すべての言語</option>
+        <option value="en">🇬🇧 英語</option>
+        <option value="de">🇩🇪 ドイツ語</option>
+        <option value="fr">🇫🇷 フランス語</option>
+        <option value="es">🇪🇸 スペイン語</option>
+        <option value="it">🇮🇹 イタリア語</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:9px">
+      <span style="font-size:11px;color:var(--tx2);white-space:nowrap;width:52px">状態:</span>
+      <select id="SEL-status-filter" style="flex:1;background:var(--sf);border:1px solid rgba(255,255,255,.1);border-radius:9px;color:var(--tx);font-family:inherit;font-size:13px;padding:7px 10px;outline:none;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239090aa' d='M6 8L0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px">
+        <option value="all">📋 すべて</option>
+        <option value="studied">✅ 学習済み（正解のみ）</option>
+        <option value="missed">❌ 間違いあり</option>
+        <option value="dontknow">❓ わからない</option>
+        <option value="new">🆕 未学習</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:9px">
+      <span style="font-size:11px;color:var(--tx2);white-space:nowrap;width:52px">並び替え:</span>
+      <select id="SEL-sort" style="flex:1;background:var(--sf);border:1px solid rgba(255,255,255,.1);border-radius:9px;color:var(--tx);font-family:inherit;font-size:13px;padding:7px 10px;outline:none;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239090aa' d='M6 8L0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px">
+        <option value="default">📋 登録順</option>
+        <option value="missed">❌ 間違い多い順</option>
+        <option value="slow">⏱ 回答が遅い順</option>
+        <option value="level-asc">📈 レベル低い順</option>
+        <option value="level-desc">📉 レベル高い順</option>
+        <option value="alpha">🔤 アルファベット順</option>
+      </select>
     </div>
   </div>
   <div class="scroll" style="padding-top:10px">
@@ -1024,7 +1033,6 @@ function setLang(lang){
 function parsePaste(){
   var txt=el('IN-paste-text').value.trim();
   if(!txt){toast('テキストを入力してください');return;}
-  /* JSONテキストを自動検出 */
   if(txt.charAt(0)==='{' || txt.charAt(0)==='['){
     try{
       JSON.parse(txt);
@@ -1684,7 +1692,6 @@ var listLangFilter='all';
 var listStatusFilter='all';
 var listSort='default';
 
-/* 単語ごとのログ集計キャッシュ */
 var _wordLogCache=null;
 function getWordLogCache(){
   if(_wordLogCache)return _wordLogCache;
@@ -1720,7 +1727,6 @@ function listFilterRebuild(){
   sel.value=cur||'all';
 }
 function listRender(){
-  /* 選択モードのツールバー表示を同期 */
   var _tb=document.getElementById('SEL-toolbar');
   if(_tb)_tb.style.display=selModeOn?'block':'none';
   var flt=(el('SEL-list')||{}).value||'all';
@@ -1729,17 +1735,15 @@ function listRender(){
   var words=flt==='all'?G.words.slice():G.words.filter(function(w){return w.lid===flt;});
   if(listLangFilter!=='all')words=words.filter(function(w){return(w.lang||'en')===listLangFilter;});
   if(srch)words=words.filter(function(w){return w.word.toLowerCase().indexOf(srch)>=0||w.meaning.toLowerCase().indexOf(srch)>=0;});
-  /* ステータスフィルター */
   if(listStatusFilter!=='all'){
     words=words.filter(function(w){return wordStatus(w)===listStatusFilter;});
   }
-  /* ソート */
   var cache=getWordLogCache();
   if(listSort==='missed'){
     words=words.slice().sort(function(a,b){return ((b.s&&b.s.l)||0)-((a.s&&a.s.l)||0);});
   } else if(listSort==='slow'){
     words=words.slice().sort(function(a,b){
-      var ca=cache[a.id], cb=cache[b.id];
+      var ca=cache[a.id],cb=cache[b.id];
       var aa=ca&&ca.slowCnt?ca.slowMs/ca.slowCnt:0;
       var ba=cb&&cb.slowCnt?cb.slowMs/cb.slowCnt:0;
       return ba-aa;
@@ -1748,6 +1752,8 @@ function listRender(){
     words=words.slice().sort(function(a,b){return lvl(a)-lvl(b);});
   } else if(listSort==='level-desc'){
     words=words.slice().sort(function(a,b){return lvl(b)-lvl(a);});
+  } else if(listSort==='alpha'){
+    words=words.slice().sort(function(a,b){return a.word.localeCompare(b.word);});
   }
   if(!words.length){c.innerHTML='<div class="empty"><div class="empty-ic">🔍</div><div class="empty-tl">単語なし</div></div>';return;}
   var lb=['初','入','中','中上','上','習得'],h='';
@@ -1756,14 +1762,14 @@ function listRender(){
     var l=LANGS[w.lang||'en'];
     var st=wordStatus(w);
     var stIcon='';
-    if(st==='studied')stIcon='<span title="学習済み" style="font-size:13px;margin-left:4px">✅</span>';
-    else if(st==='missed'){var mc=(w.s&&w.s.l)||0;stIcon='<span title="間違い'+mc+'回" style="font-size:13px;margin-left:4px">❌</span><span style="font-size:10px;color:var(--rd);margin-left:2px">×'+mc+'</span>';}
-    else if(st==='dontknow')stIcon='<span title="わからない" style="font-size:13px;margin-left:4px">❓</span>';
-    else stIcon='<span title="未学習" style="font-size:13px;margin-left:4px;opacity:.3">🆕</span>';
+    if(st==='studied')stIcon='<span title="学習済み" style="font-size:12px;margin-left:3px">✅</span>';
+    else if(st==='missed'){var mc=(w.s&&w.s.l)||0;stIcon='<span title="間違い'+mc+'回" style="font-size:12px;margin-left:3px">❌</span><span style="font-size:10px;color:var(--rd);margin-left:1px">×'+mc+'</span>';}
+    else if(st==='dontknow')stIcon='<span title="わからない" style="font-size:12px;margin-left:3px">❓</span>';
+    else stIcon='<span title="未学習" style="font-size:12px;margin-left:3px;opacity:.3">🆕</span>';
     var chk=selModeOn?'<input type="checkbox" class="word-sel-chk" data-wid="'+esc(w.id)+'"'+(selSet[w.id]?' checked':'')+' style="width:18px;height:18px;flex-shrink:0;margin-right:4px;accent-color:var(--ac)">':'';
     h+='<button class="word-item" data-wid="'+esc(w.id)+'" style="'+(selModeOn&&selSet[w.id]?'background:rgba(124,92,252,.18);border-color:var(--ac);':'')+'">'+
       chk+
-      '<div class="wi-inf"><div class="wi-en">'+(l?'<span style="font-size:11px;margin-right:4px">'+l.flag+'</span>':'')+esc(w.word)+stIcon+'</div>'+
+      '<div class="wi-inf"><div class="wi-en">'+(l?'<span style="font-size:11px;margin-right:3px">'+l.flag+'</span>':'')+esc(w.word)+stIcon+'</div>'+
       '<div class="wi-ja">'+(w.meaning?esc(w.meaning):'訳なし')+'</div></div>'+
       '<div class="wi-lvl l'+v+'">'+lb[v]+'</div></button>';
   });
@@ -1779,7 +1785,6 @@ function listRender(){
     chk.addEventListener('click',function(e){e.stopPropagation();selWordToggle(this.getAttribute('data-wid'));var btn=this.closest('.word-item');if(btn){btn.style.background=selSet[this.getAttribute('data-wid')]?'rgba(124,92,252,.18)':'';btn.style.borderColor=selSet[this.getAttribute('data-wid')]?'var(--ac)':'';}});
   });
 }
-
 function listMenu(lid){
   var lst=G.lists.find(function(x){return x.id===lid;}); if(!lst)return;
   var ws=G.words.filter(function(w){return w.lid===lid;});
@@ -2990,13 +2995,13 @@ function qNext(){
   el('B-next').textContent='次へ →';
 
   var q=Q.q[Q.i];
-  /* 不正解経験あり かつ 再出題回数が上限未満の場合のみ再出題 */
   var requeueMax=G.cfg.requeueMax!=null?G.cfg.requeueMax:1;
   if(!Q.requeued)Q.requeued={};
   var remaining=Q.q.length-(Q.i+1);
-  if(q && q._hadMiss && (Q.requeued[q.id]||0)<requeueMax && remaining>0){
+  /* 習得済み（正解確定）なら再出題しない */
+  var alreadyMastered=Q.masteredIds&&Q.masteredIds[q.id];
+  if(q && q._hadMiss && !alreadyMastered && (Q.requeued[q.id]||0)<requeueMax && remaining>0){
     Q.requeued[q.id]=(Q.requeued[q.id]||0)+1;
-    /* 残り問題のうち1〜3問後のランダムな位置に挿入 */
     var insertOffset=1+Math.floor(Math.random()*Math.min(remaining,3));
     Q.q.splice(Q.i+1+insertOffset,0,q);
   }
@@ -3124,31 +3129,19 @@ function bind(){
   });
 
   /* 言語フィルター */
-  el('LANG-filter').querySelectorAll('.flt-btn').forEach(function(b){
-    b.addEventListener('click',function(){
-      listLangFilter=this.getAttribute('data-lang');
-      el('LANG-filter').querySelectorAll('.flt-btn').forEach(function(x){x.classList.remove('on');});
-      this.classList.add('on');
-      listRender();
-    });
+  el('SEL-lang-filter').addEventListener('change',function(){
+    listLangFilter=this.value;
+    listRender();
   });
   /* ステータスフィルター */
-  el('STATUS-filter').querySelectorAll('.flt-btn').forEach(function(b){
-    b.addEventListener('click',function(){
-      listStatusFilter=this.getAttribute('data-status');
-      el('STATUS-filter').querySelectorAll('.flt-btn').forEach(function(x){x.classList.remove('on');});
-      this.classList.add('on');
-      listRender();
-    });
+  el('SEL-status-filter').addEventListener('change',function(){
+    listStatusFilter=this.value;
+    listRender();
   });
   /* ソート */
-  el('SORT-filter').querySelectorAll('.flt-btn').forEach(function(b){
-    b.addEventListener('click',function(){
-      listSort=this.getAttribute('data-sort');
-      el('SORT-filter').querySelectorAll('.flt-btn').forEach(function(x){x.classList.remove('on');});
-      this.classList.add('on');
-      listRender();
-    });
+  el('SEL-sort').addEventListener('change',function(){
+    listSort=this.value;
+    listRender();
   });
 
   el('B-parse').addEventListener('click',parsePaste);
