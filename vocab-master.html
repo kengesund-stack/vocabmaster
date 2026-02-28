@@ -356,16 +356,16 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
       <div class="json-sec-wrap" id="PASTE-json-sec">
         <div class="lbl">取り込みセクション</div>
         <div style="display:flex;gap:7px;margin-bottom:10px">
-          <button class="opt-btn on" data-pjsec="all" id="PJSEC-all" style="flex:1;padding:7px;font-size:11px">📦<br>すべて</button>
-          <button class="opt-btn" data-pjsec="vocabulary" id="PJSEC-vocab" style="flex:1;padding:7px;font-size:11px">📝<br>単語のみ</button>
-          <button class="opt-btn" data-pjsec="phrases" id="PJSEC-phrase" style="flex:1;padding:7px;font-size:11px">💬<br>熟語のみ</button>
+          <button class="opt-btn on" data-pjsec="all" id="PJSEC-all" onclick="setPasteJsonSection('all')" style="flex:1;padding:7px;font-size:11px">📦<br>すべて</button>
+          <button class="opt-btn" data-pjsec="vocabulary" id="PJSEC-vocab" onclick="setPasteJsonSection('vocabulary')" style="flex:1;padding:7px;font-size:11px">📝<br>単語のみ</button>
+          <button class="opt-btn" data-pjsec="phrases" id="PJSEC-phrase" onclick="setPasteJsonSection('phrases')" style="flex:1;padding:7px;font-size:11px">💬<br>熟語のみ</button>
         </div>
       </div>
 
       <div class="lbl">単語リスト または JSONテキスト</div>
-      <textarea class="inp ta" id="IN-paste-text" placeholder="■ 通常形式（1行1単語 または「単語,訳」）&#10;例:&#10;Haus&#10;Schule,学校&#10;&#10;■ JSON形式（貼り付けると自動認識）&#10;例:&#10;{&quot;words&quot;:[{&quot;word&quot;:&quot;Haus&quot;,&quot;meaning&quot;:&quot;家&quot;}]}"></textarea>
+      <textarea class="inp ta" id="IN-paste-text" oninput="pasteJsonDetect(this.value)" placeholder="■ 通常形式（1行1単語 または「単語,訳」）&#10;例:&#10;Haus&#10;Schule,学校&#10;&#10;■ JSON形式（貼り付けると自動認識）&#10;例:&#10;{&quot;words&quot;:[{&quot;word&quot;:&quot;Haus&quot;,&quot;meaning&quot;:&quot;家&quot;}]}"></textarea>
       <div class="hint">訳なしの単語はAPIキー設定でAI自動翻訳できます。JSON形式も自動認識します。</div>
-      <button class="btn-primary" id="B-parse">🔍 解析する</button>
+      <button class="btn-primary" id="B-parse" onclick="parsePaste()">🔍 解析する</button>
     </div>
 
     <!-- FILE -->
