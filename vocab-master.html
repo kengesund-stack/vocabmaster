@@ -245,6 +245,29 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 .fl-play-btn:active { opacity:.85; }
 
 ::-webkit-scrollbar { display:none; }
+
+/* ---- FOLDER ---- */
+.folder-block { margin-bottom:10px; }
+.folder-hdr { display:flex; align-items:center; gap:8px; padding:8px 4px 6px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.folder-arrow { font-size:11px; color:var(--tx2); transition:transform .2s ease; flex-shrink:0; }
+.folder-arrow.open { transform:rotate(90deg); }
+.folder-ic { font-size:18px; flex-shrink:0; }
+.folder-name { font-size:13px; font-weight:600; color:var(--tx); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.folder-count { font-size:11px; color:var(--tx2); flex-shrink:0; }
+.folder-edit-btn { background:none; border:none; font-size:15px; color:var(--tx2); cursor:pointer; padding:4px; flex-shrink:0; -webkit-appearance:none; }
+.folder-body { overflow:hidden; transition:max-height .25s ease; }
+.folder-body.collapsed { max-height:0 !important; }
+.no-folder-hdr { font-size:11px; font-weight:600; color:var(--tx2); text-transform:uppercase; letter-spacing:.08em; padding:6px 4px 6px; }
+
+/* ---- DRAG & DROP ---- */
+.drag-ghost { position:fixed; pointer-events:none; z-index:500; opacity:.85; transform:scale(1.03); box-shadow:0 8px 32px rgba(0,0,0,.6); border-radius:var(--r); transition:transform .1s; left:0; top:0; }
+.drag-ghost .swipe-del-bg { display:none; }
+.drag-ghost .swipe-inner { transform:none !important; }
+.list-card.dragging-src { opacity:.35; pointer-events:none; }
+.folder-drop-target { outline:2px solid var(--ac); outline-offset:-2px; background:rgba(124,92,252,.12) !important; border-radius:var(--r); }
+.nofolder-drop-target { outline:2px dashed var(--ac2); outline-offset:-2px; border-radius:8px; background:rgba(252,92,125,.08); }
+.drag-hint { position:absolute; top:-22px; left:50%; transform:translateX(-50%); background:var(--ac); color:#fff; font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .15s; }
+.drag-hint.on { opacity:1; }
 </style>
 </head>
 <body>
@@ -282,7 +305,10 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     </div>
     <div class="sec-hdr">
       <div class="sec-title">単語リスト</div>
-      <button class="btn-text" id="B-new-list">＋ 新規</button>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn-text" id="B-new-folder" style="color:var(--tx2)">📁 フォルダ</button>
+        <button class="btn-text" id="B-new-list">＋ 新規</button>
+      </div>
     </div>
     <div id="H-lists"></div>
     <div style="margin:18px 0 8px">
@@ -855,8 +881,9 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
+if(!G.folders) G.folders=[];
 function save(){sSet(G);scheduleAutoCloudSave();}
 
 /* ── ファイル保存（HTMLにデータ埋め込み） ── */
@@ -1031,8 +1058,17 @@ function homeRefresh(){
 function homeListsRender(){
   var c=el('H-lists');
   if(!G.lists.length){c.innerHTML='<div class="empty"><div class="empty-ic">📖</div><div class="empty-tl">単語リストなし</div><div class="empty-sub">「単語を追加」から<br>新しい単語を登録しよう</div></div>';return;}
-  var h='';
-  G.lists.forEach(function(lst){
+
+  /* フォルダが未初期化の場合に備える */
+  if(!G.folders) G.folders=[];
+
+  /* フォルダごとにリストをグループ化 */
+  var folders=G.folders;
+  var folderedIds={};
+  folders.forEach(function(f){ folderedIds[f.id]=true; });
+
+  /* 各フォルダのリストカードHTMLを生成する共通関数 */
+  function renderListCard(lst){
     var ws=G.words.filter(function(w){return w.lid===lst.id;});
     var d=ws.filter(due).length;
     var l=LANGS[lst.lang||'en'];
@@ -1042,7 +1078,7 @@ function homeListsRender(){
     var progClr=pct>=100?'var(--gn)':pct>=60?'var(--ac3)':pct>=30?'var(--ac)':'var(--ac2)';
     var nextN=Math.min(parseInt(G.cfg.size)||20, total-cursor);
     var progLabel=pct>=100?'✅ 全単語完了！':'次回: '+cursor+'〜'+(cursor+nextN)+'番目 ('+pct+'%)';
-    h+='<div class="swipe-wrap" data-lid="'+esc(lst.id)+'">'+
+    return '<div class="swipe-wrap" data-lid="'+esc(lst.id)+'">'+
       '<div class="swipe-del-bg"><span>🗑️</span>削除</div>'+
       '<div class="swipe-inner">'+
         '<button class="list-card" data-lid="'+esc(lst.id)+'" style="padding-bottom:8px">'+
@@ -1058,15 +1094,92 @@ function homeListsRender(){
           (d?'<div class="list-badge" style="align-self:flex-start">'+d+'</div>':'')+'</button>'+
       '</div>'+
     '</div>';
+  }
+
+  var h='';
+
+  /* フォルダブロックを描画 */
+  folders.forEach(function(folder){
+    var folderLists=G.lists.filter(function(l){return l.fid===folder.id;});
+    var totalWords=folderLists.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id;}).length;},0);
+    var dueWords=folderLists.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id&&due(w);}).length;},0);
+    var isOpen=!folder.collapsed;
+    /* フォルダ内のリスト全体の高さを予測するためにmax-heightは大きめに設定 */
+    h+='<div class="folder-block" data-fid="'+esc(folder.id)+'">'+
+      '<div class="folder-hdr" data-fid="'+esc(folder.id)+'">'+
+        '<span class="folder-arrow'+(isOpen?' open':'')+'">▶</span>'+
+        '<span class="folder-ic">📁</span>'+
+        '<span class="folder-name">'+esc(folder.name)+'</span>'+
+        '<span class="folder-count">'+folderLists.length+'リスト'+(dueWords?' · 復習'+dueWords+'件':'')+'</span>'+
+        '<button class="folder-edit-btn" data-fid="'+esc(folder.id)+'" title="フォルダを編集">···</button>'+
+      '</div>'+
+      '<div class="folder-body'+(isOpen?'':' collapsed')+'" data-fid="'+esc(folder.id)+'" style="max-height:'+(isOpen?'9999px':'0')+'">';
+    if(folderLists.length===0){
+      h+='<div style="padding:10px 8px 6px;font-size:12px;color:var(--tx2)">リストなし</div>';
+    } else {
+      folderLists.forEach(function(lst){ h+=renderListCard(lst); });
+    }
+    h+='</div></div>';
   });
+
+  /* フォルダなしのリスト */
+  var noFolderLists=G.lists.filter(function(l){return !l.fid || !G.folders.some(function(f){return f.id===l.fid;});});
+  if(noFolderLists.length>0){
+    if(folders.length>0){
+      h+='<div class="no-folder-hdr">未分類</div>';
+    }
+    noFolderLists.forEach(function(lst){ h+=renderListCard(lst); });
+  }
+
   c.innerHTML=h;
+
+  /* フォルダヘッダークリックで折り畳み */
+  c.querySelectorAll('.folder-hdr').forEach(function(hdr){
+    hdr.addEventListener('click',function(e){
+      /* 編集ボタンはスキップ */
+      if(e.target.classList.contains('folder-edit-btn')) return;
+      var fid=this.getAttribute('data-fid');
+      var folder=G.folders.find(function(f){return f.id===fid;});
+      if(!folder) return;
+      folder.collapsed=!folder.collapsed;
+      save();
+      /* アニメーションで折り畳み */
+      var arrow=this.querySelector('.folder-arrow');
+      var body=c.querySelector('.folder-body[data-fid="'+fid+'"]');
+      if(folder.collapsed){
+        body.style.maxHeight=body.scrollHeight+'px';
+        requestAnimationFrame(function(){
+          body.style.transition='max-height .25s ease';
+          body.style.maxHeight='0';
+          body.classList.add('collapsed');
+          if(arrow) arrow.classList.remove('open');
+        });
+      } else {
+        body.classList.remove('collapsed');
+        body.style.maxHeight='0';
+        requestAnimationFrame(function(){
+          body.style.transition='max-height .25s ease';
+          body.style.maxHeight=body.scrollHeight+'px';
+          setTimeout(function(){body.style.maxHeight='9999px';},260);
+          if(arrow) arrow.classList.add('open');
+        });
+      }
+    });
+  });
+
+  /* フォルダ編集ボタン */
+  c.querySelectorAll('.folder-edit-btn').forEach(function(btn){
+    btn.addEventListener('click',function(e){
+      e.stopPropagation();
+      editFolder(this.getAttribute('data-fid'));
+    });
+  });
 
   /* タップでlistMenu */
   c.querySelectorAll('.list-card').forEach(function(b){
     b.addEventListener('click',function(){
       var inner=this.closest('.swipe-inner');
       if(inner&&inner.classList.contains('swiped')){
-        /* スワイプ中はタップを無効化してリセット */
         inner.classList.remove('swiped');return;
       }
       listMenu(this.getAttribute('data-lid'));
@@ -1077,14 +1190,10 @@ function homeListsRender(){
   c.querySelectorAll('.swipe-wrap').forEach(function(wrap){
     var inner=wrap.querySelector('.swipe-inner');
     var startX,startY,dx,isDragging=false,isSwipe=false;
-
     inner.addEventListener('touchstart',function(e){
-      startX=e.touches[0].clientX;
-      startY=e.touches[0].clientY;
-      dx=0; isDragging=true; isSwipe=false;
-      inner.style.transition='none';
+      startX=e.touches[0].clientX;startY=e.touches[0].clientY;
+      dx=0;isDragging=true;isSwipe=false;inner.style.transition='none';
     },{passive:true});
-
     inner.addEventListener('touchmove',function(e){
       if(!isDragging)return;
       dx=e.touches[0].clientX-startX;
@@ -1096,30 +1205,173 @@ function homeListsRender(){
       var tx=Math.min(0,Math.max(-90,already+dx));
       inner.style.transform='translateX('+tx+'px)';
     },{passive:true});
-
     inner.addEventListener('touchend',function(){
       if(!isDragging){inner.style.transition='';return;}
-      isDragging=false;
-      inner.style.transition='transform .2s ease';
+      isDragging=false;inner.style.transition='transform .2s ease';
       var already=inner.classList.contains('swiped')?-90:0;
       var total=already+dx;
       if(total<-40){
-        /* 削除ゾーン表示 */
-        inner.style.transform='translateX(-90px)';
-        inner.classList.add('swiped');
+        inner.style.transform='translateX(-90px)';inner.classList.add('swiped');
       } else {
-        inner.style.transform='';
-        inner.classList.remove('swiped');
+        inner.style.transform='';inner.classList.remove('swiped');
       }
     });
   });
 
-  /* 削除ボタン（赤いゾーンをタップ） */
+  /* 削除ボタン */
   c.querySelectorAll('.swipe-del-bg').forEach(function(btn){
     btn.addEventListener('click',function(){
-      var lid=this.closest('.swipe-wrap').getAttribute('data-lid');
-      deleteList(lid);
+      deleteList(this.closest('.swipe-wrap').getAttribute('data-lid'));
     });
+  });
+
+  /* ---- タッチ ドラッグ & ドロップ ---- */
+  initListDragDrop(c);
+}
+
+/* =========================================================
+   タッチ ドラッグ & ドロップ（リスト → フォルダ移動）
+   ========================================================= */
+function initListDragDrop(container){
+  var LONG_PRESS_MS=480;
+  var ghost=null, srcWrap=null, srcCard=null, srcLid=null;
+  var pressTimer=null, dragging=false;
+  var scrollEl=document.getElementById('s-home').querySelector('.scroll');
+
+  /* ゴースト生成 */
+  function createGhost(wrap, touchX, touchY){
+    var g=wrap.cloneNode(true);
+    g.className='drag-ghost';
+    var r=wrap.getBoundingClientRect();
+    g.style.width=r.width+'px';
+    /* ゴーストの位置を指の位置に合わせる */
+    g.style.left=(touchX-r.width/2)+'px';
+    g.style.top=(touchY-r.height/2)+'px';
+    document.body.appendChild(g);
+    return g;
+  }
+
+  /* ゴースト移動 */
+  function moveGhost(touchX, touchY){
+    if(!ghost)return;
+    var r=ghost.getBoundingClientRect();
+    ghost.style.left=(touchX-r.width/2)+'px';
+    ghost.style.top=(touchY-r.height/2)+'px';
+  }
+
+  /* ドロップ対象のハイライト解除 */
+  function clearHighlights(){
+    container.querySelectorAll('.folder-drop-target').forEach(function(el){el.classList.remove('folder-drop-target');});
+    container.querySelectorAll('.nofolder-drop-target').forEach(function(el){el.classList.remove('nofolder-drop-target');});
+  }
+
+  /* タッチ座標でフォルダヘッダーまたは未分類エリアを特定 */
+  function findDropTarget(x, y){
+    var els=document.elementsFromPoint(x,y);
+    for(var i=0;i<els.length;i++){
+      var e=els[i];
+      /* フォルダヘッダー or フォルダボディ */
+      if(e.classList.contains('folder-hdr')||e.classList.contains('folder-block')||e.classList.contains('folder-body')||e.classList.contains('folder-arrow')||e.classList.contains('folder-ic')||e.classList.contains('folder-name')||e.classList.contains('folder-count')){
+        var fid=e.getAttribute('data-fid')||(e.closest('[data-fid]')&&e.closest('[data-fid]').getAttribute('data-fid'));
+        if(fid){
+          var folder=G.folders.find(function(f){return f.id===fid;});
+          if(folder) return {type:'folder',fid:fid,folder:folder,el:e.closest('.folder-block')||e};
+        }
+      }
+      /* 未分類エリア */
+      if(e.classList.contains('no-folder-hdr')){
+        return {type:'nofolder',el:e};
+      }
+    }
+    return null;
+  }
+
+  /* 長押し検出 — 各 swipe-wrap に付与 */
+  container.querySelectorAll('.swipe-wrap').forEach(function(wrap){
+    var card=wrap.querySelector('.list-card');
+    if(!card)return;
+    var startX,startY,moved=false;
+
+    function cancelPress(){
+      clearTimeout(pressTimer);pressTimer=null;
+    }
+
+    wrap.addEventListener('touchstart',function(e){
+      if(dragging)return;
+      /* スワイプ済みなら長押し無効 */
+      var inner=wrap.querySelector('.swipe-inner');
+      if(inner&&inner.classList.contains('swiped'))return;
+      startX=e.touches[0].clientX;startY=e.touches[0].clientY;moved=false;
+      pressTimer=setTimeout(function(){
+        if(moved)return;
+        /* ドラッグ開始 */
+        dragging=true;
+        srcWrap=wrap;srcCard=card;
+        srcLid=wrap.getAttribute('data-lid');
+        card.classList.add('dragging-src');
+        ghost=createGhost(wrap,startX,startY);
+        if(navigator.vibrate)navigator.vibrate(40);
+      },LONG_PRESS_MS);
+    },{passive:true});
+
+    wrap.addEventListener('touchmove',function(e){
+      if(!dragging&&pressTimer){
+        var dx=Math.abs(e.touches[0].clientX-startX);
+        var dy=Math.abs(e.touches[0].clientY-startY);
+        if(dx>8||dy>8){moved=true;cancelPress();}
+        return;
+      }
+      if(!dragging)return;
+      e.preventDefault();
+      var tx=e.touches[0].clientX,ty=e.touches[0].clientY;
+      moveGhost(tx,ty);
+      clearHighlights();
+      var target=findDropTarget(tx,ty);
+      if(target){
+        if(target.type==='folder'){
+          var fb=container.querySelector('.folder-block[data-fid="'+target.fid+'"]');
+          if(fb)fb.querySelector('.folder-hdr').classList.add('folder-drop-target');
+        } else if(target.type==='nofolder'){
+          target.el.classList.add('nofolder-drop-target');
+        }
+      }
+      /* 自動スクロール */
+      var margin=80;
+      var scrollSpeed=8;
+      if(scrollEl){
+        var sr=scrollEl.getBoundingClientRect();
+        if(ty<sr.top+margin) scrollEl.scrollTop-=scrollSpeed;
+        else if(ty>sr.bottom-margin) scrollEl.scrollTop+=scrollSpeed;
+      }
+    },{passive:false});
+
+    function onTouchEnd(e){
+      cancelPress();
+      if(!dragging)return;
+      dragging=false;
+      /* ゴースト削除 */
+      if(ghost){ghost.parentNode&&ghost.parentNode.removeChild(ghost);ghost=null;}
+      clearHighlights();
+      if(srcCard)srcCard.classList.remove('dragging-src');
+
+      var tx=e.changedTouches[0].clientX,ty=e.changedTouches[0].clientY;
+      var target=findDropTarget(tx,ty);
+      var lst=G.lists.find(function(l){return l.id===srcLid;});
+      if(lst&&target){
+        var oldFid=lst.fid||null;
+        var newFid=target.type==='folder'?target.fid:null;
+        if(oldFid!==newFid){
+          lst.fid=newFid;
+          save();homeRefresh();
+          var folderName=target.type==='folder'?'📁 '+target.folder.name:'未分類';
+          toast('✅ 「'+lst.name+'」を '+folderName+' に移動しました');
+          return;
+        }
+      }
+      srcWrap=null;srcCard=null;srcLid=null;
+    }
+    wrap.addEventListener('touchend',onTouchEnd,{passive:true});
+    wrap.addEventListener('touchcancel',onTouchEnd,{passive:true});
   });
 }
 
@@ -2084,15 +2336,22 @@ function mkCard(l,v){return'<div style="background:var(--sf2);border-radius:9px;
 /* ── リスト編集モーダル ── */
 function editList(lid){
   var lst=G.lists.find(function(x){return x.id===lid;});if(!lst)return;
+  if(!G.folders) G.folders=[];
   var langOpts=Object.entries(LANGS).map(function(kv){
     return '<option value="'+kv[0]+'"'+(lst.lang===kv[0]?' selected':'')+'>'+kv[1].flag+' '+kv[1].name+'</option>';
+  }).join('');
+  var folderOpts='<option value=""'+((!lst.fid||!G.folders.some(function(f){return f.id===lst.fid;}))?' selected':'')+'>（未分類）</option>';
+  folderOpts+=G.folders.map(function(f){
+    return '<option value="'+f.id+'"'+(lst.fid===f.id?' selected':'')+'>📁 '+escHtml(f.name)+'</option>';
   }).join('');
   el('modal-ct').innerHTML=
     '<div class="modal-tl">✏️ リストを編集</div>'+
     '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">リスト名</div>'+
     '<input class="inp" id="EL-name" type="text" value="'+escHtml(lst.name)+'" style="margin-bottom:12px">'+
     '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">言語</div>'+
-    '<select class="inp" id="EL-lang" style="margin-bottom:16px">'+langOpts+'</select>'+
+    '<select class="inp" id="EL-lang" style="margin-bottom:12px">'+langOpts+'</select>'+
+    '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">フォルダ</div>'+
+    '<select class="inp" id="EL-folder" style="margin-bottom:16px">'+folderOpts+'</select>'+
     '<button class="btn-primary" id="EL-save" style="margin-bottom:8px">💾 保存</button>'+
     '<button class="btn-sec" id="EL-cancel" style="margin-top:0">キャンセル</button>';
   el('modal-bg').classList.add('on');
@@ -2102,11 +2361,65 @@ function editList(lid){
     if(!name){toast('リスト名を入力してください');return;}
     lst.name=name;
     lst.lang=el('EL-lang').value;
+    lst.fid=el('EL-folder').value||null;
     save();el('modal-bg').classList.remove('on');
     homeRefresh();listFilterRebuild();listRender();
     toast('✅ リストを更新しました');
   });
   el('EL-cancel').addEventListener('click',function(){el('modal-bg').classList.remove('on');});
+}
+
+/* ── フォルダ作成 ── */
+function createFolder(){
+  if(!G.folders) G.folders=[];
+  el('modal-ct').innerHTML=
+    '<div class="modal-tl">📁 新規フォルダ</div>'+
+    '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">フォルダ名</div>'+
+    '<input class="inp" id="CF-name" type="text" placeholder="例: 英検準1級、仕事用" style="margin-bottom:16px">'+
+    '<button class="btn-primary" id="CF-save" style="margin-bottom:8px">📁 作成</button>'+
+    '<button class="btn-sec" id="CF-cancel" style="margin-top:0">キャンセル</button>';
+  el('modal-bg').classList.add('on');
+  setTimeout(function(){var n=el('CF-name');if(n){n.focus();}},100);
+  el('CF-save').addEventListener('click',function(){
+    var name=(el('CF-name').value||'').trim();
+    if(!name){toast('フォルダ名を入力してください');return;}
+    G.folders.push({id:uid(),name:name,collapsed:false});
+    save();el('modal-bg').classList.remove('on');
+    homeRefresh();toast('📁 フォルダ「'+name+'」を作成しました');
+  });
+  el('CF-cancel').addEventListener('click',function(){el('modal-bg').classList.remove('on');});
+}
+
+/* ── フォルダ編集 ── */
+function editFolder(fid){
+  if(!G.folders) G.folders=[];
+  var folder=G.folders.find(function(f){return f.id===fid;});if(!folder)return;
+  var listsInFolder=G.lists.filter(function(l){return l.fid===fid;});
+  el('modal-ct').innerHTML=
+    '<div class="modal-tl">📁 フォルダを編集</div>'+
+    '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">フォルダ名</div>'+
+    '<input class="inp" id="EF-name" type="text" value="'+escHtml(folder.name)+'" style="margin-bottom:16px">'+
+    '<button class="btn-primary" id="EF-save" style="margin-bottom:8px">💾 保存</button>'+
+    '<button class="btn-sec" id="EF-cancel" style="margin-top:0;margin-bottom:8px">キャンセル</button>'+
+    '<button class="del-btn" id="EF-del">🗑️ フォルダを削除（リストは残す）</button>';
+  el('modal-bg').classList.add('on');
+  setTimeout(function(){var n=el('EF-name');if(n){n.focus();n.select();}},100);
+  el('EF-save').addEventListener('click',function(){
+    var name=(el('EF-name').value||'').trim();
+    if(!name){toast('フォルダ名を入力してください');return;}
+    folder.name=name;
+    save();el('modal-bg').classList.remove('on');
+    homeRefresh();toast('✅ フォルダを更新しました');
+  });
+  el('EF-cancel').addEventListener('click',function(){el('modal-bg').classList.remove('on');});
+  el('EF-del').addEventListener('click',function(){
+    if(!confirm('フォルダ「'+folder.name+'」を削除しますか？\n（フォルダ内の'+listsInFolder.length+'件のリストは未分類に移動します）'))return;
+    /* フォルダに入っていたリストのfidを解除 */
+    G.lists.forEach(function(l){if(l.fid===fid)l.fid=null;});
+    G.folders=G.folders.filter(function(f){return f.id!==fid;});
+    save();el('modal-bg').classList.remove('on');
+    homeRefresh();toast('🗑️ フォルダを削除しました');
+  });
 }
 
 /* ── 単語編集モーダル ── */
@@ -3410,6 +3723,7 @@ function bind(){
   el('B-test-list').addEventListener('click',function(){showListSelectModal('test');});
   el('B-report').addEventListener('click',function(){showReportModal();});
   el('B-new-list').addEventListener('click',function(){go('s-add');});
+  el('B-new-folder').addEventListener('click',function(){createFolder();});
 
   el('B-add-back').addEventListener('click',function(){go('s-home');});
   el('SG-paste').addEventListener('click',function(){segSwitch('paste');});
