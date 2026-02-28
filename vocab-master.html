@@ -268,6 +268,20 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 .nofolder-drop-target { outline:2px dashed var(--ac2); outline-offset:-2px; border-radius:8px; background:rgba(252,92,125,.08); }
 .drag-hint { position:absolute; top:-22px; left:50%; transform:translateX(-50%); background:var(--ac); color:#fff; font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .15s; }
 .drag-hint.on { opacity:1; }
+.folder-dragging-src { opacity:.35; }
+.folder-drag-ghost { position:fixed; pointer-events:none; z-index:500; opacity:.85; transform:scale(1.03); box-shadow:0 8px 32px rgba(0,0,0,.6); border-radius:var(--r); left:0; top:0; background:var(--sf); padding:10px 14px; display:flex; align-items:center; gap:8px; min-width:160px; }
+.subfolder-indent { margin-left:12px; }
+/* 階層ごとの左ライン＋背景で深さを表現 */
+.folder-body { position:relative; }
+.folder-body > .folder-block { border-left:2px solid rgba(124,92,252,.28); margin-left:10px; padding-left:10px; border-radius:0 0 0 6px; background:rgba(124,92,252,.04); border-radius:0 8px 8px 0; margin-bottom:6px; }
+.folder-body > .folder-block > .folder-hdr { padding-left:0; }
+.folder-body > .folder-block > .folder-body > .folder-block { border-left:2px solid rgba(92,248,252,.22); background:rgba(92,248,252,.03); }
+/* 各階層のフォルダヘッダーに薄い背景 */
+.folder-block[data-depth="0"] > .folder-hdr { background:rgba(255,255,255,.03); border-radius:10px; padding-left:8px; }
+.folder-block[data-depth="1"] > .folder-hdr { background:rgba(124,92,252,.07); border-radius:8px; padding-left:6px; }
+.folder-block[data-depth="2"] > .folder-hdr { background:rgba(92,248,252,.07); border-radius:7px; padding-left:6px; }
+/* リストカードもインデント内では少し縮める */
+.folder-body > .swipe-wrap { margin-left:2px; }
 </style>
 </head>
 <body>
@@ -1144,15 +1158,10 @@ function homeRefresh(){
 }
 function homeListsRender(){
   var c=el('H-lists');
-  if(!G.lists.length){c.innerHTML='<div class="empty"><div class="empty-ic">📖</div><div class="empty-tl">単語リストなし</div><div class="empty-sub">「単語を追加」から<br>新しい単語を登録しよう</div></div>';return;}
+  if(!G.lists.length&&!(G.folders&&G.folders.length)){c.innerHTML='<div class="empty"><div class="empty-ic">📖</div><div class="empty-tl">単語リストなし</div><div class="empty-sub">「単語を追加」から<br>新しい単語を登録しよう</div></div>';return;}
 
   /* フォルダが未初期化の場合に備える */
   if(!G.folders) G.folders=[];
-
-  /* フォルダごとにリストをグループ化 */
-  var folders=G.folders;
-  var folderedIds={};
-  folders.forEach(function(f){ folderedIds[f.id]=true; });
 
   /* 各フォルダのリストカードHTMLを生成する共通関数 */
   function renderListCard(lst){
@@ -1183,36 +1192,58 @@ function homeListsRender(){
     '</div>';
   }
 
-  var h='';
-
-  /* フォルダブロックを描画 */
-  folders.forEach(function(folder){
+  /* フォルダブロックを再帰描画する関数 (depth: ネストの深さ) */
+  function renderFolder(folder, depth){
+    depth=depth||0;
     var folderLists=G.lists.filter(function(l){return l.fid===folder.id;});
+    var subFolders=G.folders.filter(function(f){return f.parentId===folder.id;});
     var totalWords=folderLists.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id;}).length;},0);
     var dueWords=folderLists.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id&&due(w);}).length;},0);
+    /* サブフォルダ内の集計も加える */
+    function countInSubfolders(fid){
+      var sf=G.folders.filter(function(f){return f.parentId===fid;});
+      var sl=G.lists.filter(function(l){return l.fid===fid;});
+      var tw=sl.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id;}).length;},0);
+      var dw=sl.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id&&due(w);}).length;},0);
+      sf.forEach(function(f){var r=countInSubfolders(f.id);tw+=r.tw;dw+=r.dw;});
+      return{tw:tw,dw:dw};
+    }
+    var sub=countInSubfolders(folder.id);
+    totalWords+=sub.tw; dueWords+=sub.dw;
     var isOpen=!folder.collapsed;
-    /* フォルダ内のリスト全体の高さを予測するためにmax-heightは大きめに設定 */
-    h+='<div class="folder-block" data-fid="'+esc(folder.id)+'">'+
+    var indent=depth>0?'class="subfolder-indent"':'';
+    var fic=depth>0?'📂':'📁';
+    var innerContent='';
+    /* サブフォルダを先に描画 */
+    subFolders.forEach(function(sf){ innerContent+=renderFolder(sf,depth+1); });
+    /* リスト */
+    folderLists.forEach(function(lst){ innerContent+=renderListCard(lst); });
+    if(!subFolders.length&&!folderLists.length){
+      innerContent='<div style="padding:10px 8px 6px;font-size:12px;color:var(--tx2)">リストなし</div>';
+    }
+    return '<div class="folder-block" data-fid="'+esc(folder.id)+'" data-depth="'+depth+'">'+
       '<div class="folder-hdr" data-fid="'+esc(folder.id)+'">'+
         '<span class="folder-arrow'+(isOpen?' open':'')+'">▶</span>'+
-        '<span class="folder-ic">📁</span>'+
+        '<span class="folder-ic">'+fic+'</span>'+
         '<span class="folder-name">'+esc(folder.name)+'</span>'+
-        '<span class="folder-count">'+folderLists.length+'リスト'+(dueWords?' · 復習'+dueWords+'件':'')+'</span>'+
+        '<span class="folder-count">'+(subFolders.length?subFolders.length+'フォルダ・':'')+folderLists.length+'リスト'+(dueWords?' · 復習'+dueWords+'件':'')+'</span>'+
         '<button class="folder-edit-btn" data-fid="'+esc(folder.id)+'" title="フォルダを編集">···</button>'+
       '</div>'+
-      '<div class="folder-body'+(isOpen?'':' collapsed')+'" data-fid="'+esc(folder.id)+'" style="max-height:'+(isOpen?'9999px':'0')+'">';
-    if(folderLists.length===0){
-      h+='<div style="padding:10px 8px 6px;font-size:12px;color:var(--tx2)">リストなし</div>';
-    } else {
-      folderLists.forEach(function(lst){ h+=renderListCard(lst); });
-    }
-    h+='</div></div>';
-  });
+      '<div class="folder-body'+(isOpen?'':' collapsed')+'" data-fid="'+esc(folder.id)+'" style="max-height:'+(isOpen?'9999px':'0')+'">'+
+        innerContent+
+      '</div></div>';
+  }
+
+  var h='';
+
+  /* ルートフォルダ（parentIdがない or undefinedのもの）を描画 */
+  var rootFolders=G.folders.filter(function(f){return !f.parentId;});
+  rootFolders.forEach(function(folder){ h+=renderFolder(folder,0); });
 
   /* フォルダなしのリスト */
   var noFolderLists=G.lists.filter(function(l){return !l.fid || !G.folders.some(function(f){return f.id===l.fid;});});
   if(noFolderLists.length>0){
-    if(folders.length>0){
+    if(rootFolders.length>0){
       h+='<div class="no-folder-hdr">未分類</div>';
     }
     noFolderLists.forEach(function(lst){ h+=renderListCard(lst); });
@@ -1317,23 +1348,34 @@ function homeListsRender(){
 }
 
 /* =========================================================
-   タッチ ドラッグ & ドロップ（リスト → フォルダ移動）
+   タッチ ドラッグ & ドロップ（リスト → フォルダ移動 + フォルダ → フォルダ移動）
    ========================================================= */
 function initListDragDrop(container){
   var LONG_PRESS_MS=480;
   var ghost=null, srcWrap=null, srcCard=null, srcLid=null;
-  var pressTimer=null, dragging=false;
+  var srcFolderBlock=null, srcFid=null; /* フォルダドラッグ用 */
+  var pressTimer=null, dragging=false, dragType=null; /* dragType: 'list' | 'folder' */
   var scrollEl=document.getElementById('s-home').querySelector('.scroll');
 
-  /* ゴースト生成 */
+  /* ゴースト生成（リスト用） */
   function createGhost(wrap, touchX, touchY){
     var g=wrap.cloneNode(true);
     g.className='drag-ghost';
     var r=wrap.getBoundingClientRect();
     g.style.width=r.width+'px';
-    /* ゴーストの位置を指の位置に合わせる */
     g.style.left=(touchX-r.width/2)+'px';
     g.style.top=(touchY-r.height/2)+'px';
+    document.body.appendChild(g);
+    return g;
+  }
+
+  /* ゴースト生成（フォルダ用） */
+  function createFolderGhost(folder, touchX, touchY){
+    var g=document.createElement('div');
+    g.className='folder-drag-ghost';
+    g.innerHTML='<span style="font-size:18px">📂</span><span style="font-size:13px;font-weight:600">'+esc(folder.name)+'</span>';
+    g.style.left=(touchX-80)+'px';
+    g.style.top=(touchY-22)+'px';
     document.body.appendChild(g);
     return g;
   }
@@ -1353,14 +1395,16 @@ function initListDragDrop(container){
   }
 
   /* タッチ座標でフォルダヘッダーまたは未分類エリアを特定 */
-  function findDropTarget(x, y){
+  function findDropTarget(x, y, excludeFid){
     var els=document.elementsFromPoint(x,y);
     for(var i=0;i<els.length;i++){
       var e=els[i];
       /* フォルダヘッダー or フォルダボディ */
       if(e.classList.contains('folder-hdr')||e.classList.contains('folder-block')||e.classList.contains('folder-body')||e.classList.contains('folder-arrow')||e.classList.contains('folder-ic')||e.classList.contains('folder-name')||e.classList.contains('folder-count')){
         var fid=e.getAttribute('data-fid')||(e.closest('[data-fid]')&&e.closest('[data-fid]').getAttribute('data-fid'));
-        if(fid){
+        if(fid&&fid!==excludeFid){
+          /* 循環参照チェック: excludeFidの子孫にはドロップ不可 */
+          if(excludeFid&&isDescendant(fid, excludeFid)) continue;
           var folder=G.folders.find(function(f){return f.id===fid;});
           if(folder) return {type:'folder',fid:fid,folder:folder,el:e.closest('.folder-block')||e};
         }
@@ -1373,7 +1417,16 @@ function initListDragDrop(container){
     return null;
   }
 
-  /* 長押し検出 — 各 swipe-wrap に付与 */
+  /* fid2がfid1の子孫かチェック */
+  function isDescendant(fid2, fid1){
+    var f=G.folders.find(function(x){return x.id===fid2;});
+    if(!f) return false;
+    if(f.parentId===fid1) return true;
+    if(!f.parentId) return false;
+    return isDescendant(f.parentId, fid1);
+  }
+
+  /* 長押し検出 — 各 swipe-wrap に付与（リストのD&D） */
   container.querySelectorAll('.swipe-wrap').forEach(function(wrap){
     var card=wrap.querySelector('.list-card');
     if(!card)return;
@@ -1392,7 +1445,7 @@ function initListDragDrop(container){
       pressTimer=setTimeout(function(){
         if(moved)return;
         /* ドラッグ開始 */
-        dragging=true;
+        dragging=true; dragType='list';
         srcWrap=wrap;srcCard=card;
         srcLid=wrap.getAttribute('data-lid');
         card.classList.add('dragging-src');
@@ -1408,12 +1461,12 @@ function initListDragDrop(container){
         if(dx>8||dy>8){moved=true;cancelPress();}
         return;
       }
-      if(!dragging)return;
+      if(!dragging||dragType!=='list')return;
       e.preventDefault();
       var tx=e.touches[0].clientX,ty=e.touches[0].clientY;
       moveGhost(tx,ty);
       clearHighlights();
-      var target=findDropTarget(tx,ty);
+      var target=findDropTarget(tx,ty,null);
       if(target){
         if(target.type==='folder'){
           var fb=container.querySelector('.folder-block[data-fid="'+target.fid+'"]');
@@ -1423,26 +1476,20 @@ function initListDragDrop(container){
         }
       }
       /* 自動スクロール */
-      var margin=80;
-      var scrollSpeed=8;
-      if(scrollEl){
-        var sr=scrollEl.getBoundingClientRect();
-        if(ty<sr.top+margin) scrollEl.scrollTop-=scrollSpeed;
-        else if(ty>sr.bottom-margin) scrollEl.scrollTop+=scrollSpeed;
-      }
+      var margin=80,scrollSpeed=8;
+      if(scrollEl){var sr=scrollEl.getBoundingClientRect();if(ty<sr.top+margin)scrollEl.scrollTop-=scrollSpeed;else if(ty>sr.bottom-margin)scrollEl.scrollTop+=scrollSpeed;}
     },{passive:false});
 
     function onTouchEnd(e){
-      cancelPress();
-      if(!dragging)return;
-      dragging=false;
-      /* ゴースト削除 */
+      clearTimeout(pressTimer);pressTimer=null;
+      if(!dragging||dragType!=='list')return;
+      dragging=false; dragType=null;
       if(ghost){ghost.parentNode&&ghost.parentNode.removeChild(ghost);ghost=null;}
       clearHighlights();
       if(srcCard)srcCard.classList.remove('dragging-src');
 
       var tx=e.changedTouches[0].clientX,ty=e.changedTouches[0].clientY;
-      var target=findDropTarget(tx,ty);
+      var target=findDropTarget(tx,ty,null);
       var lst=G.lists.find(function(l){return l.id===srcLid;});
       if(lst&&target){
         var oldFid=lst.fid||null;
@@ -1459,6 +1506,86 @@ function initListDragDrop(container){
     }
     wrap.addEventListener('touchend',onTouchEnd,{passive:true});
     wrap.addEventListener('touchcancel',onTouchEnd,{passive:true});
+  });
+
+  /* 長押し検出 — 各 folder-block に付与（フォルダのD&D） */
+  container.querySelectorAll('.folder-block').forEach(function(block){
+    var hdr=block.querySelector('.folder-block > .folder-hdr, .folder-hdr');
+    if(!hdr)return;
+    var fid=block.getAttribute('data-fid');
+    var folder=G.folders.find(function(f){return f.id===fid;});
+    if(!folder)return;
+    var startX,startY,moved=false;
+
+    function cancelFolderPress(){
+      clearTimeout(pressTimer);pressTimer=null;
+    }
+
+    hdr.addEventListener('touchstart',function(e){
+      if(dragging)return;
+      if(e.target.classList.contains('folder-edit-btn'))return;
+      startX=e.touches[0].clientX;startY=e.touches[0].clientY;moved=false;
+      pressTimer=setTimeout(function(){
+        if(moved)return;
+        dragging=true; dragType='folder';
+        srcFolderBlock=block; srcFid=fid;
+        block.classList.add('folder-dragging-src');
+        ghost=createFolderGhost(folder,startX,startY);
+        if(navigator.vibrate)navigator.vibrate(60);
+      },LONG_PRESS_MS);
+    },{passive:true});
+
+    hdr.addEventListener('touchmove',function(e){
+      if(!dragging&&pressTimer){
+        var dx=Math.abs(e.touches[0].clientX-startX);
+        var dy=Math.abs(e.touches[0].clientY-startY);
+        if(dx>8||dy>8){moved=true;cancelFolderPress();}
+        return;
+      }
+      if(!dragging||dragType!=='folder')return;
+      e.preventDefault();
+      var tx=e.touches[0].clientX,ty=e.touches[0].clientY;
+      /* フォルダゴーストを指に追従 */
+      if(ghost){ghost.style.left=(tx-80)+'px';ghost.style.top=(ty-22)+'px';}
+      clearHighlights();
+      var target=findDropTarget(tx,ty,srcFid);
+      if(target&&target.type==='folder'){
+        var fb=container.querySelector('.folder-block[data-fid="'+target.fid+'"]');
+        if(fb)fb.querySelector(':scope > .folder-hdr').classList.add('folder-drop-target');
+      } else if(target&&target.type==='nofolder'){
+        target.el.classList.add('nofolder-drop-target');
+      }
+      /* 自動スクロール */
+      var margin=80,scrollSpeed=8;
+      if(scrollEl){var sr=scrollEl.getBoundingClientRect();if(ty<sr.top+margin)scrollEl.scrollTop-=scrollSpeed;else if(ty>sr.bottom-margin)scrollEl.scrollTop+=scrollSpeed;}
+    },{passive:false});
+
+    function onFolderTouchEnd(e){
+      clearTimeout(pressTimer);pressTimer=null;
+      if(!dragging||dragType!=='folder')return;
+      dragging=false; dragType=null;
+      if(ghost){ghost.parentNode&&ghost.parentNode.removeChild(ghost);ghost=null;}
+      clearHighlights();
+      if(srcFolderBlock)srcFolderBlock.classList.remove('folder-dragging-src');
+
+      var tx=e.changedTouches[0].clientX,ty=e.changedTouches[0].clientY;
+      var target=findDropTarget(tx,ty,srcFid);
+      var srcFolder=G.folders.find(function(f){return f.id===srcFid;});
+      if(srcFolder&&target){
+        var oldParent=srcFolder.parentId||null;
+        var newParent=target.type==='folder'?target.fid:null;
+        if(oldParent!==newParent){
+          srcFolder.parentId=newParent;
+          save();homeRefresh();
+          var targetName=target.type==='folder'?'📁 '+target.folder.name:'ルート';
+          toast('✅ フォルダ「'+srcFolder.name+'」を '+targetName+' に移動しました');
+          return;
+        }
+      }
+      srcFolderBlock=null; srcFid=null;
+    }
+    hdr.addEventListener('touchend',onFolderTouchEnd,{passive:true});
+    hdr.addEventListener('touchcancel',onFolderTouchEnd,{passive:true});
   });
 }
 
@@ -2457,10 +2584,14 @@ function editList(lid){
 }
 
 /* ── フォルダ作成 ── */
-function createFolder(){
+function createFolder(parentId){
   if(!G.folders) G.folders=[];
+  var parentFolder=parentId?G.folders.find(function(f){return f.id===parentId;}):null;
+  var title=parentFolder?'📂 サブフォルダを作成':'📁 新規フォルダ';
+  var hint=parentFolder?'<div style="font-size:11px;color:var(--tx2);margin-bottom:10px">親フォルダ: 📁 '+esc(parentFolder.name)+'</div>':'';
   el('modal-ct').innerHTML=
-    '<div class="modal-tl">📁 新規フォルダ</div>'+
+    '<div class="modal-tl">'+title+'</div>'+
+    hint+
     '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">フォルダ名</div>'+
     '<input class="inp" id="CF-name" type="text" placeholder="例: 英検準1級、仕事用" style="margin-bottom:16px">'+
     '<button class="btn-primary" id="CF-save" style="margin-bottom:8px">📁 作成</button>'+
@@ -2470,7 +2601,9 @@ function createFolder(){
   el('CF-save').addEventListener('click',function(){
     var name=(el('CF-name').value||'').trim();
     if(!name){toast('フォルダ名を入力してください');return;}
-    G.folders.push({id:uid(),name:name,collapsed:false});
+    var newFolder={id:uid(),name:name,collapsed:false};
+    if(parentId) newFolder.parentId=parentId;
+    G.folders.push(newFolder);
     save();el('modal-bg').classList.remove('on');
     homeRefresh();toast('📁 フォルダ「'+name+'」を作成しました');
   });
@@ -2482,11 +2615,31 @@ function editFolder(fid){
   if(!G.folders) G.folders=[];
   var folder=G.folders.find(function(f){return f.id===fid;});if(!folder)return;
   var listsInFolder=G.lists.filter(function(l){return l.fid===fid;});
+  var subFolders=G.folders.filter(function(f){return f.parentId===fid;});
+  var parentFolder=folder.parentId?G.folders.find(function(f){return f.id===folder.parentId;}):null;
+
+  /* 移動先フォルダ選択肢（自分自身と子孫を除く） */
+  function isDescOf(f2id, f1id){
+    var f=G.folders.find(function(x){return x.id===f2id;});
+    if(!f) return false;
+    if(f.parentId===f1id) return true;
+    if(!f.parentId) return false;
+    return isDescOf(f.parentId, f1id);
+  }
+  var moveOpts='<option value="">ルート（トップレベル）</option>';
+  G.folders.forEach(function(f){
+    if(f.id===fid||isDescOf(f.id,fid)) return; /* 自分・子孫は除外 */
+    moveOpts+='<option value="'+esc(f.id)+'"'+(folder.parentId===f.id?' selected':'')+'>📁 '+esc(f.name)+'</option>';
+  });
+
   el('modal-ct').innerHTML=
     '<div class="modal-tl">📁 フォルダを編集</div>'+
     '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">フォルダ名</div>'+
-    '<input class="inp" id="EF-name" type="text" value="'+escHtml(folder.name)+'" style="margin-bottom:16px">'+
+    '<input class="inp" id="EF-name" type="text" value="'+escHtml(folder.name)+'" style="margin-bottom:10px">'+
+    '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">📂 親フォルダ</div>'+
+    '<select class="inp" id="EF-parent" style="margin-bottom:16px">'+moveOpts+'</select>'+
     '<button class="btn-primary" id="EF-save" style="margin-bottom:8px">💾 保存</button>'+
+    '<button class="btn-sec" id="EF-subfolder" style="margin-top:0;margin-bottom:8px">📂 サブフォルダを作成</button>'+
     '<button class="btn-sec" id="EF-cancel" style="margin-top:0;margin-bottom:8px">キャンセル</button>'+
     '<button class="del-btn" id="EF-del">🗑️ フォルダを削除（リストは残す）</button>';
   el('modal-bg').classList.add('on');
@@ -2495,15 +2648,29 @@ function editFolder(fid){
     var name=(el('EF-name').value||'').trim();
     if(!name){toast('フォルダ名を入力してください');return;}
     folder.name=name;
+    var newParent=el('EF-parent').value||null;
+    folder.parentId=newParent||undefined;
     save();el('modal-bg').classList.remove('on');
     homeRefresh();toast('✅ フォルダを更新しました');
   });
+  el('EF-subfolder').addEventListener('click',function(){
+    el('modal-bg').classList.remove('on');
+    setTimeout(function(){createFolder(fid);},150);
+  });
   el('EF-cancel').addEventListener('click',function(){el('modal-bg').classList.remove('on');});
   el('EF-del').addEventListener('click',function(){
-    if(!confirm('フォルダ「'+folder.name+'」を削除しますか？\n（フォルダ内の'+listsInFolder.length+'件のリストは未分類に移動します）'))return;
-    /* フォルダに入っていたリストのfidを解除 */
-    G.lists.forEach(function(l){if(l.fid===fid)l.fid=null;});
-    G.folders=G.folders.filter(function(f){return f.id!==fid;});
+    var totalSub=subFolders.length;
+    var msg='フォルダ「'+folder.name+'」を削除しますか？\n（フォルダ内の'+listsInFolder.length+'件のリストは未分類に移動します）';
+    if(totalSub>0) msg+='\n※ サブフォルダ '+totalSub+'件 もすべて削除されます';
+    if(!confirm(msg))return;
+    /* 再帰的にサブフォルダを削除し、リストのfidを解除 */
+    function removeFolder(rfid){
+      G.lists.forEach(function(l){if(l.fid===rfid)l.fid=null;});
+      var subs=G.folders.filter(function(f){return f.parentId===rfid;});
+      subs.forEach(function(sf){removeFolder(sf.id);});
+      G.folders=G.folders.filter(function(f){return f.id!==rfid;});
+    }
+    removeFolder(fid);
     save();el('modal-bg').classList.remove('on');
     homeRefresh();toast('🗑️ フォルダを削除しました');
   });
