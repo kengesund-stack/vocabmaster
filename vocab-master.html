@@ -329,9 +329,22 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     <div id="TP-paste">
       <div class="lbl">リスト名</div>
       <input class="inp" id="IN-paste-name" type="text" placeholder="例: ドイツ語基礎単語">
-      <div class="lbl">単語リスト（1行1単語 または「単語,訳」形式）</div>
+      <div class="lbl">テキスト / JSON を貼り付け</div>
       <textarea class="inp ta" id="IN-paste-text" placeholder="例:&#10;Haus&#10;Schule,学校&#10;arbeiten&#10;schön,美しい"></textarea>
-      <div class="hint">訳なしの単語はAPIキー設定でAI自動翻訳できます</div>
+      <!-- JSON検出時に表示されるオプション -->
+      <div id="PASTE-json-opts" style="display:none;margin-bottom:10px">
+        <div style="background:rgba(92,248,252,.07);border:1px solid rgba(92,248,252,.2);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:var(--ac3);line-height:1.7">
+          📗 <b>JSONテキストを検出しました</b><br>
+          <span style="color:var(--tx2)">book_title・vocabulary・phrases などを自動認識します</span>
+        </div>
+        <div class="lbl">取り込みセクション</div>
+        <div style="display:flex;gap:7px;margin-bottom:8px">
+          <button class="opt-btn on" data-pjsec="all" id="PJSEC-all" style="flex:1;padding:7px;font-size:11px">📦<br>すべて</button>
+          <button class="opt-btn" data-pjsec="vocabulary" id="PJSEC-vocab" style="flex:1;padding:7px;font-size:11px">📝<br>単語のみ</button>
+          <button class="opt-btn" data-pjsec="phrases" id="PJSEC-phrase" style="flex:1;padding:7px;font-size:11px">💬<br>熟語のみ</button>
+        </div>
+      </div>
+      <div class="hint" id="PASTE-hint">テキスト形式（1行1単語 / 「単語,訳」）または JSON テキストをそのまま貼り付けられます。訳なしの単語はAPIキー設定でAI自動翻訳できます。</div>
       <button class="btn-primary" id="B-parse">🔍 解析する</button>
     </div>
 
@@ -694,7 +707,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
       <div class="set-row" id="B-import-row"><span class="set-lbl">📥 インポート（追加統合）</span><span class="set-val">→</span></div>
       <div class="set-row" id="B-reset"><span class="set-lbl" style="color:var(--rd)">🗑️ すべて削除</span><span class="set-val">→</span></div>
     </div>
-    <div style="text-align:center;padding:16px;color:var(--tx2);font-size:11px">VocabMaster v2.0 — 多言語対応版</div>
+    <div style="text-align:center;padding:16px;color:var(--tx2);font-size:11px">VocabMaster v2.1 — 多言語対応版</div>
     <div style="height:20px"></div>
   </div>
 </div>
@@ -1138,6 +1151,29 @@ function setLang(lang){
   var ta=el('IN-paste-text');if(ta)ta.placeholder=ph[lang]||ph.en;
 }
 
+/* JSON貼り付けモード用セクション */
+var pasteJsonSection='all';
+function setPasteJsonSection(sec){
+  pasteJsonSection=sec;
+  document.querySelectorAll('[data-pjsec]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-pjsec')===sec);});
+}
+
+/* テキストエリア入力でJSON検出してオプション表示 */
+function pasteDetectJson(){
+  var txt=(el('IN-paste-text').value||'').trim();
+  var isJson=txt.charAt(0)==='{' || txt.charAt(0)==='[';
+  var optsEl=el('PASTE-json-opts');
+  var hintEl=el('PASTE-hint');
+  if(optsEl) optsEl.style.display=isJson?'block':'none';
+  if(hintEl){
+    if(isJson){
+      hintEl.textContent='📗 JSON を認識しました。リスト名は JSON 内の book_title / title から自動設定されます。';
+    } else {
+      hintEl.textContent='テキスト形式（1行1単語 / 「単語,訳」）または JSON テキストをそのまま貼り付けられます。訳なしの単語はAPIキー設定でAI自動翻訳できます。';
+    }
+  }
+}
+
 function parsePaste(){
   var txt=el('IN-paste-text').value.trim();
   if(!txt){toast('テキストを入力してください');return;}
@@ -1147,6 +1183,8 @@ function parsePaste(){
   if(trimmed.charAt(0)==='{' || trimmed.charAt(0)==='['){
     try{
       var jd=JSON.parse(txt);
+
+      /* 言語自動検出 */
       var LANG_KEY_MAP={german:'de',deutsch:'de',french:'fr',français:'fr',spanish:'es',italiano:'it',english:'en'};
       if(typeof jd==='object'&&!Array.isArray(jd)){
         Object.keys(jd).forEach(function(k){
@@ -1156,6 +1194,15 @@ function parsePaste(){
           });
         });
       }
+
+      /* リスト名の自動設定 */
+      var ni=el('IN-paste-name');
+      if(ni&&!ni.value){
+        var autoName=jd.book_title||jd.title||jd.name||'';
+        if(autoName) ni.value=autoName;
+      }
+
+      /* 単語配列を取り出す汎用関数 */
       function extractJW(arr){
         if(!Array.isArray(arr))return[];
         return arr.map(function(item){
@@ -1164,20 +1211,45 @@ function parsePaste(){
           return w?{word:String(w).trim(),meaning:String(m).trim()}:null;
         }).filter(Boolean);
       }
+
       var jwords=[];
+
+      /* パターンC: {"content":{"vocabulary":[...],"phrases":[...]}} */
       if(jd.content&&typeof jd.content==='object'){
-        jwords=extractJW(jd.content.vocabulary||jd.content.words||[]).concat(extractJW(jd.content.phrases||[]));
-      } else if(Array.isArray(jd.words)){jwords=extractJW(jd.words);}
+        var vocab=extractJW(jd.content.vocabulary||jd.content.words||[]);
+        var phrases=extractJW(jd.content.phrases||jd.content.expressions||[]);
+        if(pasteJsonSection==='vocabulary'){jwords=vocab;}
+        else if(pasteJsonSection==='phrases'){jwords=phrases;}
+        else{jwords=vocab.concat(phrases);}
+        /* セクション別にリスト名サフィックスを付ける */
+        if(ni&&ni.value&&(vocab.length>0||phrases.length>0)){
+          if(pasteJsonSection==='vocabulary') ni.value=ni.value.replace(/ \[単語\]$/,'')+' [単語]';
+          else if(pasteJsonSection==='phrases') ni.value=ni.value.replace(/ \[熟語\]$/,'')+' [熟語]';
+        }
+      }
+      /* シンプル型 */
+      else if(Array.isArray(jd.words)){jwords=extractJW(jd.words);}
       else if(Array.isArray(jd.vocabulary)){jwords=extractJW(jd.vocabulary);}
+      else if(Array.isArray(jd.phrases)){jwords=extractJW(jd.phrases);}
       else if(Array.isArray(jd)){jwords=extractJW(jd);}
+      /* フォールバック: オブジェクト内の配列を探す */
       if(!jwords.length&&typeof jd==='object'){
         Object.values(jd).forEach(function(v){if(Array.isArray(v)&&!jwords.length){var w=extractJW(v);if(w.length)jwords=w;}});
       }
-      if(jwords.length){toast('JSON形式を認識（'+jwords.length+'語）');needTranslate(jwords)?doTranslate(jwords,selLang):prvShow(jwords);return;}
-      else{toast('JSONを認識しましたが単語が見つかりません');return;}
-    }catch(e){}
+
+      if(jwords.length){
+        toast('📗 JSON形式を認識（'+jwords.length+'語）');
+        needTranslate(jwords)?doTranslate(jwords,selLang):prvShow(jwords);
+        return;
+      } else {
+        toast('⚠️ JSONを認識しましたが単語が見つかりません');return;
+      }
+    }catch(e){
+      toast('⚠️ JSONの解析に失敗しました。形式を確認してください。');return;
+    }
   }
 
+  /* 通常テキスト（1行1単語 or 単語,訳） */
   var words=[];
   txt.split('\n').forEach(function(line){
     line=line.trim();if(!line)return;
@@ -3372,6 +3444,14 @@ function bind(){
   el('B-parse').addEventListener('click',parsePaste);
   el('B-upload').addEventListener('click',function(){el('IN-file').click();});
   el('IN-file').addEventListener('change',handleFile);
+
+  /* 貼り付けタブ: JSON自動検出 */
+  el('IN-paste-text').addEventListener('input',pasteDetectJson);
+  el('IN-paste-text').addEventListener('paste',function(){setTimeout(pasteDetectJson,50);});
+  /* 貼り付けタブ: JSONセクション選択 */
+  document.querySelectorAll('[data-pjsec]').forEach(function(b){
+    b.addEventListener('click',function(){setPasteJsonSection(this.getAttribute('data-pjsec'));});
+  });
 
   /* ファイルタブのモード/レベル/タイプ切替 */
   document.querySelectorAll('[data-fmode]').forEach(function(b){
