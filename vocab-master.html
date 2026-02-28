@@ -790,19 +790,6 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         <span style="font-size:11px;color:var(--tx2);line-height:1.6">読み上げ中の音楽ボリュームを下げます。0%で無音、100%で変化なし。</span>
       </div>
     </div>
-    <div class="set-sec">☁️ クラウド同期（オプション）</div>
-    <div class="set-group">
-      <div class="set-row" id="ROW-cloudauto">
-        <span class="set-lbl">🔄 クラウド自動保存（5分ごと）</span>
-        <button class="toggle" id="TG-cloudauto"></button>
-      </div>
-      <div class="set-row" style="cursor:default;flex-direction:column;align-items:stretch;gap:8px">
-        <div style="font-size:11px;color:var(--tx2);line-height:1.6;padding:2px 0">同じClaudeアカウントでログインした別デバイスとデータを手動同期できます。</div>
-        <button class="btn-primary" id="B-cloud-save" style="padding:10px;font-size:13px">☁️ 今すぐ保存</button>
-        <button class="btn-sec" id="B-cloud-load" style="padding:10px;font-size:13px;margin-top:0">📥 クラウドから読み込む</button>
-        <div id="CLOUD-status" style="font-size:11px;text-align:center;color:var(--tx2);padding:2px 0;min-height:16px"></div>
-      </div>
-    </div>
     <div class="set-sec">データ</div>
     <div class="set-group">
       <div class="set-row" style="cursor:default;padding:10px 16px">
@@ -839,121 +826,6 @@ function sSet(v){
   MEM=v;
 }
 
-/* ── Claudeストレージ同期 ── */
-var CLOUD_KEY='vocabmaster-sync-v1';
-function cloudStatus(msg,clr){var el=document.getElementById('CLOUD-status');if(el){el.textContent=msg;el.style.color=clr||'var(--tx2)';}}
-
-/* ── 自動保存：デバウンス（最後のsave()から5分後に実行、重複しない） ── */
-var _autoSaveTimer=null;
-var AUTO_SAVE_DELAY=5*60*1000; /* 5分 */
-
-function scheduleAutoCloudSave(){
-  if(!G.cfg.cloudAuto) return;       /* 自動保存OFFなら何もしない */
-  if(!window.storage) return;        /* ストレージが使えない環境 */
-  if(_autoSaveTimer) clearTimeout(_autoSaveTimer);
-  _autoSaveTimer=setTimeout(function(){
-    _autoSaveTimer=null;
-    cloudSaveAuto();
-  }, AUTO_SAVE_DELAY);
-}
-
-async function cloudSaveAuto(){
-  /* サイレント保存（ボタンUI操作なし・トースト最小限） */
-  if(!window.storage||!G.cfg.cloudAuto) return;
-  try{
-    var payload=JSON.stringify(G);
-    if(payload.length>4*1024*1024) return; /* 大きすぎる場合はスキップ */
-    var result=await window.storage.set(CLOUD_KEY, payload);
-    if(result){
-      var now=new Date();
-      var ts=now.getFullYear()+'/'+(now.getMonth()+1)+'/'+now.getDate()+' '+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
-      cloudStatus('🔄 自動保存完了 — '+ts,'var(--gn)');
-      /* ホーム画面にいる場合のみトーストを出す（クイズ中は邪魔しない） */
-      if(document.getElementById('s-home').classList.contains('on')){
-        toast('☁️ 自動保存しました');
-      }
-    }
-  }catch(e){ /* 自動保存失敗はサイレントに無視 */ }
-}
-
-async function cloudSave(){
-  if(!window.storage){cloudStatus('⚠️ このブラウザ環境では使用できません','var(--rd)');return;}
-  var btn=document.getElementById('B-cloud-save');
-  if(btn){btn.disabled=true;btn.textContent='保存中...';}
-  cloudStatus('','');
-  try{
-    var payload=JSON.stringify(G);
-    if(payload.length>4*1024*1024){cloudStatus('⚠️ データが大きすぎます（4MB超）','var(--rd)');return;}
-    var result=await window.storage.set(CLOUD_KEY, payload);
-    if(result){
-      var now=new Date();
-      var ts=now.getFullYear()+'/'+(now.getMonth()+1)+'/'+now.getDate()+' '+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
-      cloudStatus('✅ 保存完了 — '+ts,'var(--gn)');
-      toast('☁️ クラウドに保存しました');
-    }else{
-      cloudStatus('⚠️ 保存に失敗しました','var(--rd)');
-    }
-  }catch(e){
-    cloudStatus('⚠️ エラー: '+e.message,'var(--rd)');
-  }finally{
-    if(btn){btn.disabled=false;btn.textContent='☁️ 今すぐ保存';}
-  }
-}
-
-/* 起動時クラウドチェック：ローカルより新しいデータがあれば通知 */
-async function cloudCheckOnStartup(){
-  if(!window.storage) return;
-  try{
-    var result=await window.storage.get(CLOUD_KEY);
-    if(!result||!result.value) return;
-    var remote=JSON.parse(result.value);
-    var remoteWords=(remote.words||[]).length;
-    var localWords=G.words.length;
-    /* クラウドの単語数がローカルより多い場合のみ提案 */
-    if(remoteWords>localWords){
-      setTimeout(function(){
-        var msg='☁️ クラウドにより多くのデータがあります\n\nクラウド: '+remoteWords+'単語 / ローカル: '+localWords+'単語\n\nクラウドから読み込みますか？\n（現在のローカルデータは上書きされます）';
-        if(confirm(msg)){
-          var savedKey=(G.cfg&&G.cfg.key)||'';
-          G=remote;
-          if(savedKey&&(!G.cfg||!G.cfg.key)){if(!G.cfg)G.cfg={};G.cfg.key=savedKey;}
-          sSet(G);
-          homeRefresh();
-          toast('📥 クラウドから読み込みました（'+remoteWords+'単語）');
-        }
-      }, 800);
-    }
-  }catch(e){ /* 起動時チェック失敗はサイレントに無視 */ }
-}
-
-async function cloudLoad(){
-  if(!window.storage){cloudStatus('⚠️ このブラウザ環境では使用できません','var(--rd)');return;}
-  var btn=document.getElementById('B-cloud-load');
-  if(btn){btn.disabled=true;btn.textContent='読み込み中...';}
-  cloudStatus('','');
-  try{
-    var result=await window.storage.get(CLOUD_KEY);
-    if(!result||!result.value){cloudStatus('クラウドにデータがありません','var(--tx2)');toast('クラウドにデータが見つかりませんでした');return;}
-    var remote=JSON.parse(result.value);
-    /* 件数表示して確認 */
-    var lists=(remote.lists||[]).length;
-    var words=(remote.words||[]).length;
-    var msg='クラウドのデータ:\nリスト '+lists+' 件 / 単語 '+words+' 件\n\n現在のデータと置き換えますか？\n（置き換え前に現在のデータはエクスポートしてください）';
-    if(!confirm(msg))return;
-    var savedKey=(G.cfg&&G.cfg.key)||'';
-    G=remote;
-    /* 現在デバイスのAPIキーを優先して保持 */
-    if(savedKey&&!G.cfg.key){if(!G.cfg)G.cfg={};G.cfg.key=savedKey;}
-    sSet(G);
-    homeRefresh();listFilterRebuild();listRender();
-    cloudStatus('✅ 読み込み完了 — リスト'+lists+'件 / 単語'+words+'件','var(--gn)');
-    toast('📥 クラウドから読み込みました');
-  }catch(e){
-    cloudStatus('⚠️ エラー: '+e.message,'var(--rd)');
-  }finally{
-    if(btn){btn.disabled=false;btn.textContent='📥 クラウドから読み込む';}
-  }
-}
 
 var EASE0=2.5, EMIN=1.3;
 
@@ -969,7 +841,7 @@ var LANGS={
 function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 if(!G.folders) G.folders=[];
-function save(){sSet(G);scheduleAutoCloudSave();}
+function save(){sSet(G);}
 
 /* ── ファイル保存（HTMLにデータ埋め込み） ── */
 function saveAsFile(){
@@ -3948,7 +3820,6 @@ function settingsLoad(){
   el('TG-flashauto').classList.toggle('on',!!G.cfg.flashAuto);
   el('TG-autoQuiz').classList.toggle('on',!!G.cfg.autoQuiz);
   el('IN-flash-sec').value=G.cfg.flashSec||2;
-  el('TG-cloudauto').classList.toggle('on',!!G.cfg.cloudAuto);
   var sm=G.cfg.spkMode||'both';
   ['both','foreign','ja'].forEach(function(m){el('SPK-'+m).classList.toggle('on',sm===m);});
   el('IN-duck-vol').value=G.cfg.duckVol!=null?G.cfg.duckVol:15;
@@ -4249,22 +4120,6 @@ function bind(){
   el('B-reset').addEventListener('click',function(){
     if(confirm('すべてのデータを削除しますか？\nこの操作は取り消せません。')){G=mkDB();save();toast('データを削除しました');homeRefresh();}
   });
-  el('B-cloud-save').addEventListener('click',function(){cloudSave();});
-  el('B-cloud-load').addEventListener('click',function(){cloudLoad();});
-  el('TG-cloudauto').addEventListener('click',function(){
-    G.cfg.cloudAuto=!this.classList.contains('on');
-    this.classList.toggle('on',G.cfg.cloudAuto);
-    save();
-    if(G.cfg.cloudAuto){
-      toast('🔄 自動保存をONにしました');
-      cloudSaveAuto(); /* ONにした瞬間に即1回保存 */
-    } else {
-      toast('自動保存をOFFにしました');
-      if(_autoSaveTimer){clearTimeout(_autoSaveTimer);_autoSaveTimer=null;}
-    }
-  });
-  el('ROW-cloudauto').addEventListener('click',function(e){if(e.target!==el('TG-cloudauto'))el('TG-cloudauto').click();});
-
   /* ── エビングハウス忘却曲線設定 ── */
   if(el('TG-ebbing'))el('TG-ebbing').addEventListener('click',function(){
     G.cfg.ebbing=!this.classList.contains('on');
@@ -4361,8 +4216,6 @@ window.onload=function(){
     }catch(e){/* 無効なハッシュは無視 */}
   }
   bind();loadSample();homeRefresh();updateLevelHint();
-  /* 起動時クラウドチェック（自動保存ONの場合のみ） */
-  if(G.cfg&&G.cfg.cloudAuto) cloudCheckOnStartup();
 };
 </script>
 </body>
