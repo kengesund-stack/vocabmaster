@@ -371,6 +371,77 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         </div>
       </div>
       <div class="hint" id="PASTE-hint">テキスト形式（1行1単語 / 「単語,訳」）または JSON テキストをそのまま貼り付けられます。訳なしの単語はAPIキー設定でAI自動翻訳できます。</div>
+
+      <!-- JSON形式サンプル（折り畳み） -->
+      <div id="JSON-sample-wrap" style="margin-bottom:12px">
+        <button id="JSON-sample-toggle" style="width:100%;background:none;border:1px dashed rgba(92,248,252,.3);border-radius:10px;padding:9px 14px;color:var(--ac3);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;-webkit-appearance:none;display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left">
+          <span>📋 AIへの依頼プロンプト・JSON形式の例</span>
+          <span id="JSON-sample-arrow" style="font-size:10px;transition:transform .2s;flex-shrink:0">▼</span>
+        </button>
+        <div id="JSON-sample-body" style="display:none;margin-top:8px;background:rgba(92,248,252,.04);border:1px solid rgba(92,248,252,.15);border-radius:10px;padding:12px;font-size:11px;line-height:1.7">
+
+          <div style="color:var(--tx2);margin-bottom:10px">
+            下記のプロンプトをそのままAI（ChatGPT・Claude等）に送ると、このアプリに貼り付けられるJSONを作成してもらえます。
+          </div>
+
+          <!-- プロンプト例1：単語リスト -->
+          <div style="margin-bottom:12px">
+            <div style="color:var(--ac3);font-weight:700;margin-bottom:5px">① 単語リストを作る</div>
+            <div style="background:rgba(0,0,0,.35);border-radius:8px;padding:10px;position:relative">
+              <pre id="PROMPT-1" style="white-space:pre-wrap;color:var(--tx);font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:11px;margin:0;line-height:1.6">英検準1級レベルの英単語を50語、以下のJSON形式で出力してください。日本語訳も必ず付けてください。
+
+{
+  "book_title": "英検準1級 単語リスト",
+  "content": {
+    "vocabulary": [
+      {"word": "abolish", "meaning": "廃止する"},
+      {"word": "ambiguous", "meaning": "曖昧な"}
+    ],
+    "phrases": [
+      {"word": "carry out", "meaning": "実行する"},
+      {"word": "come up with", "meaning": "思いつく"}
+    ]
+  }
+}</pre>
+              <button onclick="copyPrompt('PROMPT-1','BTN-CP-1')" id="BTN-CP-1" style="margin-top:8px;width:100%;background:rgba(92,248,252,.12);border:1px solid rgba(92,248,252,.25);border-radius:7px;padding:7px;color:var(--ac3);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;-webkit-appearance:none">📋 コピー</button>
+            </div>
+          </div>
+
+          <!-- プロンプト例2：テーマ指定 -->
+          <div style="margin-bottom:12px">
+            <div style="color:var(--ac);font-weight:700;margin-bottom:5px">② テーマ・レベルを指定する</div>
+            <div style="background:rgba(0,0,0,.35);border-radius:8px;padding:10px;position:relative">
+              <pre id="PROMPT-2" style="white-space:pre-wrap;color:var(--tx);font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:11px;margin:0;line-height:1.6">「ビジネス英語」に関する重要単語30語と頻出フレーズ10個を以下のJSON形式で出力してください。中上級レベルで、日本語訳も付けてください。
+
+{
+  "book_title": "ビジネス英語 必須表現",
+  "content": {
+    "vocabulary": [
+      {"word": "negotiate", "meaning": "交渉する"},
+      {"word": "facilitate", "meaning": "促進する、容易にする"}
+    ],
+    "phrases": [
+      {"word": "reach a consensus", "meaning": "合意に達する"},
+      {"word": "bottom line", "meaning": "最終的な結論、収益"}
+    ]
+  }
+}</pre>
+              <button onclick="copyPrompt('PROMPT-2','BTN-CP-2')" id="BTN-CP-2" style="margin-top:8px;width:100%;background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.25);border-radius:7px;padding:7px;color:var(--ac);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;-webkit-appearance:none">📋 コピー</button>
+            </div>
+          </div>
+
+          <!-- 形式の説明 -->
+          <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px;color:var(--tx2);font-size:10px;line-height:1.8">
+            <div style="color:var(--tx);font-weight:600;margin-bottom:4px">📌 JSONのルール</div>
+            <div><span style="color:var(--ac3)">book_title</span> … リスト名として自動設定</div>
+            <div><span style="color:var(--ac3)">vocabulary</span> … 単語リスト（単語 / 熟語どちらも可）</div>
+            <div><span style="color:var(--ac3)">phrases</span> … 熟語・イディオム専用（省略可）</div>
+            <div><span style="color:var(--ac3)">word</span> … 外国語の単語・フレーズ</div>
+            <div><span style="color:var(--ac3)">meaning</span> … 日本語訳</div>
+          </div>
+        </div>
+      </div>
+
       <button class="btn-primary" id="B-parse">🔍 解析する</button>
     </div>
 
@@ -1040,6 +1111,22 @@ function loading(msg){el('ld-tx').textContent=msg||'処理中...';el('ld').class
 function loaded(){el('ld').classList.remove('on');}
 function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
 function uid(){return '_'+(Date.now()%1e9)+'_'+(Math.random()*1e6|0);}
+function copyPrompt(preId, btnId){
+  var pre=el(preId);if(!pre)return;
+  var txt=pre.textContent||pre.innerText;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(function(){
+      var btn=el(btnId);if(btn){var orig=btn.textContent;btn.textContent='✅ コピーしました';setTimeout(function(){btn.textContent=orig;},2000);}
+    }).catch(function(){fallbackCopy(txt,btnId);});
+  } else { fallbackCopy(txt,btnId); }
+}
+function fallbackCopy(txt,btnId){
+  var ta=document.createElement('textarea');
+  ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';
+  document.body.appendChild(ta);ta.focus();ta.select();
+  try{document.execCommand('copy');var btn=el(btnId);if(btn){var orig=btn.textContent;btn.textContent='✅ コピーしました';setTimeout(function(){btn.textContent=orig;},2000);}}catch(e){toast('コピーに失敗しました');}
+  document.body.removeChild(ta);
+}
 function langBadge(lang){var l=LANGS[lang||'en'];if(!l)return'';return'<span class="lang-badge '+l.cls+'">'+l.flag+' '+l.name+'</span>';}
 
 /* HOME */
@@ -3758,6 +3845,15 @@ function bind(){
   el('B-parse').addEventListener('click',parsePaste);
   el('B-upload').addEventListener('click',function(){el('IN-file').click();});
   el('IN-file').addEventListener('change',handleFile);
+
+  /* JSON形式サンプル 折り畳みトグル */
+  el('JSON-sample-toggle').addEventListener('click',function(){
+    var body=el('JSON-sample-body');
+    var arrow=el('JSON-sample-arrow');
+    var isOpen=body.style.display!=='none';
+    body.style.display=isOpen?'none':'block';
+    arrow.style.transform=isOpen?'':'rotate(180deg)';
+  });
 
   /* 貼り付けタブ: JSON自動検出 */
   el('IN-paste-text').addEventListener('input',pasteDetectJson);
