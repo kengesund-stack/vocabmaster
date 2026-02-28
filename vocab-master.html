@@ -798,7 +798,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
       <div class="set-row" style="cursor:default;padding:0 16px 10px">
         <span style="font-size:11px;color:var(--tx2);line-height:1.6">データを埋め込んだHTMLファイルをダウンロードします。iCloudに上書き保存してください。</span>
       </div>
-      <div class="set-row" id="B-export"><span class="set-lbl">📤 全データをエクスポート (JSON)</span><span class="set-val">→</span></div>
+      <div class="set-row" id="B-export"><span class="set-lbl">📤 全データをエクスポート (JSON)<br><span style="font-size:11px;color:var(--tx2);font-weight:400">単語・リスト・学習記録・統計を含む</span></span><span class="set-val">→</span></div>
       <div class="set-row" id="B-export-select"><span class="set-lbl">📋 リストを選んでエクスポート</span><span class="set-val">→</span></div>
       <div class="set-row" id="B-export-csv"><span class="set-lbl">📊 CSVでエクスポート</span><span class="set-val">→</span></div>
       <div class="set-row" id="B-qr"><span class="set-lbl">📱 QRコードで転送</span><span class="set-val">→</span></div>
@@ -4039,7 +4039,12 @@ function bind(){
       var ids=getSelected();if(!ids.length){toast('リストを選択してください');return;}
       var lists=G.lists.filter(function(l){return ids.indexOf(l.id)>=0;});
       var words=G.words.filter(function(w){return ids.indexOf(w.lid)>=0;});
-      dlJson({words:words,lists:lists,cfg:G.cfg,stats:G.stats}, 'vocabmaster_lists.json');
+      /* 選択リストに関連する学習ログも含める */
+      var selLogs=(G.logs||[]).filter(function(lg){
+        var lgLids=lg.lids||[];
+        return lgLids.some(function(lid){return ids.indexOf(lid)>=0;});
+      });
+      dlJson({words:words,lists:lists,logs:selLogs,cfg:G.cfg,stats:G.stats}, 'vocabmaster_lists.json');
       el('modal-bg').classList.remove('on');toast('✅ エクスポート完了');
     });
     el('EXP-csv-sel').addEventListener('click',function(){
@@ -4109,8 +4114,32 @@ function bind(){
         d.words.forEach(function(w){
           if(existWordIds.indexOf(w.id)<0){G.words.push(w);addedWords++;}
         });
+        /* 学習ログのマージ（重複はtsで判定） */
+        var addedLogs=0;
+        if(d.logs&&d.logs.length){
+          if(!G.logs)G.logs=[];
+          var existTs=G.logs.map(function(l){return l.ts;});
+          d.logs.forEach(function(lg){
+            if(existTs.indexOf(lg.ts)<0){G.logs.push(lg);addedLogs++;}
+          });
+          /* 日付順に並べ直す */
+          G.logs.sort(function(a,b){return a.ts<b.ts?-1:a.ts>b.ts?1:0;});
+          /* 上限365件 */
+          if(G.logs.length>365)G.logs=G.logs.slice(-365);
+        }
+        /* stats（streak・lastDay）は、インポート元の方が進んでいる場合のみ上書き */
+        if(d.stats){
+          var localStreak=G.stats.streak||0;
+          var remoteStreak=d.stats.streak||0;
+          if(remoteStreak>localStreak){
+            G.stats.streak=remoteStreak;
+            G.stats.lastDay=d.stats.lastDay||G.stats.lastDay;
+          }
+        }
         save();homeRefresh();
-        toast('✅ '+addedLists+'リスト・'+addedWords+'単語を追加しました');
+        var msg='✅ '+addedLists+'リスト・'+addedWords+'単語を追加しました';
+        if(addedLogs>0)msg+='（学習記録+'+addedLogs+'件）';
+        toast(msg);
       }
       catch(err){toast('インポートに失敗しました');}
     };
@@ -4209,6 +4238,14 @@ window.onload=function(){
         var addedLists=0,addedWords=0;
         d.lists.forEach(function(lst){if(existListIds.indexOf(lst.id)<0){G.lists.push(lst);addedLists++;}});
         d.words.forEach(function(w){if(existWordIds.indexOf(w.id)<0){G.words.push(w);addedWords++;}});
+        /* 学習ログのマージ */
+        if(d.logs&&d.logs.length){
+          if(!G.logs)G.logs=[];
+          var existTs=G.logs.map(function(l){return l.ts;});
+          d.logs.forEach(function(lg){if(existTs.indexOf(lg.ts)<0)G.logs.push(lg);});
+          G.logs.sort(function(a,b){return a.ts<b.ts?-1:a.ts>b.ts?1:0;});
+          if(G.logs.length>365)G.logs=G.logs.slice(-365);
+        }
         save();
         history.replaceState(null,'',location.pathname); /* ハッシュを消す */
         setTimeout(function(){toast('📱 QRから '+addedLists+'リスト・'+addedWords+'単語をインポートしました！');},500);
