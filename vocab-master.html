@@ -3697,17 +3697,18 @@ function qSelect(i){
     if(!Q.slow)Q.slow=[];
     Q.slow.push({id:q.id,word:q.word,meaning:q.meaning||'',lang:q.lang||'en',lid:q.lid,answerMs:answerMs});
   }
-  /* 習得判定：初回正解で即習得。不正解後は2回連続正解で習得 */
+  /* 習得判定：初回正解で即習得。不正解後はrequeueMax回連続正解で習得 */
+  var requeueMax=G.cfg.requeueMax!=null?G.cfg.requeueMax:1;
   if(!Q.consec)Q.consec={};
   if(!Q.masteredIds)Q.masteredIds={};
   var hadMiss=!!q._hadMiss;
   if(!ok){ q._hadMiss=true; Q.consec[q.id]=0; Q.lastWasWrong=true; }
   else { Q.consec[q.id]=(Q.consec[q.id]||0)+1; Q.lastWasWrong=false; }
-  var justMastered=ok&&(!hadMiss||Q.consec[q.id]>=2)&&!Q.masteredIds[q.id];
+  var justMastered=ok&&(!hadMiss||Q.consec[q.id]>=requeueMax)&&!Q.masteredIds[q.id];
   if(justMastered){Q.masteredIds[q.id]=true;Q.mastered=(Q.mastered||0)+1;}
 
   el('FB-tx').innerHTML=ok
-    ?(justMastered?'<span style="color:var(--gn)">✓ 正解！</span>':'<span style="color:var(--gn)">✓ 正解！ もう1回！</span>')
+    ?(justMastered?'<span style="color:var(--gn)">✓ 正解！</span>':'<span style="color:var(--gn)">✓ 正解！あと'+(requeueMax-(Q.consec[q.id]||0))+'回正解で習得</span>')
     :'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca);
   el('FB-dt').textContent=Q.testMode?'':(ok?'次回: '+(q.s&&q.s.i||1)+'日後':'1日後に再復習');
   el('FB').classList.add('on');
@@ -3734,15 +3735,14 @@ function qNext(){
   el('B-next').textContent='次へ →';
 
   var q=Q.q[Q.i];
-  /* 不正解経験あり かつ 再出題回数が上限未満の場合のみ再出題 */
+  /* 不正解経験あり かつ 連続正解数が設定値未満の場合は再出題 */
   var requeueMax=G.cfg.requeueMax!=null?G.cfg.requeueMax:1;
   if(!Q.requeued)Q.requeued={};
   var remaining=Q.q.length-(Q.i+1);
-  /* masteredIds にある（2回連続正解済み）場合は再出題しない */
+  /* masteredIds にある（requeueMax回連続正解済み）場合は再出題しない */
   var alreadyMastered=Q.masteredIds&&Q.masteredIds[q&&q.id];
-  /* 不正解直後のqNextでのみ再挿入カウント。正解後のqNextではカウントしない */
-  if(q && q._hadMiss && Q.lastWasWrong && !alreadyMastered && (Q.requeued[q.id]||0)<requeueMax){
-    Q.requeued[q.id]=(Q.requeued[q.id]||0)+1;
+  /* 不正解経験あり かつ 連続正解数が設定値未満なら再出題 */
+  if(q && q._hadMiss && !alreadyMastered){
     /* 残り問題がある場合は1〜3問後のランダムな位置に、ない場合は末尾に挿入 */
     var insertOffset=remaining>0 ? 1+Math.floor(Math.random()*Math.min(remaining,3)) : 1;
     Q.q.splice(Q.i+1+insertOffset,0,q);
