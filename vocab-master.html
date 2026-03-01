@@ -889,6 +889,98 @@ function ebbingSchedule(wordId) {
   return G.ebbing[wordId] || null;
 }
 
+/* ── 不正解単語の復習スケジュールモーダル ── */
+function showNgScheduleModal(lid) {
+  var lst = G.lists.find(function(l){ return l.id === lid; });
+  if (!lst) return;
+  var lInfo = LANGS[lst.lang||'en'];
+
+  /* wordStatus='ng' の単語を抽出 */
+  var ngWords = G.words.filter(function(w){
+    if (w.lid !== lid) return false;
+    var s = w.s;
+    if (!s || s.k === undefined) return false;
+    return (s.l||0) > 0 && (s.k||0) < 2;
+  });
+
+  if (!ngWords.length) {
+    el('modal-ct').innerHTML =
+      '<div class="modal-tl">❌ 不正解単語の復習スケジュール</div>' +
+      '<div style="text-align:center;padding:28px 0;color:var(--tx2);font-size:14px">不正解単語はありません 🎉</div>';
+    el('modal-bg').classList.add('on');
+    return;
+  }
+
+  /* 各単語をエビングハウス復習予定日でグループ化 */
+  var today = new Date(); today.setHours(0,0,0,0);
+  var groups = {};  /* key: diff日数(数値) → {label, words:[]} */
+  ngWords.forEach(function(w){
+    var eb = G.ebbing && G.ebbing[w.id];
+    var diff, label;
+    if (eb && eb.nextDate) {
+      var nd = new Date(eb.nextDate); nd.setHours(0,0,0,0);
+      diff = Math.round((nd - today) / 86400000);
+      if (diff < 0) diff = 0;
+      if (diff === 0) label = '今日（期限切れ含む）';
+      else if (diff === 1) label = '明日（' + (nd.getMonth()+1) + '/' + nd.getDate() + '）';
+      else label = diff + '日後（' + (nd.getMonth()+1) + '/' + nd.getDate() + '）';
+    } else {
+      diff = 9999;
+      label = 'スケジュール未登録';
+    }
+    if (!groups[diff]) groups[diff] = { diff: diff, label: label, words: [] };
+    groups[diff].words.push({
+      word: w.word||'', meaning: w.meaning||'',
+      ngCount: w.s && w.s.l || 0,
+      interval: eb ? EBBING_INTERVALS[eb.nextIdx||0] : null
+    });
+  });
+
+  var sortedDiffs = Object.keys(groups).map(Number).sort(function(a,b){ return a-b; });
+
+  /* モーダルHTML組み立て */
+  var lFlag = lInfo ? lInfo.flag + ' ' : '';
+  var html = '<div class="modal-tl">❌ 不正解単語の復習スケジュール</div>' +
+    '<div style="font-size:12px;color:var(--tx2);margin-bottom:16px">' + lFlag + esc(lst.name) + '　計 <strong style="color:var(--rd)">' + ngWords.length + '語</strong></div>';
+
+  sortedDiffs.forEach(function(diff){
+    var g = groups[diff];
+    var isToday  = diff === 0;
+    var isUnsched = diff === 9999;
+    var hdrClr = isToday ? 'var(--rd)' : isUnsched ? 'var(--tx2)' : diff <= 3 ? 'var(--or)' : 'var(--ac3)';
+    var hdrBg  = isToday ? 'rgba(255,76,106,.13)' : isUnsched ? 'rgba(144,144,170,.1)' : diff <= 3 ? 'rgba(255,156,76,.1)' : 'rgba(92,248,252,.08)';
+    html +=
+      '<div style="margin-bottom:14px">' +
+        /* 日付ヘッダー */
+        '<div style="display:flex;align-items:center;gap:8px;background:' + hdrBg + ';' +
+          'border-radius:9px;padding:6px 11px;margin-bottom:7px">' +
+          '<span style="font-size:13px;font-weight:700;color:' + hdrClr + '">' +
+            (isToday ? '🔴' : isUnsched ? '⬜' : diff <= 3 ? '🟠' : '🔵') + ' ' + g.label +
+          '</span>' +
+          '<span style="margin-left:auto;font-size:11px;font-weight:600;color:' + hdrClr + '">' + g.words.length + '語</span>' +
+        '</div>';
+    /* 単語一覧 */
+    g.words.forEach(function(w){
+      html +=
+        '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;' +
+          'background:var(--sf2);border-radius:9px;margin-bottom:4px">' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(w.word) + '</div>' +
+            '<div style="font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px">' + esc(w.meaning) + '</div>' +
+          '</div>' +
+          '<div style="text-align:right;flex-shrink:0">' +
+            '<div style="font-size:10px;color:var(--rd);font-weight:700">✗ ' + w.ngCount + '回</div>' +
+            (w.interval != null ? '<div style="font-size:9px;color:var(--tx2);margin-top:1px">間隔 ' + w.interval + '日</div>' : '') +
+          '</div>' +
+        '</div>';
+    });
+    html += '</div>';
+  });
+
+  el('modal-ct').innerHTML = html;
+  el('modal-bg').classList.add('on');
+}
+
 function ebbingMarkMiss(wordId, word, meaning, lang) {
   /* 間違えた単語に復習スケジュールを追加 */
   if (!G.cfg.ebbing) return;
@@ -1058,6 +1150,26 @@ function homeListsRender(){
               '<div class="lc-prog-bar"><div class="lc-prog-fill" style="width:'+pct+'%;background:'+progClr+'"></div></div>'+
               '<div class="lc-prog-txt"><span>'+progLabel+'</span><span style="font-weight:600;color:'+progClr+'">'+pct+'%</span></div>'+
             '</div>'+
+            (function(){
+              var wOk=0,wNg=0,wNew=0;
+              ws.forEach(function(w){
+                var s=w.s;
+                if(!s||s.k===undefined){wNew++;return;}
+                if((s.l||0)>0&&(s.k||0)<2){wNg++;return;}
+                if(s.k>=1&&s.i>=3){wOk++;return;}
+                wNew++;
+              });
+              if(!total)return '';
+              var lid2=esc(lst.id);
+              return '<div style="margin-top:6px">'+
+                '<div style="display:flex;height:5px;border-radius:3px;overflow:hidden;gap:1px">'+
+                  (wOk>0?'<div style="flex:'+wOk+';background:#4cff91;border-radius:3px;opacity:.8"></div>':'')+
+                  (wNg>0?'<div style="flex:'+wNg+';background:var(--rd);border-radius:3px;cursor:pointer" onclick="event.stopPropagation();showNgScheduleModal(\''+lid2+'\')"></div>':'')+
+                  (wNew>0?'<div style="flex:'+wNew+';background:rgba(144,144,170,.25);border-radius:3px"></div>':'')+
+                '</div>'+
+                (wNg>0?'<div style="font-size:10px;color:var(--rd);margin-top:4px;cursor:pointer" onclick="event.stopPropagation();showNgScheduleModal(\''+lid2+'\')">❌ '+wNg+'語 要復習 · タップで復習スケジュール</div>':'')+
+              '</div>';
+            })()+'
           '</div>'+
           (d?'<div class="list-badge" style="align-self:flex-start">'+d+'</div>':'')+'</button>'+
       '</div>'+
@@ -3151,11 +3263,47 @@ function generateReport(period, lids){
       });
     }
   });
+  /* 期間内ログから 単語ID別の正解/不正解回数を集計 */
+  var wordOkMap={}, wordNgMap={};
+  logs.forEach(function(l){
+    /* missは不正解単語の配列 */
+    (l.miss||[]).forEach(function(w){
+      wordNgMap[w.id]=(wordNgMap[w.id]||0)+1;
+    });
+    /* wordsは出題した全単語IDの配列、miss以外は正解 */
+    var missIds={};
+    (l.miss||[]).forEach(function(w){missIds[w.id]=true;});
+    (l.words||[]).forEach(function(wid){
+      if(!missIds[wid]) wordOkMap[wid]=(wordOkMap[wid]||0)+1;
+    });
+  });
+
   var listData=Object.keys(listMap).map(function(lid){
     var lst=G.lists.find(function(x){return x.id===lid;});
     var r=listMap[lid];
     var acc2=r.total?Math.round(r.ok/r.total*100):0;
-    return {lid:lid, name:lst?lst.name:'（削除済みリスト）', lang:lst?lst.lang:'', sessions:r.sessions, total:r.total, ok:r.ok, acc:acc2, durMs:r.durMs};
+    /* そのリスト全単語に対して期間内の正解/不正解/未回答を算出 */
+    var allWords=G.words.filter(function(w){return w.lid===lid;});
+    var wAnswered=0, wOkOnly=0, wNgAny=0, wUnanswered=0;
+    allWords.forEach(function(w){
+      var okCnt=wordOkMap[w.id]||0;
+      var ngCnt=wordNgMap[w.id]||0;
+      if(okCnt===0&&ngCnt===0){ wUnanswered++; }
+      else if(ngCnt>0){ wNgAny++; }   /* 期間内に1回でも不正解あり */
+      else { wOkOnly++; }              /* 期間内に正解のみ */
+      if(okCnt>0||ngCnt>0) wAnswered++;
+    });
+    /* 最終復習日（期間内ログのうち最新ts） */
+    var lastTs=null;
+    logs.forEach(function(l){
+      (l.lids||[]).forEach(function(llid){
+        if(llid===lid&&(!lastTs||l.ts>lastTs))lastTs=l.ts;
+      });
+    });
+    return {lid:lid, name:lst?lst.name:'（削除済みリスト）', lang:lst?lst.lang:'',
+            sessions:r.sessions, total:r.total, ok:r.ok, acc:acc2, durMs:r.durMs,
+            wordTotal:allWords.length, wordOkOnly:wOkOnly, wordNgAny:wNgAny,
+            wordUnanswered:wUnanswered, lastTs:lastTs};
   }).sort(function(a,b){return b.durMs-a.durMs;});
 
   /* エビングハウス今後30日予測 */
@@ -3277,6 +3425,68 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
   }
   var ebbingHTML = makeEbbingHTML(ebbingForecast);
 
+  /* ── リスト習得ステータスバー（期間内の正解/不正解/未回答） ── */
+  var _barSeq=0;
+  function makeStatusBar(d){
+    var total=d.wordTotal||0;
+    if(total===0)return '<span style="color:#aaa;font-size:8.5pt">単語なし</span>';
+    var wOk=d.wordOkOnly||0, wNg=d.wordNgAny||0, wUn=d.wordUnanswered||0;
+    var pOk=wOk/total, pNg=wNg/total, pUn=wUn/total;
+    var okPct=Math.round(pOk*100), ngPct=Math.round(pNg*100), unPct=100-okPct-ngPct;
+    /* 最終復習日 */
+    var lastStr='';
+    if(d.lastTs){
+      var lt=new Date(d.lastTs);
+      lastStr=(lt.getMonth()+1)+'/'+(lt.getDate())+' '+lt.getHours()+':'+String(lt.getMinutes()).padStart(2,'0');
+    }
+    var bid='sb'+(_barSeq++), tipId='tip'+bid;
+    /* ツールチップHTML */
+    var tipInner=
+      '<div style="font-weight:700;color:#e0e0f8;margin-bottom:6px;font-size:9pt">'+escHtml(d.name)+'</div>'+
+      '<div style="display:flex;flex-direction:column;gap:3px;font-size:8.5pt">'+
+        '<span><span style="color:#4caf50;font-weight:700">■ 正解のみ</span>　'+wOk+'語（'+okPct+'%）</span>'+
+        '<span><span style="color:#ef5350;font-weight:700">■ 不正解あり</span>　'+wNg+'語（'+ngPct+'%）</span>'+
+        '<span><span style="color:#b0b0c8;font-weight:700">■ 未回答</span>　'+wUn+'語（'+unPct+'%）</span>'+
+        '<span style="color:#9090b8;margin-top:4px;border-top:1px solid #334;padding-top:4px">全 <b>'+total+'語</b>'+(lastStr?' ／ 最終復習: '+lastStr:' ／ この期間の記録なし')+'</span>'+
+      '</div>';
+    var lid=d.lid||'';
+    return (
+      '<div style="display:flex;align-items:center;gap:10px;position:relative">'+
+        '<div id="'+bid+'" '+
+          'onmouseenter="document.getElementById(\"'+tipId+'\").style.display=\"block\"" '+
+          'onmouseleave="document.getElementById(\"'+tipId+'\").style.display=\"none\"" '+
+          'style="flex:1;height:16px;border-radius:8px;overflow:hidden;display:flex;min-width:120px;background:#e0e0e8">'+
+          (wOk>0?'<div style="flex:'+wOk+';background:#4caf50"></div>':'')+
+          (wNg>0?
+            '<div title="クリック：復習スケジュールを確認" '+
+              'onclick="try{window.opener.showNgScheduleModal(\"'+lid+'\");}catch(e){}" '+
+              'onmouseenter="this.style.filter=\"brightness(1.25)\"" '+
+              'onmouseleave="this.style.filter=\"\"" '+
+              'style="flex:'+wNg+';background:#ef5350;cursor:pointer"></div>'
+          : '')+
+          (wUn>0?'<div style="flex:'+wUn+';background:#d0d0dc"></div>':'')+
+        '</div>'+
+        '<div style="white-space:nowrap;font-size:8pt;min-width:110px;color:#444">'+
+          '<span style="color:#4caf50;font-weight:700">'+wOk+'</span>'+
+          '<span style="color:#ef5350;font-weight:700"> / '+wNg+'</span>'+
+          '<span style="color:#aaa"> / '+wUn+'　</span>'+
+          '<span style="color:#888">（全'+total+'語）</span>'+
+        '</div>'+
+        (wNg>0?
+          '<span onclick="try{window.opener.showNgScheduleModal(\"'+lid+'\");}catch(e){}" '+
+            'style="font-size:8pt;color:#ef5350;cursor:pointer;white-space:nowrap;font-weight:600;'+
+            'border-bottom:1px solid rgba(239,83,80,.4)">❌ 詳細</span>'
+        :'')+
+        '<div id="'+tipId+'" style="display:none;position:absolute;left:0;bottom:24px;'+
+          'background:#1e1e34;border:1px solid #5c4ccc;border-radius:10px;'+
+          'padding:10px 14px;z-index:300;box-shadow:0 4px 18px rgba(0,0,0,.35);'+
+          'pointer-events:none;min-width:220px">'+
+          tipInner+
+        '</div>'+
+      '</div>'
+    );
+  }
+
   function fmtDur(ms){
     if(!ms||ms<1000)return '0分';
     var s=Math.round(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);
@@ -3383,15 +3593,35 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
   });
   if(!dayRows)dayRows='<tr><td colspan="7" style="text-align:center;color:#888;padding:14px">この期間の記録はありません</td></tr>';
 
-  /* 単語集テーブル */
+  /* 単語集テーブル＋進捗ステータスバー */
   var listRows='';
   if(listData&&listData.length){
     listData.forEach(function(d){
       var l=LANGS[d.lang||'en'];
       var clr=d.acc>=80?'#2e7d32':d.acc>=60?'#f57c00':'#c62828';
-      listRows+='<tr><td><strong>'+escHtml(d.name)+'</strong></td><td>'+(l?l.flag+' '+l.name:'—')+'</td>'+
-        '<td style="text-align:center">'+d.sessions+'</td><td style="text-align:center">'+d.total+'</td>'+
-        '<td style="text-align:center;color:'+clr+';font-weight:700">'+d.acc+'%</td><td>'+fmtDur(d.durMs)+'</td></tr>';
+      listRows+=
+        '<tr>'+
+          '<td><strong>'+escHtml(d.name)+'</strong></td>'+
+          '<td>'+(l?l.flag+' '+l.name:'—')+'</td>'+
+          '<td style="text-align:center">'+d.sessions+'</td>'+
+          '<td style="text-align:center">'+d.total+'</td>'+
+          '<td style="text-align:center;color:'+clr+';font-weight:700">'+d.acc+'%</td>'+
+          '<td>'+fmtDur(d.durMs)+'</td>'+
+        '</tr>'+
+        '<tr>'+
+          '<td colspan="6" style="padding:5px 14px 11px;background:#f7f7fc;border-bottom:2px solid #e4e4f0">'+
+            '<div style="display:flex;align-items:center;gap:14px;margin-bottom:4px">'+
+              '<span style="font-size:8pt;font-weight:600;color:#666;white-space:nowrap">単語進捗（期間内）</span>'+
+              '<span style="font-size:7.5pt;color:#888">'+
+                '<span style="color:#4caf50">■ 正解のみ</span>　'+
+                '<span style="color:#ef5350">■ 不正解あり</span>　'+
+                '<span style="color:#b0b0c8">■ 未回答</span>　'+
+                '（バーにカーソルで詳細）'+
+              '</span>'+
+            '</div>'+
+            makeStatusBar(d)+
+          '</td>'+
+        '</tr>';
     });
   } else {
     listRows='<tr><td colspan="6" style="text-align:center;color:#888;padding:14px">データがありません</td></tr>';
