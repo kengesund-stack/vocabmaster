@@ -317,7 +317,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
       <div class="stat"><div class="stat-n" id="H-streak">0</div><div class="stat-l">連続日数</div></div>
     </div>
     <button class="due-btn" id="B-quiz-due">
-      <div class="due-txt"><h3>今日の復習</h3><p>忘却曲線に基づく最適タイミング</p></div>
+      <div class="due-txt"><h3>今日の復習</h3><p>忘却曲線に基づく最適タイミング</p><p style="font-size:10px;opacity:.75;margin-top:2px">🧠 不正解単語は全インターバル完走で正解に昇格</p></div>
       <div class="due-n" id="H-due">0</div>
     </button>
     <div class="act-grid">
@@ -752,7 +752,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         <button class="toggle" id="TG-ebbing"></button>
       </div>
       <div class="set-row" style="cursor:default">
-        <span style="font-size:11px;color:var(--tx2);line-height:1.6">間違えた・わからなかった単語を1日後・3日後・7日後・14日後・30日後に通常クイズへ自動追加します。</span>
+        <span style="font-size:11px;color:var(--tx2);line-height:1.6">間違えた・わからなかった単語を1日後・3日後・7日後・14日後・30日後に通常クイズへ自動追加します。全インターバルを正解で完走した単語は「正解 🟢」に昇格します。</span>
       </div>
       <div class="set-row" style="cursor:default" id="ROW-ebbing-max">
         <span class="set-lbl">📊 追加復習の上限単語数</span>
@@ -763,7 +763,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         </div>
       </div>
       <div style="padding:6px 14px 10px;font-size:11px;color:var(--tx2);line-height:1.6;border-top:1px solid rgba(255,255,255,.05)">
-        💡 上限を超えた分は翌日に自動繰り越しされます。期限が古い単語から優先して出題されます。
+        💡 上限を超えた分は翌日に自動繰り越しされます。期限が古い単語から優先して出題されます。繰り越しが続いても、全インターバル完走で「正解 🟢」に昇格します。
       </div>
     </div>
     <div class="set-sec">予習設定</div>
@@ -1106,13 +1106,13 @@ function homeListsRender(){
       '</div>';
 
     /* ── 凡例（数が0のものは非表示） ── */
-    function dot(clr,label,n){
+    function dot(clr,label,n,note){
       if(!n) return '';
-      return '<span class="lc-stat-lbl"><span class="lc-stat-dot" style="background:'+clr+'"></span>'+label+'&thinsp;<b>'+n+'</b></span>';
+      return '<span class="lc-stat-lbl"><span class="lc-stat-dot" style="background:'+clr+'"></span>'+label+'&thinsp;<b>'+n+'</b>'+(note?'<span style="font-size:9px;color:var(--tx2);margin-left:2px">'+note+'</span>':'')+' </span>';
     }
     var legend='<div class="lc-stat-legend">'+
-      dot('var(--gn)','正解',nOk)+
-      dot('var(--rd)','不正解',nNg)+
+      dot('var(--gn)','正解',nOk,'(不正解歴なし、または忘却曲線完走)')+
+      dot('var(--rd)','不正解',nNg,'(忘却曲線で復習中)')+
       dot('var(--gd)','あいまい',nUnknown)+
       dot('rgba(160,160,180,.6)','未習',nNew)+
     '</div>';
@@ -2312,10 +2312,17 @@ function listFilterRebuild(){
   sel.value=cur||'all';
 }
 function wordStatus(w){
-  /* ステータスを返す: new/ok/ng/unknown */
+  /* ステータスを返す: new/ok/ng/unknown
+   * 正解への昇格条件：
+   *   一度も不正解なし → 連続正解1回以上・間隔3日以上で正解
+   *   不正解歴あり    → 忘却曲線の全インターバル（1/3/7/14/30日）を
+   *                      正解で完走しG.ebbingから削除された時点で正解に昇格
+   */
   if(!w.s||w.s.k===undefined)return 'new';
   if((w.s.l||0)>0&&(w.s.k||0)<2)return 'ng';
-  if(w.s.k>=1&&w.s.i>=3)return 'ok';
+  var hadMiss=(w.s.l||0)>0;
+  var ebbingDone=hadMiss&&!(G.ebbing&&G.ebbing[w.id]); /* 忘却曲線完走済み */
+  if((!hadMiss||ebbingDone)&&w.s.k>=1&&w.s.i>=3)return 'ok';
   if(!w.s.d)return 'new';
   return 'unknown';
 }
@@ -3584,7 +3591,8 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
     graphSection+
     '<h2>🧠 エビングハウス忘却曲線 — 今後30日の復習予定</h2>'+
     '<div style="background:#f0f0ff;border:1px solid #d0d0f0;border-radius:8px;padding:12px;margin-bottom:14px">'+
-      '<div style="font-size:9pt;color:#555;margin-bottom:8px">📍 横軸: 今後の日付 ／ 縦軸: 復習すべき単語数 ／ 点にカーソルを合わせると単語一覧が表示されます</div>'+
+      '<div style="font-size:9pt;color:#555;margin-bottom:4px">📍 横軸: 今後の日付 ／ 縦軸: 復習すべき単語数 ／ 棒にカーソルを合わせると単語一覧が表示されます</div>'+
+      '<div style="font-size:8.5pt;color:#7c5cfc;margin-bottom:8px">🟢 不正解になった単語は 1→3→7→14→30日後の全インターバルを正解で完走した時点で「正解」に昇格します</div>'+
       ebbingHTML+
     '</div>'+
     '<h2>📋 日別学習記録</h2>'+
