@@ -3541,6 +3541,8 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
     '</div>'+
     '<h2>📋 日別学習記録</h2>'+
     '<table><tr><th>日付</th><th>セッション</th><th>出題数</th><th>正解</th><th>不正解</th><th>正答率</th><th>学習時間</th></tr>'+dayRows+'</table>'+
+    '<h2 style="border-left-color:#7c5cfc">📚 使用した単語集</h2>'+
+    listCards+
     '</div>';
 
   /* ── 単語レポートページ ── */
@@ -3549,8 +3551,6 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
     '<h1>📝 単語レポート</h1>'+
     '<div class="subtitle">'+escHtml(title)+' ｜ 作成：'+fmtDate(now)+' '+now.getHours()+'時'+String(now.getMinutes()).padStart(2,'0')+'分</div>'+
     badges+
-    '<h2 style="border-left-color:#7c5cfc">📚 使用した単語集</h2>'+
-    listCards+
     '<h2 style="border-left-color:#c62828">❌ 苦手単語（不正解が多い順）</h2>'+
     '<table><tr><th style="background:#c62828">#</th><th style="background:#c62828">単語</th><th style="background:#c62828">意味</th><th style="background:#c62828">言語</th><th style="background:#c62828">間違い回数</th></tr>'+missRows+'</table>'+
     '<h2 style="border-left-color:#e65100">⏱️ 準苦手ランキング（回答に時間がかかった単語）</h2>'+
