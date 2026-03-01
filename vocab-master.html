@@ -3182,8 +3182,19 @@ function generateReport(period, lids){
   var missArr=Object.values(missMap).map(function(m){
     /* エビングハウス次回復習日を付加 */
     var rec=G.ebbing&&G.ebbing[m.id];
+    /* データ修復：不正解歴があるのにG.ebbingに登録がない場合は再登録 */
+    if(!rec && G.cfg.ebbing){
+      var wObj=G.words.find(function(x){return x.id===m.id;});
+      if(wObj&&(wObj.s&&(wObj.s.l||0)>0)){
+        ebbingMarkMiss(m.id, m.word, m.meaning||'', m.lang||'en');
+        rec=G.ebbing&&G.ebbing[m.id];
+      }
+    }
     m.nextDate=rec?rec.nextDate:null;
     m.nextIdx=rec?rec.nextIdx:null;
+    /* 真の完走済み：不正解歴なし（s.l===0）かつG.ebbingにない */
+    var wObj2=G.words.find(function(x){return x.id===m.id;});
+    m.trulyDone=!rec&&wObj2&&(wObj2.s&&(wObj2.s.l||0)===0);
     return m;
   }).sort(function(a,b){return b.count-a.count;});
 
@@ -3580,7 +3591,10 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
           '<div style="color:#999;font-size:7.5pt">'+stageStr+'</div>'+
         '</td>';
       } else {
-        nextCell='<td style="text-align:center;color:#aaa;font-size:8.5pt">完走済み ✅</td>';
+        /* 真の完走済み（不正解歴なし）か、再登録待ちかで表示を分ける */
+        nextCell=w.trulyDone
+          ?'<td style="text-align:center;color:#aaa;font-size:8.5pt">完走済み ✅</td>'
+          :'<td style="text-align:center;color:#e65100;font-size:8.5pt">再登録中 🔄<div style="font-size:7.5pt;color:#999">次回の復習クイズで出題</div></td>';
       }
       missRows+='<tr><td style="text-align:center">'+(i+1)+'</td><td><strong>'+escHtml(w.word)+'</strong></td>'+
         '<td>'+escHtml(w.meaning)+'</td><td>'+(langNames[w.lang]||w.lang)+'</td>'+
