@@ -889,23 +889,24 @@ function ebbingSchedule(wordId) {
   return G.ebbing[wordId] || null;
 }
 
-/* ── 不正解単語の復習スケジュールモーダル ── */
+/* ── 不正解単語の復習スケジュールモーダル（ホーム・報告書共通） ── */
 function showNgScheduleModal(lid) {
   var lst = G.lists.find(function(l){ return l.id === lid; });
   if (!lst) return;
-  var lInfo = LANGS[lst.lang||'en'];
 
-  /* wordStatus='ng' の単語を抽出 */
+  /* wordStatus='ng' の単語: 不正解歴あり & 連続正解2回未満 */
   var ngWords = G.words.filter(function(w){
     if (w.lid !== lid) return false;
     var s = w.s;
-    if (!s || s.k === undefined) return false;
-    return (s.l||0) > 0 && (s.k||0) < 2;
+    return s && s.k !== undefined && (s.l||0) > 0 && (s.k||0) < 2;
   });
+
+  var lInfo = LANGS[lst.lang||'en'];
+  var lFlag = lInfo ? lInfo.flag + ' ' : '';
 
   if (!ngWords.length) {
     el('modal-ct').innerHTML =
-      '<div class="modal-tl">❌ 不正解単語の復習スケジュール</div>' +
+      '<div class="modal-tl">📅 復習スケジュール</div>' +
       '<div style="text-align:center;padding:28px 0;color:var(--tx2);font-size:14px">不正解単語はありません 🎉</div>';
     el('modal-bg').classList.add('on');
     return;
@@ -913,7 +914,7 @@ function showNgScheduleModal(lid) {
 
   /* 各単語をエビングハウス復習予定日でグループ化 */
   var today = new Date(); today.setHours(0,0,0,0);
-  var groups = {};  /* key: diff日数(数値) → {label, words:[]} */
+  var groups = {};   /* key: 数値diff */
   ngWords.forEach(function(w){
     var eb = G.ebbing && G.ebbing[w.id];
     var diff, label;
@@ -921,56 +922,60 @@ function showNgScheduleModal(lid) {
       var nd = new Date(eb.nextDate); nd.setHours(0,0,0,0);
       diff = Math.round((nd - today) / 86400000);
       if (diff < 0) diff = 0;
-      if (diff === 0) label = '今日（期限切れ含む）';
-      else if (diff === 1) label = '明日（' + (nd.getMonth()+1) + '/' + nd.getDate() + '）';
-      else label = diff + '日後（' + (nd.getMonth()+1) + '/' + nd.getDate() + '）';
+      if (diff === 0)      label = '🔴 今日（期限切れ含む）';
+      else if (diff === 1) label = '🟠 明日（' + (nd.getMonth()+1) + '/' + nd.getDate() + '）';
+      else if (diff <= 3)  label = '🟠 ' + diff + '日後（' + (nd.getMonth()+1) + '/' + nd.getDate() + '）';
+      else                 label = '🔵 ' + diff + '日後（' + (nd.getMonth()+1) + '/' + nd.getDate() + '）';
     } else {
       diff = 9999;
-      label = 'スケジュール未登録';
+      label = '⬜ スケジュール未登録';
     }
-    if (!groups[diff]) groups[diff] = { diff: diff, label: label, words: [] };
+    if (!groups[diff]) groups[diff] = { label: label, diff: diff, words: [] };
     groups[diff].words.push({
-      word: w.word||'', meaning: w.meaning||'',
-      ngCount: w.s && w.s.l || 0,
-      interval: eb ? EBBING_INTERVALS[eb.nextIdx||0] : null
+      word: w.word || '',
+      meaning: w.meaning || '',
+      ngCount: (w.s && w.s.l) || 0,
+      interval: eb ? EBBING_INTERVALS[eb.nextIdx || 0] : null
     });
   });
 
-  var sortedDiffs = Object.keys(groups).map(Number).sort(function(a,b){ return a-b; });
+  var sortedDiffs = Object.keys(groups).map(Number).sort(function(a,b){ return a - b; });
 
-  /* モーダルHTML組み立て */
-  var lFlag = lInfo ? lInfo.flag + ' ' : '';
-  var html = '<div class="modal-tl">❌ 不正解単語の復習スケジュール</div>' +
-    '<div style="font-size:12px;color:var(--tx2);margin-bottom:16px">' + lFlag + esc(lst.name) + '　計 <strong style="color:var(--rd)">' + ngWords.length + '語</strong></div>';
+  /* HTML組み立て */
+  var totalDays = sortedDiffs.filter(function(d){ return d !== 9999; }).length;
+  var html =
+    '<div class="modal-tl">📅 不正解単語の復習スケジュール</div>' +
+    '<div style="font-size:12px;color:var(--tx2);margin-bottom:14px">' +
+      lFlag + esc(lst.name) + '　<span style="color:var(--rd);font-weight:700">' + ngWords.length + '語</span> 要復習' +
+      (totalDays > 0 ? '　<span style="color:var(--tx2)">/ ' + totalDays + '日にわたる計画</span>' : '') +
+    '</div>';
 
   sortedDiffs.forEach(function(diff){
     var g = groups[diff];
-    var isToday  = diff === 0;
+    var isToday   = diff === 0;
     var isUnsched = diff === 9999;
     var hdrClr = isToday ? 'var(--rd)' : isUnsched ? 'var(--tx2)' : diff <= 3 ? 'var(--or)' : 'var(--ac3)';
     var hdrBg  = isToday ? 'rgba(255,76,106,.13)' : isUnsched ? 'rgba(144,144,170,.1)' : diff <= 3 ? 'rgba(255,156,76,.1)' : 'rgba(92,248,252,.08)';
+
     html +=
       '<div style="margin-bottom:14px">' +
-        /* 日付ヘッダー */
-        '<div style="display:flex;align-items:center;gap:8px;background:' + hdrBg + ';' +
-          'border-radius:9px;padding:6px 11px;margin-bottom:7px">' +
-          '<span style="font-size:13px;font-weight:700;color:' + hdrClr + '">' +
-            (isToday ? '🔴' : isUnsched ? '⬜' : diff <= 3 ? '🟠' : '🔵') + ' ' + g.label +
-          '</span>' +
-          '<span style="margin-left:auto;font-size:11px;font-weight:600;color:' + hdrClr + '">' + g.words.length + '語</span>' +
+        '<div style="display:flex;align-items:center;background:' + hdrBg + ';' +
+          'border-radius:9px;padding:6px 11px;margin-bottom:6px">' +
+          '<span style="font-size:13px;font-weight:700;color:' + hdrClr + '">' + g.label + '</span>' +
+          '<span style="margin-left:auto;font-size:11px;font-weight:700;color:' + hdrClr + '">' + g.words.length + '語</span>' +
         '</div>';
-    /* 単語一覧 */
+
     g.words.forEach(function(w){
       html +=
-        '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;' +
+        '<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;' +
           'background:var(--sf2);border-radius:9px;margin-bottom:4px">' +
           '<div style="flex:1;min-width:0">' +
             '<div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(w.word) + '</div>' +
             '<div style="font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px">' + esc(w.meaning) + '</div>' +
           '</div>' +
-          '<div style="text-align:right;flex-shrink:0">' +
+          '<div style="text-align:right;flex-shrink:0;line-height:1.5">' +
             '<div style="font-size:10px;color:var(--rd);font-weight:700">✗ ' + w.ngCount + '回</div>' +
-            (w.interval != null ? '<div style="font-size:9px;color:var(--tx2);margin-top:1px">間隔 ' + w.interval + '日</div>' : '') +
+            (w.interval != null ? '<div style="font-size:9px;color:var(--tx2)">間隔 ' + w.interval + '日</div>' : '') +
           '</div>' +
         '</div>';
     });
@@ -1151,6 +1156,7 @@ function homeListsRender(){
               '<div class="lc-prog-txt"><span>'+progLabel+'</span><span style="font-weight:600;color:'+progClr+'">'+pct+'%</span></div>'+
             '</div>'+
             (function(){
+              /* 正解/不正解/未学習 3色バー */
               var wOk=0,wNg=0,wNew=0;
               ws.forEach(function(w){
                 var s=w.s;
@@ -1159,17 +1165,20 @@ function homeListsRender(){
                 if(s.k>=1&&s.i>=3){wOk++;return;}
                 wNew++;
               });
-              if(!total)return '';
+              if(!total||(!wOk&&!wNg))return '';
               var lid2=esc(lst.id);
               return '<div style="margin-top:6px">'+
-                '<div style="display:flex;height:5px;border-radius:3px;overflow:hidden;gap:1px">'+
-                  (wOk>0?'<div style="flex:'+wOk+';background:#4cff91;border-radius:3px;opacity:.8"></div>':'')+
-                  (wNg>0?'<div style="flex:'+wNg+';background:var(--rd);border-radius:3px;cursor:pointer" onclick="event.stopPropagation();showNgScheduleModal(\''+lid2+'\')"></div>':'')+
-                  (wNew>0?'<div style="flex:'+wNew+';background:rgba(144,144,170,.25);border-radius:3px"></div>':'')+
+                '<div style="display:flex;height:5px;border-radius:3px;overflow:hidden">'+
+                  (wOk>0?'<div style="flex:'+wOk+';background:#4cff91;opacity:.8"></div>':'')+
+                  (wNg>0?'<div style="flex:'+wNg+';background:var(--rd);cursor:pointer" '+
+                    'onclick="event.stopPropagation();showNgScheduleModal(\''+lid2+'\')" ></div>':'')+
+                  (wNew>0?'<div style="flex:'+wNew+';background:rgba(144,144,170,.25)"></div>':'')+
                 '</div>'+
-                (wNg>0?'<div style="font-size:10px;color:var(--rd);margin-top:4px;cursor:pointer" onclick="event.stopPropagation();showNgScheduleModal(\''+lid2+'\')">❌ '+wNg+'語 要復習 · タップで復習スケジュール</div>':'')+
+                (wNg>0?'<div style="font-size:10px;color:var(--rd);margin-top:3px;cursor:pointer" '+
+                  'onclick="event.stopPropagation();showNgScheduleModal(\''+lid2+'\')">'+
+                  '❌ '+wNg+'語 要復習 · タップで復習スケジュール</div>':'')+
               '</div>';
-            })()+'
+            })()+
           '</div>'+
           (d?'<div class="list-badge" style="align-self:flex-start">'+d+'</div>':'')+'</button>'+
       '</div>'+
@@ -3453,17 +3462,16 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
     return (
       '<div style="display:flex;align-items:center;gap:10px;position:relative">'+
         '<div id="'+bid+'" '+
-          'onmouseenter="document.getElementById(\"'+tipId+'\").style.display=\"block\"" '+
-          'onmouseleave="document.getElementById(\"'+tipId+'\").style.display=\"none\"" '+
+          'onmouseenter="document.getElementById(\''+tipId+'\').style.display=\'block\'" '+
+          'onmouseleave="document.getElementById(\''+tipId+'\').style.display=\'none\'" '+
           'style="flex:1;height:16px;border-radius:8px;overflow:hidden;display:flex;min-width:120px;background:#e0e0e8">'+
           (wOk>0?'<div style="flex:'+wOk+';background:#4caf50"></div>':'')+
           (wNg>0?
-            '<div title="クリック：復習スケジュールを確認" '+
-              'onclick="try{window.opener.showNgScheduleModal(\"'+lid+'\");}catch(e){}" '+
-              'onmouseenter="this.style.filter=\"brightness(1.25)\"" '+
-              'onmouseleave="this.style.filter=\"\"" '+
+            '<div title="クリックして復習スケジュールを確認" '+
+              'onclick="try{window.opener.showNgScheduleModal(\''+lid+'\');}catch(e){}" '+
+              'onmouseenter="this.style.opacity=\'0.75\'" onmouseleave="this.style.opacity=\'1\'" '+
               'style="flex:'+wNg+';background:#ef5350;cursor:pointer"></div>'
-          : '')+
+          :'')+
           (wUn>0?'<div style="flex:'+wUn+';background:#d0d0dc"></div>':'')+
         '</div>'+
         '<div style="white-space:nowrap;font-size:8pt;min-width:110px;color:#444">'+
@@ -3473,9 +3481,9 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
           '<span style="color:#888">（全'+total+'語）</span>'+
         '</div>'+
         (wNg>0?
-          '<span onclick="try{window.opener.showNgScheduleModal(\"'+lid+'\");}catch(e){}" '+
-            'style="font-size:8pt;color:#ef5350;cursor:pointer;white-space:nowrap;font-weight:600;'+
-            'border-bottom:1px solid rgba(239,83,80,.4)">❌ 詳細</span>'
+          '<span onclick="try{window.opener.showNgScheduleModal(\''+lid+'\');}catch(e){}" '+
+            'style="font-size:8pt;color:#ef5350;cursor:pointer;white-space:nowrap;'+
+            'font-weight:600;border-bottom:1px solid rgba(239,83,80,.5)">❌ 詳細</span>'
         :'')+
         '<div id="'+tipId+'" style="display:none;position:absolute;left:0;bottom:24px;'+
           'background:#1e1e34;border:1px solid #5c4ccc;border-radius:10px;'+
