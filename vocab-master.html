@@ -3197,7 +3197,19 @@ function generateReport(period, lids){
     var lst=G.lists.find(function(x){return x.id===lid;});
     var r=listMap[lid];
     var acc2=r.total?Math.round(r.ok/r.total*100):0;
-    return {lid:lid, name:lst?lst.name:'（削除済みリスト）', lang:lst?lst.lang:'', sessions:r.sessions, total:r.total, ok:r.ok, acc:acc2, durMs:r.durMs};
+    /* ステータス別集計 */
+    var ws=G.words.filter(function(w){return w.lid===lid;});
+    var nOk=0,nNg=0,nUnknown=0,nNew=0;
+    ws.forEach(function(w){
+      var st=wordStatus(w);
+      if(st==='ok') nOk++;
+      else if(st==='ng') nNg++;
+      else if(st==='unknown') nUnknown++;
+      else nNew++;
+    });
+    return {lid:lid, name:lst?lst.name:'（削除済みリスト）', lang:lst?lst.lang:'',
+            sessions:r.sessions, total:r.total, ok:r.ok, acc:acc2, durMs:r.durMs,
+            wordTotal:ws.length, nOk:nOk, nNg:nNg, nUnknown:nUnknown, nNew:nNew};
   }).sort(function(a,b){return b.durMs-a.durMs;});
 
   /* エビングハウス今後30日予測 */
@@ -3425,18 +3437,55 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
   });
   if(!dayRows)dayRows='<tr><td colspan="7" style="text-align:center;color:#888;padding:14px">この期間の記録はありません</td></tr>';
 
-  /* 単語集テーブル */
-  var listRows='';
+  /* 単語集カード（ステータスバー付き） */
+  var listCards='';
   if(listData&&listData.length){
     listData.forEach(function(d){
       var l=LANGS[d.lang||'en'];
-      var clr=d.acc>=80?'#2e7d32':d.acc>=60?'#f57c00':'#c62828';
-      listRows+='<tr><td><strong>'+escHtml(d.name)+'</strong></td><td>'+(l?l.flag+' '+l.name:'—')+'</td>'+
-        '<td style="text-align:center">'+d.sessions+'</td><td style="text-align:center">'+d.total+'</td>'+
-        '<td style="text-align:center;color:'+clr+';font-weight:700">'+d.acc+'%</td><td>'+fmtDur(d.durMs)+'</td></tr>';
+      var t=d.wordTotal||0;
+      /* セグメント幅 (%) — 合計が100になるよう端数を nNew に吸収 */
+      var wOk=t?Math.round(d.nOk/t*100):0;
+      var wNg=t?Math.round(d.nNg/t*100):0;
+      var wUk=t?Math.round(d.nUnknown/t*100):0;
+      var wNw=Math.max(0, 100-wOk-wNg-wUk);
+      /* セグメント要素（幅0は省略） */
+      function seg(w,bg){ return w?'<div style="width:'+w+'%;height:100%;background:'+bg+'"></div>':''; }
+      var bar=seg(wOk,'#4caf50')+seg(wNg,'#e53935')+seg(wUk,'#f9a825')+seg(wNw,'#d0d0e0');
+      /* 凡例 */
+      function dot(bg,label,n){
+        return n?'<span style="display:inline-flex;align-items:center;gap:3px;margin-right:10px;font-size:8.5pt;color:#555">'+
+          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+bg+';flex-shrink:0"></span>'+
+          label+'&thinsp;<strong style="color:#1a1a2e">'+n+'</strong></span>':'';
+      }
+      var accClr=d.acc>=80?'#2e7d32':d.acc>=60?'#f57c00':'#c62828';
+      listCards+=
+        '<div style="background:#f8f8ff;border:1px solid #e0e0f0;border-radius:10px;padding:13px 15px;margin-bottom:10px">'+
+          /* 上段：アイコン・名前・学習時間 */
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">'+
+            '<span style="font-size:16pt;line-height:1">'+(l?l.flag:'📗')+'</span>'+
+            '<strong style="flex:1;font-size:11pt;color:#1a1a2e">'+escHtml(d.name)+'</strong>'+
+            '<span style="font-size:9pt;color:#888">⏱ '+fmtDur(d.durMs)+'</span>'+
+          '</div>'+
+          /* ステータスバー */
+          '<div style="height:8px;background:#e4e4ee;border-radius:4px;overflow:hidden;display:flex;margin-bottom:6px">'+bar+'</div>'+
+          /* 凡例 */
+          '<div style="margin-bottom:9px;line-height:2.2">'+
+            dot('#4caf50','正解',d.nOk)+
+            dot('#e53935','不正解',d.nNg)+
+            dot('#f9a825','あいまい',d.nUnknown)+
+            dot('#aaa','未習',d.nNew)+
+          '</div>'+
+          /* 下段バッジ */
+          '<div style="display:flex;flex-wrap:wrap;gap:5px">'+
+            '<span style="background:#ede7ff;color:#6a3fcf;border-radius:5px;padding:2px 8px;font-size:8.5pt;font-weight:600">'+t+'単語</span>'+
+            '<span style="background:#e8f5e9;color:'+accClr+';border-radius:5px;padding:2px 8px;font-size:8.5pt;font-weight:700">正答率 '+d.acc+'%</span>'+
+            '<span style="background:#fce4ec;color:#b71c1c;border-radius:5px;padding:2px 8px;font-size:8.5pt;font-weight:600">出題 '+d.total+'問</span>'+
+            '<span style="background:#e3f2fd;color:#1565c0;border-radius:5px;padding:2px 8px;font-size:8.5pt;font-weight:600">'+d.sessions+'セッション</span>'+
+          '</div>'+
+        '</div>';
     });
   } else {
-    listRows='<tr><td colspan="6" style="text-align:center;color:#888;padding:14px">データがありません</td></tr>';
+    listCards='<div style="text-align:center;color:#888;padding:20px;font-size:10pt">データがありません</div>';
   }
 
   /* 苦手単語テーブル */
@@ -3501,7 +3550,7 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
     '<div class="subtitle">'+escHtml(title)+' ｜ 作成：'+fmtDate(now)+' '+now.getHours()+'時'+String(now.getMinutes()).padStart(2,'0')+'分</div>'+
     badges+
     '<h2 style="border-left-color:#7c5cfc">📚 使用した単語集</h2>'+
-    '<table><tr><th style="background:#7c5cfc">単語集名</th><th style="background:#7c5cfc">言語</th><th style="background:#7c5cfc">セッション</th><th style="background:#7c5cfc">出題数</th><th style="background:#7c5cfc">正答率</th><th style="background:#7c5cfc">学習時間</th></tr>'+listRows+'</table>'+
+    listCards+
     '<h2 style="border-left-color:#c62828">❌ 苦手単語（不正解が多い順）</h2>'+
     '<table><tr><th style="background:#c62828">#</th><th style="background:#c62828">単語</th><th style="background:#c62828">意味</th><th style="background:#c62828">言語</th><th style="background:#c62828">間違い回数</th></tr>'+missRows+'</table>'+
     '<h2 style="border-left-color:#e65100">⏱️ 準苦手ランキング（回答に時間がかかった単語）</h2>'+
