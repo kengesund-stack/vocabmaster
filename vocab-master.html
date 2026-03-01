@@ -3795,12 +3795,19 @@ function qSelect(i){
   var hadMiss=!!q._hadMiss;
   if(!ok){ q._hadMiss=true; Q.consec[q.id]=0; Q.lastWasWrong=true; }
   else { Q.consec[q.id]=(Q.consec[q.id]||0)+1; Q.lastWasWrong=false; }
+  /* requeueMax=0（再出題なし）の場合、不正解でも再出題しないので即習得扱いにする */
   var justMastered=ok&&(!hadMiss||Q.consec[q.id]>=requeueMax)&&!Q.masteredIds[q.id];
-  if(justMastered){Q.masteredIds[q.id]=true;Q.mastered=(Q.mastered||0)+1;}
+  var justMasteredBySkip=!ok&&requeueMax===0&&!Q.masteredIds[q.id];
+  if(justMastered||justMasteredBySkip){Q.masteredIds[q.id]=true;Q.mastered=(Q.mastered||0)+1;}
 
+  var needMore=requeueMax>0&&hadMiss&&!justMastered&&ok;
   el('FB-tx').innerHTML=ok
-    ?(justMastered?'<span style="color:var(--gn)">✓ 正解！</span>':'<span style="color:var(--gn)">✓ 正解！あと'+(requeueMax-(Q.consec[q.id]||0))+'回正解で習得</span>')
-    :'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca);
+    ?(justMastered?'<span style="color:var(--gn)">✓ 正解！</span>'
+      :(needMore?'<span style="color:var(--gn)">✓ 正解！あと'+(requeueMax-(Q.consec[q.id]||0))+'回正解で習得</span>'
+        :'<span style="color:var(--gn)">✓ 正解！</span>'))
+    :(requeueMax===0
+        ?'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca)+'<span style="color:var(--tx2);font-size:11px"> （再出題なし）</span>'
+        :'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca));
   el('FB-dt').textContent=Q.testMode?'':(ok?'次回: '+(q.s&&q.s.i||1)+'日後':'1日後に再復習');
   el('FB').classList.add('on');
   /* 自動進行 — 正解時のみ（不正解は手動で確認させる） */
@@ -3832,8 +3839,8 @@ function qNext(){
   var remaining=Q.q.length-(Q.i+1);
   /* masteredIds にある（requeueMax回連続正解済み）場合は再出題しない */
   var alreadyMastered=Q.masteredIds&&Q.masteredIds[q&&q.id];
-  /* 不正解経験あり かつ 連続正解数が設定値未満なら再出題 */
-  if(q && q._hadMiss && !alreadyMastered){
+  /* 不正解経験あり かつ requeueMax>0 かつ 連続正解数が設定値未満なら再出題 */
+  if(q && q._hadMiss && requeueMax>0 && !alreadyMastered){
     /* 残り問題がある場合は1〜3問後のランダムな位置に、ない場合は末尾に挿入 */
     var insertOffset=remaining>0 ? 1+Math.floor(Math.random()*Math.min(remaining,3)) : 1;
     Q.q.splice(Q.i+1+insertOffset,0,q);
