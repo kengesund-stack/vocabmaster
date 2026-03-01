@@ -885,7 +885,8 @@ function answer(w,ok){
   if(!w.s)w.s={i:1,e:EASE0,d:null,k:0,l:0};
   var s=w.s;
   if(ok){s.k=(s.k||0)+1;if(s.k<=1)s.i=1;else if(s.k===2)s.i=3;else s.i=Math.round(s.i*s.e);s.e=Math.min(3.0,s.e+0.1);
-    if(G.cfg.ebbing) ebbingAdvance(w.id);}
+    /* エビングハウス進行：dueモードでエビング由来の単語のみ */
+    if(G.cfg.ebbing&&Q.ebbingIds&&Q.ebbingIds[w.id]) ebbingAdvance(w.id);}
   else{s.l=(s.l||0)+1;s.k=0;s.i=1;s.e=Math.max(EMIN,s.e-0.2);
     if(G.cfg.ebbing) ebbingMarkMiss(w.id, w.word, w.meaning||'', w.lang||'en');}
   s.i=Math.max(1,Math.min(s.i,365));
@@ -2454,7 +2455,9 @@ function listMenu(lid){
     var pool=ws.filter(due);
     if(pool.length<2){toast('復習単語が少なすぎます（最低2単語）');return;}
     var qs=(G.cfg.random ? shuffle(pool) : pool).slice(0,size);
-    Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'due',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{}};
+    var ebbingIds2={};
+    if(G.cfg.ebbing){getEbbingDue().forEach(function(w){ebbingIds2[w.id]=true;});}
+    Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'due',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{},ebbingIds:ebbingIds2};
     go('s-quiz');qRender();
   });
   el('LM-list').addEventListener('click',function(){
@@ -3768,8 +3771,13 @@ function quizStart(mode,lid){
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
   var size=Math.min(pool.length,parseInt(G.cfg.size)||20);
   var ws=(G.cfg.random ? shuffle(pool) : pool).slice(0,size);
+  /* エビングハウス由来の単語IDセットを記録（dueモードのみ） */
+  var ebbingIds={};
+  if(mode==='due'&&G.cfg.ebbing){
+    getEbbingDue().forEach(function(w){ebbingIds[w.id]=true;});
+  }
   Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now(),
-     consec:{},mastered:0,masteredIds:{}}; /* consec: wordId→連続正解数 */
+     consec:{},mastered:0,masteredIds:{},ebbingIds:ebbingIds};
   go('s-quiz');qRender();
 }
 
