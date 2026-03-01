@@ -3244,53 +3244,74 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
     if(!forecast||!forecast.length)forecast=[];
     var hasDue=forecast.some(function(d){return d.words.length>0;});
     var maxN=Math.max.apply(null,forecast.map(function(d){return d.words.length;}).concat([1]));
-    var GW=580, GH=130, PL=30, PR=10, PB=28, PT=14;
+    var GW=580, GH=150, PL=28, PR=8, PB=30, PT=24;
     var IW=GW-PL-PR, IH=GH-PT-PB;
-    var step=IW/31;
-    /* グリッド */
+    var nBars=forecast.length||31;
+    var barW=IW/nBars;
+    var barPad=Math.max(1, barW*0.18);
+
+    /* Y軸グリッド */
     var grid='';
-    [0,0.5,1].forEach(function(r){
+    [0,0.25,0.5,0.75,1].forEach(function(r){
       var y=PT+IH-Math.round(r*IH);
-      grid+='<line x1="'+PL+'" y1="'+y+'" x2="'+(GW-PR)+'" y2="'+y+'" stroke="#dde" stroke-width="'+(r===0||r===1?'1':'0.5')+'" stroke-dasharray="'+(r>0&&r<1?'3,3':'0')+'"/>';
-      if(r>0||r===0) grid+='<text x="'+(PL-3)+'" y="'+(y+3)+'" text-anchor="end" font-size="7" fill="#888">'+Math.round(maxN*r)+'</text>';
+      var isDark=(r===0||r===1);
+      grid+='<line x1="'+PL+'" y1="'+y+'" x2="'+(GW-PR)+'" y2="'+y+'"'+
+        ' stroke="#d8d8ee" stroke-width="'+(isDark?'1':'0.5')+'" stroke-dasharray="'+(isDark?'0':'4,3')+'"/>';
+      if(r>0) grid+='<text x="'+(PL-4)+'" y="'+(y+3)+'" text-anchor="end" font-size="7" fill="#999">'+Math.round(maxN*r)+'</text>';
     });
-    /* 折れ線と点 */
+
+    /* 棒と数値ラベル */
+    var bars='', numLabels='';
     var pts=[];
     forecast.forEach(function(d,i){
-      var cx=PL+i*step+step/2;
-      var cy=PT+IH-(d.words.length/maxN*IH);
-      pts.push({cx:cx,cy:cy,n:d.words.length,diff:d.diff,words:d.words});
-    });
-    var line='';
-    for(var i=1;i<pts.length;i++){
-      var p=pts[i-1],q=pts[i];
-      if(p.n>0||q.n>0){
-        line+='<line x1="'+p.cx.toFixed(1)+'" y1="'+p.cy.toFixed(1)+'" x2="'+q.cx.toFixed(1)+'" y2="'+q.cy.toFixed(1)+'" stroke="#7c5cfc" stroke-width="2" opacity="0.8"/>';
+      var cx=PL+i*barW+barW/2;
+      var barH=maxN>0?(d.words.length/maxN*IH):0;
+      var by=PT+IH-barH;
+      var isToday=(d.diff===0);
+      var clr=isToday?'#fc5c7d':'#7c5cfc';
+      var clrLight=isToday?'#ffa0b8':'#a990fc';
+      pts.push({cx:cx,n:d.words.length,diff:d.diff,words:d.words,by:by,barH:barH});
+      if(d.words.length>0){
+        /* 棒本体（グラデ風：上が明るい） */
+        bars+='<rect x="'+(cx-barW/2+barPad).toFixed(1)+'" y="'+by.toFixed(1)+'"'+
+          ' width="'+(barW-barPad*2).toFixed(1)+'" height="'+barH.toFixed(1)+'"'+
+          ' rx="'+(Math.min(3,barW/4)).toFixed(1)+'"'+
+          ' fill="'+clr+'" opacity="'+(isToday?'0.95':'0.82')+'"'+
+          ' class="eb-bar" data-diff="'+d.diff+'" style="cursor:pointer"/>'+
+        /* ハイライト（棒の上部を少し明るく） */
+        '<rect x="'+(cx-barW/2+barPad).toFixed(1)+'" y="'+by.toFixed(1)+'"'+
+          ' width="'+(barW-barPad*2).toFixed(1)+'" height="'+Math.min(barH,4).toFixed(1)+'"'+
+          ' rx="'+(Math.min(3,barW/4)).toFixed(1)+'"'+
+          ' fill="'+clrLight+'" opacity="0.6" pointer-events="none"/>';
+        /* 数値ラベル（棒の上） */
+        numLabels+='<text x="'+cx.toFixed(1)+'" y="'+(by-3).toFixed(1)+'"'+
+          ' text-anchor="middle" font-size="'+(barW>14?'8':'6.5')+'" font-weight="700"'+
+          ' fill="'+(isToday?'#c62870':'#5a3fcf')+'">'+d.words.length+'</text>';
       }
-    }
-    var dots='';
-    pts.forEach(function(p){
-      if(p.n>0){
-        dots+='<circle cx="'+p.cx.toFixed(1)+'" cy="'+p.cy.toFixed(1)+'" r="4" fill="'+(p.diff===0?'#fc5c7d':'#7c5cfc')+'" stroke="#fff" stroke-width="1.5" class="eb-dot" data-diff="'+p.diff+'" style="cursor:pointer"/>';
-      }
     });
-    /* X軸ラベル (週ごと) */
+
+    /* X軸ラベル（週ごと＋今日） */
     var xlbls='';
     [0,7,14,21,28,30].forEach(function(d){
-      var cx=PL+d*step+step/2;
+      var cx=PL+(d+0.5)*barW;
       var dt=new Date(); dt.setDate(dt.getDate()+d);
       var label=d===0?'今日':(dt.getMonth()+1)+'/'+(dt.getDate());
-      xlbls+='<text x="'+cx.toFixed(1)+'" y="'+(GH-4)+'" text-anchor="middle" font-size="7.5" fill="'+(d===0?'#fc5c7d':'#555')+'">'+label+'</text>';
+      xlbls+='<text x="'+cx.toFixed(1)+'" y="'+(GH-4)+'" text-anchor="middle"'+
+        ' font-size="7.5" fill="'+(d===0?'#fc5c7d':'#555')+'"'+(d===0?' font-weight="700"':'')+'>'+label+'</text>';
     });
-    /* データなしのとき空グラフ + メッセージ */
+
+    /* データなし */
     if(!hasDue){
       return '<div style="overflow-x:auto">'+
-        '<svg viewBox="0 0 '+GW+' '+GH+'" style="width:100%;max-height:160px;display:block">'+grid+xlbls+'</svg>'+
+        '<svg viewBox="0 0 '+GW+' '+GH+'" style="width:100%;max-height:170px;display:block">'+grid+xlbls+'</svg>'+
         '</div><p style="color:#888;font-size:9pt;margin-top:4px">📭 現在、忘却曲線の復習予定はありません。クイズで間違えた単語が登録されると表示されます。</p>';
     }
-    var svgHtml='<svg id="ebbing-svg" viewBox="0 0 '+GW+' '+GH+'" style="width:100%;max-height:160px;display:block;cursor:default">'+grid+line+dots+xlbls+'</svg>';
 
-    /* ツールチップ用データをJSON埋め込み */
+    var svgHtml='<svg id="ebbing-svg" viewBox="0 0 '+GW+' '+GH+'"'+
+      ' style="width:100%;max-height:170px;display:block;cursor:default">'+
+      grid+bars+numLabels+xlbls+'</svg>';
+
+    /* ツールチップ用データ */
     var tooltipData=JSON.stringify(pts.map(function(p){return{diff:p.diff,n:p.n,words:p.words};}));
 
     var html='<div style="overflow-x:auto;position:relative" id="ebbing-chart-wrap">'+svgHtml+
@@ -3305,8 +3326,8 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
       'var wrap=document.getElementById("ebbing-chart-wrap");'+
       'var tip=document.getElementById("eb-tooltip");'+
       'if(!svg||!tip)return;'+
-      'svg.querySelectorAll(".eb-dot").forEach(function(dot){'+
-        'dot.addEventListener("mouseover",function(e){'+
+      'svg.querySelectorAll(".eb-bar").forEach(function(bar){'+
+        'bar.addEventListener("mouseover",function(e){'+
           'var diff=parseInt(this.getAttribute("data-diff"));'+
           'var d=data.find(function(x){return x.diff===diff;});'+
           'if(!d||!d.n)return;'+
@@ -3318,13 +3339,13 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
           '}).join("<br>");'+
           'tip.style.display="block";'+
           'var rect=wrap.getBoundingClientRect();'+
-          'var dotRect=this.getBoundingClientRect();'+
-          'var tx=dotRect.left-rect.left+8;'+
-          'var ty=dotRect.top-rect.top-10;'+
+          'var barRect=this.getBoundingClientRect();'+
+          'var tx=barRect.left-rect.left+8;'+
+          'var ty=barRect.top-rect.top-10;'+
           'if(tx+280>rect.width)tx=tx-290;'+
           'tip.style.left=tx+"px"; tip.style.top=ty+"px";'+
         '});'+
-        'dot.addEventListener("mouseleave",function(){tip.style.display="none";});'+
+        'bar.addEventListener("mouseleave",function(){tip.style.display="none";});'+
       '});'+
     '})();<\/script>';
     return html;
