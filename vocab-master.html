@@ -1076,7 +1076,10 @@ function homeListsRender(){
   /* 各フォルダのリストカードHTMLを生成する共通関数 */
   function renderListCard(lst){
     var ws=G.words.filter(function(w){return w.lid===lst.id;});
-    var d=ws.filter(due).length;
+    /* 復習件数：一度でも学習済み（w.s あり）かつ期限到来 */
+    var d=ws.filter(function(w){return w.s&&due(w);}).length;
+    /* 未習件数：まだ一度も学習していない */
+    var dNew=ws.filter(function(w){return !w.s||w.s.k===undefined;}).length;
     var l=LANGS[lst.lang||'en'];
     var total=ws.length;
 
@@ -1124,7 +1127,10 @@ function homeListsRender(){
           '<div class="list-ic" style="background:'+lst.clr+'20">'+(l?l.flag:'📗')+'</div>'+
           '<div class="list-inf">'+
             '<div class="list-name">'+esc(lst.name)+langBadge(lst.lang)+'</div>'+
-            '<div class="list-meta">'+total+'単語'+(d?' · <span style="color:var(--ac2)">復習'+d+'件</span>':'')+'</div>'+
+            '<div class="list-meta">'+total+'単語'+
+              (d?' · <span style="color:var(--ac2)" title="一度学習済みでSRS期限が来た単語">復習'+d+'件</span>':'')+
+              (dNew?' · <span style="color:var(--tx2)" title="まだ一度も学習していない単語">未習'+dNew+'件</span>':'')+
+            '</div>'+
             statBar+
             legend+
           '</div>'+
