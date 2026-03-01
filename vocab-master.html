@@ -3170,7 +3170,13 @@ function generateReport(period, lids){
       missMap[w.id].count++;
     });
   });
-  var missArr=Object.values(missMap).sort(function(a,b){return b.count-a.count;});
+  var missArr=Object.values(missMap).map(function(m){
+    /* エビングハウス次回復習日を付加 */
+    var rec=G.ebbing&&G.ebbing[m.id];
+    m.nextDate=rec?rec.nextDate:null;
+    m.nextIdx=rec?rec.nextIdx:null;
+    return m;
+  }).sort(function(a,b){return b.count-a.count;});
 
   /* 準苦手：正解したが5秒以上かかった単語 */
   var slowMap={};
@@ -3546,13 +3552,33 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
   /* 苦手単語テーブル */
   var missRows='';
   if(missArr&&missArr.length){
+    var INTERVALS_LBL=['1日後','3日後','7日後','14日後','30日後'];
     missArr.forEach(function(w,i){
+      /* 次回復習日の表示 */
+      var nextCell='';
+      if(w.nextDate){
+        var nd=new Date(w.nextDate);
+        var now2=new Date(); now2.setHours(0,0,0,0); nd.setHours(0,0,0,0);
+        var diffD=Math.round((nd-now2)/86400000);
+        var dateStr=(nd.getMonth()+1)+'/'+(nd.getDate());
+        var diffLbl=diffD<=0?'今日':diffD===1?'明日':diffD+'日後';
+        var stageStr=w.nextIdx!=null?'（第'+(w.nextIdx+1)+'回／5回）':'';
+        var clr=diffD<=0?'#c62828':diffD<=3?'#e65100':'#2e7d32';
+        nextCell='<td style="text-align:center;font-size:8.5pt">'+
+          '<span style="color:'+clr+';font-weight:700">'+diffLbl+'</span>'+
+          '<span style="color:#888;margin-left:4px">('+dateStr+')</span>'+
+          '<div style="color:#999;font-size:7.5pt">'+stageStr+'</div>'+
+        '</td>';
+      } else {
+        nextCell='<td style="text-align:center;color:#aaa;font-size:8.5pt">完走済み ✅</td>';
+      }
       missRows+='<tr><td style="text-align:center">'+(i+1)+'</td><td><strong>'+escHtml(w.word)+'</strong></td>'+
         '<td>'+escHtml(w.meaning)+'</td><td>'+(langNames[w.lang]||w.lang)+'</td>'+
-        '<td style="color:#c62828;font-weight:700;text-align:center">'+w.count+'回</td></tr>';
+        '<td style="color:#c62828;font-weight:700;text-align:center">'+w.count+'回</td>'+
+        nextCell+'</tr>';
     });
   } else {
-    missRows='<tr><td colspan="5" style="text-align:center;color:#888;padding:14px">間違いはありませんでした 🎉</td></tr>';
+    missRows='<tr><td colspan="6" style="text-align:center;color:#888;padding:14px">間違いはありませんでした 🎉</td></tr>';
   }
 
   /* 準苦手テーブル */
@@ -3608,7 +3634,7 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
     '<div class="subtitle">'+escHtml(title)+' ｜ 作成：'+fmtDate(now)+' '+now.getHours()+'時'+String(now.getMinutes()).padStart(2,'0')+'分</div>'+
     badges+
     '<h2 style="border-left-color:#c62828">❌ 苦手単語（不正解が多い順）</h2>'+
-    '<table><tr><th style="background:#c62828">#</th><th style="background:#c62828">単語</th><th style="background:#c62828">意味</th><th style="background:#c62828">言語</th><th style="background:#c62828">間違い回数</th></tr>'+missRows+'</table>'+
+    '<table><tr><th style="background:#c62828">#</th><th style="background:#c62828">単語</th><th style="background:#c62828">意味</th><th style="background:#c62828">言語</th><th style="background:#c62828">間違い回数</th><th style="background:#c62828">次回復習</th></tr>'+missRows+'</table>'+
     '<h2 style="border-left-color:#e65100">⏱️ 準苦手ランキング（回答に時間がかかった単語）</h2>'+
     '<div style="font-size:9pt;color:#888;margin:-8px 0 10px">正解したが5秒以上かかった単語 ／ 平均回答時間の長い順</div>'+
     '<table><tr><th style="background:#e65100">#</th><th style="background:#e65100">単語</th><th style="background:#e65100">意味</th><th style="background:#e65100">言語</th><th style="background:#e65100">平均回答時間</th><th style="background:#e65100">計測回数</th></tr>'+slowRows+'</table>'+
