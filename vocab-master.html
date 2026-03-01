@@ -3674,6 +3674,7 @@ function qDontKnow(){
   q._hadMiss=true;
   Q.consec[q.id]=0;
   /* 習得カウントは増やさない */
+  Q.lastWasWrong=true;
   el('FB-tx').innerHTML='<span style="color:var(--ac3)">❓ 分からない</span> → <span style="color:var(--gn)">'+esc(Q.ca)+'</span>';
   el('FB-dt').textContent=Q.testMode?'':'1日後に再復習';
   el('FB').classList.add('on');
@@ -3700,8 +3701,8 @@ function qSelect(i){
   if(!Q.consec)Q.consec={};
   if(!Q.masteredIds)Q.masteredIds={};
   var hadMiss=!!q._hadMiss;
-  if(!ok){ q._hadMiss=true; Q.consec[q.id]=0; }
-  else { Q.consec[q.id]=(Q.consec[q.id]||0)+1; }
+  if(!ok){ q._hadMiss=true; Q.consec[q.id]=0; Q.lastWasWrong=true; }
+  else { Q.consec[q.id]=(Q.consec[q.id]||0)+1; Q.lastWasWrong=false; }
   var justMastered=ok&&(!hadMiss||Q.consec[q.id]>=2)&&!Q.masteredIds[q.id];
   if(justMastered){Q.masteredIds[q.id]=true;Q.mastered=(Q.mastered||0)+1;}
 
@@ -3739,13 +3740,14 @@ function qNext(){
   var remaining=Q.q.length-(Q.i+1);
   /* masteredIds にある（2回連続正解済み）場合は再出題しない */
   var alreadyMastered=Q.masteredIds&&Q.masteredIds[q&&q.id];
-  /* remaining>0 の条件を廃止：最後の問題を間違えても再出題されるよう修正 */
-  if(q && q._hadMiss && !alreadyMastered && (Q.requeued[q.id]||0)<requeueMax){
+  /* 不正解直後のqNextでのみ再挿入カウント。正解後のqNextではカウントしない */
+  if(q && q._hadMiss && Q.lastWasWrong && !alreadyMastered && (Q.requeued[q.id]||0)<requeueMax){
     Q.requeued[q.id]=(Q.requeued[q.id]||0)+1;
     /* 残り問題がある場合は1〜3問後のランダムな位置に、ない場合は末尾に挿入 */
     var insertOffset=remaining>0 ? 1+Math.floor(Math.random()*Math.min(remaining,3)) : 1;
     Q.q.splice(Q.i+1+insertOffset,0,q);
   }
+  Q.lastWasWrong=false;
 
   Q.i++;
   Q.i>=Q.q.length?qResult():qRender();
