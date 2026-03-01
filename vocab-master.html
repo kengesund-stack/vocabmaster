@@ -75,6 +75,17 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 .lc-prog-fill { height:100%; border-radius:2px; transition:width .4s ease; }
 .lc-prog-txt { font-size:10px; color:var(--tx2); margin-top:4px; display:flex; justify-content:space-between; }
 
+/* ステータスバー */
+.lc-stat-bar { display:flex; height:6px; border-radius:3px; overflow:hidden; background:rgba(255,255,255,.08); margin-top:8px; gap:1px; }
+.lc-stat-seg { height:100%; transition:width .4s ease; border-radius:0; }
+.lc-stat-seg:first-child { border-radius:3px 0 0 3px; }
+.lc-stat-seg:last-child { border-radius:0 3px 3px 0; }
+.lc-stat-seg:only-child { border-radius:3px; }
+.lc-stat-legend { display:flex; align-items:center; gap:9px; margin-top:5px; flex-wrap:wrap; }
+.lc-stat-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.lc-stat-lbl { font-size:10px; color:var(--tx2); display:flex; align-items:center; gap:3px; }
+.lc-stat-lbl b { color:var(--tx); font-weight:600; }
+
 /* スワイプ削除 */
 .swipe-wrap { position:relative; overflow:hidden; border-radius:var(--r); margin-bottom:7px; }
 .swipe-del-bg { position:absolute; right:0; top:0; bottom:0; width:90px; background:var(--rd); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:2px; color:#fff; font-size:11px; font-weight:700; border-radius:var(--r); }
@@ -1040,26 +1051,57 @@ function homeListsRender(){
     var ws=G.words.filter(function(w){return w.lid===lst.id;});
     var d=ws.filter(due).length;
     var l=LANGS[lst.lang||'en'];
-    var cursor=lst.cursor||0;
     var total=ws.length;
-    var pct=total>0?Math.min(100,Math.round(cursor/total*100)):0;
-    var progClr=pct>=100?'var(--gn)':pct>=60?'var(--ac3)':pct>=30?'var(--ac)':'var(--ac2)';
-    var nextN=Math.min(parseInt(G.cfg.size)||20, total-cursor);
-    var progLabel=pct>=100?'✅ 全単語完了！':'次回: '+cursor+'〜'+(cursor+nextN)+'番目 ('+pct+'%)';
+
+    /* ── ステータス集計 ── */
+    var nOk=0,nNg=0,nUnknown=0,nNew=0;
+    ws.forEach(function(w){
+      var st=wordStatus(w);
+      if(st==='ok') nOk++;
+      else if(st==='ng') nNg++;
+      else if(st==='unknown') nUnknown++;
+      else nNew++;
+    });
+    var nStudied=nOk+nNg+nUnknown; /* 既習合計 */
+
+    /* ── セグメントバー生成 ── */
+    function seg(n, clr){
+      if(!n||!total) return '';
+      var w=Math.round(n/total*100);
+      return '<div class="lc-stat-seg" style="width:'+w+'%;background:'+clr+'"></div>';
+    }
+    var statBar=
+      '<div class="lc-stat-bar">'+
+        seg(nOk,   'var(--gn)')+   /* 緑：正解 */
+        seg(nNg,   'var(--rd)')+   /* 赤：不正解 */
+        seg(nUnknown,'var(--gd)')+ /* 黄：あいまい */
+        seg(nNew,  'rgba(255,255,255,.12)')+ /* グレー：未習 */
+      '</div>';
+
+    /* ── 凡例（数が0のものは非表示） ── */
+    function dot(clr,label,n){
+      if(!n) return '';
+      return '<span class="lc-stat-lbl"><span class="lc-stat-dot" style="background:'+clr+'"></span>'+label+'&thinsp;<b>'+n+'</b></span>';
+    }
+    var legend='<div class="lc-stat-legend">'+
+      dot('var(--gn)','正解',nOk)+
+      dot('var(--rd)','不正解',nNg)+
+      dot('var(--gd)','あいまい',nUnknown)+
+      dot('rgba(160,160,180,.6)','未習',nNew)+
+    '</div>';
+
     return '<div class="swipe-wrap" data-lid="'+esc(lst.id)+'">'+
       '<div class="swipe-del-bg"><span>🗑️</span>削除</div>'+
       '<div class="swipe-inner">'+
-        '<button class="list-card" data-lid="'+esc(lst.id)+'" style="padding-bottom:8px">'+
+        '<button class="list-card" data-lid="'+esc(lst.id)+'" style="padding-bottom:10px">'+
           '<div class="list-ic" style="background:'+lst.clr+'20">'+(l?l.flag:'📗')+'</div>'+
           '<div class="list-inf">'+
             '<div class="list-name">'+esc(lst.name)+langBadge(lst.lang)+'</div>'+
-            '<div class="list-meta">'+ws.length+'単語'+(d?' · 復習'+d+'件':'')+'</div>'+
-            '<div style="margin-top:7px">'+
-              '<div class="lc-prog-bar"><div class="lc-prog-fill" style="width:'+pct+'%;background:'+progClr+'"></div></div>'+
-              '<div class="lc-prog-txt"><span>'+progLabel+'</span><span style="font-weight:600;color:'+progClr+'">'+pct+'%</span></div>'+
-            '</div>'+
+            '<div class="list-meta">'+total+'単語'+(d?' · <span style="color:var(--ac2)">復習'+d+'件</span>':'')+'</div>'+
+            statBar+
+            legend+
           '</div>'+
-          (d?'<div class="list-badge" style="align-self:flex-start">'+d+'</div>':'')+'</button>'+
+          (d?'<div class="list-badge" style="align-self:flex-start;margin-left:4px">'+d+'</div>':'')+'</button>'+
       '</div>'+
     '</div>';
   }
