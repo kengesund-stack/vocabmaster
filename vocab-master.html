@@ -1077,8 +1077,8 @@ function homeListsRender(){
   /* 各フォルダのリストカードHTMLを生成する共通関数 */
   function renderListCard(lst){
     var ws=G.words.filter(function(w){return w.lid===lst.id;});
-    /* 復習件数：一度でも学習済み（w.s あり）かつ期限到来 */
-    var d=ws.filter(function(w){return w.s&&due(w);}).length;
+    /* 復習件数：復習日(s.d)が設定済みかつ期限到来のみ（未習・初回未設定は除外） */
+    var d=ws.filter(function(w){return w.s&&w.s.d&&new Date(w.s.d)<=new Date();}).length;
     /* 未習件数：まだ一度も学習していない */
     var dNew=ws.filter(function(w){return !w.s||w.s.k===undefined;}).length;
     var l=LANGS[lst.lang||'en'];
@@ -1146,13 +1146,13 @@ function homeListsRender(){
     var folderLists=G.lists.filter(function(l){return l.fid===folder.id;});
     var subFolders=G.folders.filter(function(f){return f.parentId===folder.id;});
     var totalWords=folderLists.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id;}).length;},0);
-    var dueWords=folderLists.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id&&due(w);}).length;},0);
+    var dueWords=folderLists.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id&&w.s&&w.s.d&&new Date(w.s.d)<=new Date();}).length;},0);
     /* サブフォルダ内の集計も加える */
     function countInSubfolders(fid){
       var sf=G.folders.filter(function(f){return f.parentId===fid;});
       var sl=G.lists.filter(function(l){return l.fid===fid;});
       var tw=sl.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id;}).length;},0);
-      var dw=sl.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id&&due(w);}).length;},0);
+      var dw=sl.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id&&w.s&&w.s.d&&new Date(w.s.d)<=new Date();}).length;},0);
       sf.forEach(function(f){var r=countInSubfolders(f.id);tw+=r.tw;dw+=r.dw;});
       return{tw:tw,dw:dw};
     }
