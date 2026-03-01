@@ -3739,10 +3739,11 @@ function qNext(){
   var remaining=Q.q.length-(Q.i+1);
   /* masteredIds にある（2回連続正解済み）場合は再出題しない */
   var alreadyMastered=Q.masteredIds&&Q.masteredIds[q&&q.id];
-  if(q && q._hadMiss && !alreadyMastered && (Q.requeued[q.id]||0)<requeueMax && remaining>0){
+  /* remaining>0 の条件を廃止：最後の問題を間違えても再出題されるよう修正 */
+  if(q && q._hadMiss && !alreadyMastered && (Q.requeued[q.id]||0)<requeueMax){
     Q.requeued[q.id]=(Q.requeued[q.id]||0)+1;
-    /* 残り問題のうち1〜3問後のランダムな位置に挿入 */
-    var insertOffset=1+Math.floor(Math.random()*Math.min(remaining,3));
+    /* 残り問題がある場合は1〜3問後のランダムな位置に、ない場合は末尾に挿入 */
+    var insertOffset=remaining>0 ? 1+Math.floor(Math.random()*Math.min(remaining,3)) : 1;
     Q.q.splice(Q.i+1+insertOffset,0,q);
   }
 
