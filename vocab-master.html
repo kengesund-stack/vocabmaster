@@ -762,6 +762,9 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
           <span style="font-size:13px;color:var(--tx2)">単語</span>
         </div>
       </div>
+      <div style="padding:6px 14px 10px;font-size:11px;color:var(--tx2);line-height:1.6;border-top:1px solid rgba(255,255,255,.05)">
+        💡 上限を超えた分は翌日に自動繰り越しされます。期限が古い単語から優先して出題されます。
+      </div>
     </div>
     <div class="set-sec">予習設定</div>
     <div class="set-group">
@@ -944,18 +947,42 @@ function ebbingAdvance(wordId) {
 }
 
 function getEbbingDue() {
-  /* 今日以前の復習予定単語を返す */
+  /* 今日以前の復習予定単語を返す。上限を超えた分は翌日に明示的に繰り越す */
   if (!G.cfg.ebbing || !G.ebbing) return [];
   var now = new Date();
   var max = G.cfg.ebbingMax || 5;
-  var due = [];
+
+  /* 期限切れをすべて収集し、期限が古い順にソート */
+  var overdue = [];
   Object.values(G.ebbing).forEach(function(rec) {
     if (new Date(rec.nextDate) <= now) {
-      var w = G.words.find(function(x) { return x.id === rec.wordId; });
-      if (w) due.push(w);
+      overdue.push(rec);
     }
   });
-  return due.slice(0, max);
+  overdue.sort(function(a, b) { return new Date(a.nextDate) - new Date(b.nextDate); });
+
+  /* 上限内：今日出題する分 */
+  var selected = overdue.slice(0, max);
+
+  /* 上限超過分：nextDate を翌日0時に更新して繰り越す */
+  var overflow = overdue.slice(max);
+  if (overflow.length > 0) {
+    var tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    overflow.forEach(function(rec) {
+      rec.nextDate = tomorrow.toISOString();
+    });
+    save();
+  }
+
+  /* 単語オブジェクトに変換して返す */
+  var result = [];
+  selected.forEach(function(rec) {
+    var w = G.words.find(function(x) { return x.id === rec.wordId; });
+    if (w) result.push(w);
+  });
+  return result;
 }
 
 function getEbbingForecast() {
