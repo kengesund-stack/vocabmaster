@@ -276,6 +276,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 .drag-ghost .swipe-inner { transform:none !important; }
 .list-card.dragging-src { opacity:.35; pointer-events:none; }
 .folder-drop-target { outline:2px solid var(--ac); outline-offset:-2px; background:rgba(124,92,252,.12) !important; border-radius:var(--r); }
+.folder-drop-target::after { content:'📂 ここに入れる'; display:block; font-size:11px; font-weight:700; color:var(--ac); text-align:center; padding:3px 0 2px; letter-spacing:.02em; }
 .nofolder-drop-target { outline:2px dashed var(--ac2); outline-offset:-2px; border-radius:8px; background:rgba(252,92,125,.08); }
 .drag-hint { position:absolute; top:-22px; left:50%; transform:translateX(-50%); background:var(--ac); color:#fff; font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .15s; }
 .drag-hint.on { opacity:1; }
@@ -1497,18 +1498,28 @@ function initListDragDrop(container){
           if(excludeFid&&isDescendant(fid, excludeFid)) continue;
           var folder=G.folders.find(function(f){return f.id===fid;});
           if(folder){
-            /* 同一階層かどうかチェック：並べ替えモード */
-            var fb=e.closest('.folder-block')||e;
+            /* ドロップ位置を3ゾーンで判定：
+               上25% → 前に並べ替え（reorder before）
+               中央50% → フォルダの中に入れる（folder into）
+               下25% → 後ろに並べ替え（reorder after）
+            */
             var targetFolderBlock=container.querySelector('.folder-block[data-fid="'+fid+'"]');
             if(targetFolderBlock){
               var rect=targetFolderBlock.getBoundingClientRect();
-              var relY=(y-rect.top)/rect.height;
-              /* 同じ階層の親を持つフォルダなら並べ替えとして扱う */
+              /* ヘッダー部分の高さで判定（ヘッダーは約44px程度）*/
+              var hdrEl=targetFolderBlock.querySelector(':scope > .folder-hdr');
+              var hdrH=hdrEl?hdrEl.getBoundingClientRect().height:44;
+              var relY=(y-rect.top)/hdrH; /* ヘッダー基準のrelY */
               var srcFolder=excludeFid?G.folders.find(function(f){return f.id===excludeFid;}):null;
-              if(srcFolder&&(srcFolder.parentId||null)===(folder.parentId||null)){
-                /* 上半分: insertBefore、下半分: insertAfter */
-                var insertPos=relY<0.5?'before':'after';
-                return {type:'reorder',fid:fid,folder:folder,el:targetFolderBlock,insertPos:insertPos};
+              if(relY<0.25){
+                /* 上ゾーン：前に挿入 */
+                return {type:'reorder',fid:fid,folder:folder,el:targetFolderBlock,insertPos:'before'};
+              } else if(relY>0.75){
+                /* 下ゾーン：後ろに挿入 */
+                return {type:'reorder',fid:fid,folder:folder,el:targetFolderBlock,insertPos:'after'};
+              } else {
+                /* 中央ゾーン：フォルダの中に入れる */
+                return {type:'folder',fid:fid,folder:folder,el:targetFolderBlock};
               }
             }
             return {type:'folder',fid:fid,folder:folder,el:e.closest('.folder-block')||e};
