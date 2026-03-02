@@ -280,6 +280,9 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 .drag-hint { position:absolute; top:-22px; left:50%; transform:translateX(-50%); background:var(--ac); color:#fff; font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .15s; }
 .drag-hint.on { opacity:1; }
 .folder-dragging-src { opacity:.35; }
+.folder-reorder-indicator { height:3px; background:var(--ac); border-radius:2px; margin:2px 0; transition:opacity .15s; }
+.folder-insert-before { box-shadow:0 -3px 0 var(--ac) !important; }
+.folder-insert-after { box-shadow:0 3px 0 var(--ac) !important; }
 .folder-drag-ghost { position:fixed; pointer-events:none; z-index:500; opacity:.85; transform:scale(1.03); box-shadow:0 8px 32px rgba(0,0,0,.6); border-radius:var(--r); left:0; top:0; background:var(--sf); padding:10px 14px; display:flex; align-items:center; gap:8px; min-width:160px; }
 .subfolder-indent { margin-left:12px; }
 /* 階層ごとの左ライン＋背景で深さを表現 */
@@ -1282,7 +1285,7 @@ function homeListsRender(){
   function renderFolder(folder, depth){
     depth=depth||0;
     var folderLists=G.lists.filter(function(l){return l.fid===folder.id;});
-    var subFolders=G.folders.filter(function(f){return f.parentId===folder.id;});
+    var subFolders=G.folders.filter(function(f){return f.parentId===folder.id;}).sort(function(a,b){return (a.order||0)-(b.order||0);});
     var totalWords=folderLists.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id;}).length;},0);
     var dueWords=folderLists.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id&&w.s&&w.s.d&&new Date(w.s.d)<=new Date();}).length;},0);
     /* サブフォルダ内の集計も加える */
@@ -1323,7 +1326,7 @@ function homeListsRender(){
   var h='';
 
   /* ルートフォルダ（parentIdがない or undefinedのもの）を描画 */
-  var rootFolders=G.folders.filter(function(f){return !f.parentId;});
+  var rootFolders=G.folders.filter(function(f){return !f.parentId;}).sort(function(a,b){return (a.order||0)-(b.order||0);});
   rootFolders.forEach(function(folder){ h+=renderFolder(folder,0); });
 
   /* フォルダなしのリスト */
@@ -1478,6 +1481,7 @@ function initListDragDrop(container){
   function clearHighlights(){
     container.querySelectorAll('.folder-drop-target').forEach(function(el){el.classList.remove('folder-drop-target');});
     container.querySelectorAll('.nofolder-drop-target').forEach(function(el){el.classList.remove('nofolder-drop-target');});
+    container.querySelectorAll('.folder-insert-before,.folder-insert-after').forEach(function(el){el.classList.remove('folder-insert-before','folder-insert-after');});
   }
 
   /* タッチ座標でフォルダヘッダーまたは未分類エリアを特定 */
@@ -1492,7 +1496,23 @@ function initListDragDrop(container){
           /* 循環参照チェック: excludeFidの子孫にはドロップ不可 */
           if(excludeFid&&isDescendant(fid, excludeFid)) continue;
           var folder=G.folders.find(function(f){return f.id===fid;});
-          if(folder) return {type:'folder',fid:fid,folder:folder,el:e.closest('.folder-block')||e};
+          if(folder){
+            /* 同一階層かどうかチェック：並べ替えモード */
+            var fb=e.closest('.folder-block')||e;
+            var targetFolderBlock=container.querySelector('.folder-block[data-fid="'+fid+'"]');
+            if(targetFolderBlock){
+              var rect=targetFolderBlock.getBoundingClientRect();
+              var relY=(y-rect.top)/rect.height;
+              /* 同じ階層の親を持つフォルダなら並べ替えとして扱う */
+              var srcFolder=excludeFid?G.folders.find(function(f){return f.id===excludeFid;}):null;
+              if(srcFolder&&(srcFolder.parentId||null)===(folder.parentId||null)){
+                /* 上半分: insertBefore、下半分: insertAfter */
+                var insertPos=relY<0.5?'before':'after';
+                return {type:'reorder',fid:fid,folder:folder,el:targetFolderBlock,insertPos:insertPos};
+              }
+            }
+            return {type:'folder',fid:fid,folder:folder,el:e.closest('.folder-block')||e};
+          }
         }
       }
       /* 未分類エリア */
@@ -1635,7 +1655,14 @@ function initListDragDrop(container){
       if(ghost){ghost.style.left=(tx-80)+'px';ghost.style.top=(ty-22)+'px';}
       clearHighlights();
       var target=findDropTarget(tx,ty,srcFid);
-      if(target&&target.type==='folder'){
+      if(target&&target.type==='reorder'){
+        /* 並べ替えインジケーター */
+        var fb2=container.querySelector('.folder-block[data-fid="'+target.fid+'"]');
+        if(fb2){
+          fb2.classList.remove('folder-insert-before','folder-insert-after');
+          fb2.classList.add(target.insertPos==='before'?'folder-insert-before':'folder-insert-after');
+        }
+      } else if(target&&target.type==='folder'){
         var fb=container.querySelector('.folder-block[data-fid="'+target.fid+'"]');
         if(fb)fb.querySelector(':scope > .folder-hdr').classList.add('folder-drop-target');
       } else if(target&&target.type==='nofolder'){
@@ -1658,10 +1685,28 @@ function initListDragDrop(container){
       var target=findDropTarget(tx,ty,srcFid);
       var srcFolder=G.folders.find(function(f){return f.id===srcFid;});
       if(srcFolder&&target){
+        /* ── 並べ替え（同一階層） ── */
+        if(target.type==='reorder'){
+          var siblings=G.folders.filter(function(f){return (f.parentId||null)===(srcFolder.parentId||null)&&f.id!==srcFid;}).sort(function(a,b){return (a.order||0)-(b.order||0);});
+          var tgtIdx=-1;for(var si=0;si<siblings.length;si++){if(siblings[si].id===target.fid){tgtIdx=si;break;}}
+          if(tgtIdx<0) tgtIdx=siblings.length-1;
+          if(target.insertPos==='after') tgtIdx+=1;
+          siblings.splice(tgtIdx,0,srcFolder);
+          /* orderを0始まりで振り直し */
+          siblings.forEach(function(f,i){f.order=i;});
+          save();homeRefresh();
+          toast('✅ フォルダを並べ替えました');
+          return;
+        }
+        /* ── 別フォルダへ移動 ── */
         var oldParent=srcFolder.parentId||null;
         var newParent=target.type==='folder'?target.fid:null;
         if(oldParent!==newParent){
           srcFolder.parentId=newParent;
+          /* 移動先の末尾に配置 */
+          var destSiblings=G.folders.filter(function(f){return (f.parentId||null)===(newParent||null)&&f.id!==srcFid;});
+          var maxOrd=destSiblings.reduce(function(m,f){return Math.max(m,f.order||0);},0);
+          srcFolder.order=maxOrd+1;
           save();homeRefresh();
           var targetName=target.type==='folder'?'📁 '+target.folder.name:'ルート';
           toast('✅ フォルダ「'+srcFolder.name+'」を '+targetName+' に移動しました');
@@ -2696,7 +2741,10 @@ function createFolder(parentId){
   el('CF-save').addEventListener('click',function(){
     var name=(el('CF-name').value||'').trim();
     if(!name){toast('フォルダ名を入力してください');return;}
-    var newFolder={id:uid(),name:name,collapsed:false};
+    /* 同一階層の最大orderを取得して+1 */
+    var siblings=G.folders.filter(function(f){return (f.parentId||null)===(parentId||null);});
+    var maxOrder=siblings.reduce(function(m,f){return Math.max(m,f.order||0);},0);
+    var newFolder={id:uid(),name:name,collapsed:false,order:maxOrder+1};
     if(parentId) newFolder.parentId=parentId;
     G.folders.push(newFolder);
     save();el('modal-bg').classList.remove('on');
