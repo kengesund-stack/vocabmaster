@@ -309,136 +309,8 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 
 <!-- 使用説明モーダル -->
 <div id="help-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:150;align-items:flex-end">
-  <div style="background:var(--sf);border-radius:20px 20px 0 0;width:100%;max-height:90vh;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding:18px 18px calc(env(safe-area-inset-bottom,0px) + 24px)">
-    <div style="width:32px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:0 auto 16px"></div>
-    <!-- バージョン情報 -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <div style="font-size:20px;font-weight:800;background:linear-gradient(135deg,var(--ac),var(--ac2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">使用説明 &amp; FAQ</div>
-      <div style="font-size:10px;color:var(--tx2);background:var(--sf2);padding:3px 9px;border-radius:20px;font-weight:600">Ver 3.0</div>
-    </div>
-
-    <!-- 機能概要 -->
-    <div style="background:rgba(124,92,252,.08);border:1px solid rgba(124,92,252,.2);border-radius:14px;padding:14px;margin-bottom:14px">
-      <div style="font-size:13px;font-weight:700;color:var(--ac);margin-bottom:8px">🎯 VocabMasterとは？</div>
-      <div style="font-size:12px;color:var(--tx);line-height:1.8">
-        エビングハウス忘却曲線に基づくSRSアルゴリズムで、<b style="color:var(--ac2)">英語・ドイツ語・フランス語・スペイン語・イタリア語</b>の単語を効率的に暗記できるアプリです。AIによる自動翻訳・抽出にも対応しています。
-      </div>
-    </div>
-
-    <!-- 主要機能 -->
-    <div style="font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">🔧 主要機能</div>
-    <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:16px">
-      <div style="background:var(--sf2);border-radius:12px;padding:12px">
-        <div style="font-size:13px;font-weight:700;margin-bottom:4px">📅 今日の復習</div>
-        <div style="font-size:12px;color:var(--tx2);line-height:1.6">忘却曲線に基づき、今日復習すべき単語を表示。不正解単語は複数インターバル（1→2→4→7→14日）を全て完走してはじめて「正解」に昇格します。</div>
-      </div>
-      <div style="background:var(--sf2);border-radius:12px;padding:12px">
-        <div style="font-size:13px;font-weight:700;margin-bottom:4px">⚡ クイズ各種</div>
-        <div style="font-size:12px;color:var(--tx2);line-height:1.6">
-          <b style="color:var(--tx)">全単語クイズ</b>：登録済み全単語を4択で練習<br>
-          <b style="color:var(--tx)">苦手単語</b>：間違えた単語に絞って特訓<br>
-          <b style="color:var(--tx)">予習→クイズ</b>：単語帳を予習してからクイズ<br>
-          <b style="color:var(--tx)">テスト形式</b>：予習なしで即採点
-        </div>
-      </div>
-      <div style="background:var(--sf2);border-radius:12px;padding:12px">
-        <div style="font-size:13px;font-weight:700;margin-bottom:4px">➕ 単語の追加方法</div>
-        <div style="font-size:12px;color:var(--tx2);line-height:1.6">
-          <b style="color:var(--tx)">貼り付け</b>：1行1単語、または「単語,訳」形式でテキスト貼り付け。JSON形式にも対応<br>
-          <b style="color:var(--tx)">ファイル</b>：CSV・TXTファイルをアップロード<br>
-          <b style="color:var(--tx)">AI抽出</b>：テキストをAIが自動で単語・訳を抽出（APIキー必要）
-        </div>
-      </div>
-      <div style="background:var(--sf2);border-radius:12px;padding:12px">
-        <div style="font-size:13px;font-weight:700;margin-bottom:4px">📁 フォルダ機能</div>
-        <div style="font-size:12px;color:var(--tx2);line-height:1.6">単語リストをフォルダで整理できます。ドラッグ＆ドロップでリストをフォルダ間に移動可能。階層フォルダ（最大3階層）に対応。</div>
-      </div>
-      <div style="background:var(--sf2);border-radius:12px;padding:12px">
-        <div style="font-size:13px;font-weight:700;margin-bottom:4px">🧠 忘却曲線設定</div>
-        <div style="font-size:12px;color:var(--tx2);line-height:1.6">設定からエビングハウス忘却曲線による追加復習をON/OFFできます。ONにすると、復習期限が来た単語を優先的に出題します。</div>
-      </div>
-      <div style="background:var(--sf2);border-radius:12px;padding:12px">
-        <div style="font-size:13px;font-weight:700;margin-bottom:4px">📊 学習報告書</div>
-        <div style="font-size:12px;color:var(--tx2);line-height:1.6">ホーム下部の「学習報告書を作成」ボタンから、学習履歴・習得率・連続学習日数などをまとめたレポートを生成できます。</div>
-      </div>
-      <div style="background:var(--sf2);border-radius:12px;padding:12px">
-        <div style="font-size:13px;font-weight:700;margin-bottom:4px">📤 バックアップ・共有</div>
-        <div style="font-size:12px;color:var(--tx2);line-height:1.6">設定からデータをJSON/CSVでエクスポート・インポート可能。QRコードで別デバイスにデータを転送することもできます。</div>
-      </div>
-    </div>
-
-    <!-- FAQ -->
-    <div style="font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">❓ よくある質問</div>
-    <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:20px">
-      <div id="faq-1" style="background:var(--sf2);border-radius:12px;overflow:hidden">
-        <button onclick="toggleFaq('faq-1')" style="width:100%;background:none;border:none;padding:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-family:inherit">
-          <span style="font-size:13px;font-weight:600;color:var(--tx);text-align:left">習得済みになる条件は？</span>
-          <span class="faq-arrow" style="color:var(--tx2);font-size:11px;flex-shrink:0;transition:transform .2s">▼</span>
-        </button>
-        <div class="faq-body" style="max-height:0;overflow:hidden;transition:max-height .3s ease">
-          <div style="padding:0 12px 12px;font-size:12px;color:var(--tx2);line-height:1.7">クイズで正解すると単語レベルが上がります。レベル5（最高）に達すると「習得済み」になります。ただし不正解になると一部レベルが下がります。忘却曲線モードでは、不正解単語は複数のインターバル（1・2・4・7・14日）を全て正解してはじめてレベルアップします。</div>
-        </div>
-      </div>
-      <div id="faq-2" style="background:var(--sf2);border-radius:12px;overflow:hidden">
-        <button onclick="toggleFaq('faq-2')" style="width:100%;background:none;border:none;padding:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-family:inherit">
-          <span style="font-size:13px;font-weight:600;color:var(--tx);text-align:left">AIによる自動翻訳・抽出を使うには？</span>
-          <span class="faq-arrow" style="color:var(--tx2);font-size:11px;flex-shrink:0;transition:transform .2s">▼</span>
-        </button>
-        <div class="faq-body" style="max-height:0;overflow:hidden;transition:max-height .3s ease">
-          <div style="padding:0 12px 12px;font-size:12px;color:var(--tx2);line-height:1.7">設定画面でOpenAI / Anthropic / DeepSeek などのAPIキーを登録してください。「単語を追加」→「AI抽出」タブからテキストを貼り付けると、AIが自動で単語と訳を抽出します。APIキーなしでは翻訳なしの単語のみ登録されます。</div>
-        </div>
-      </div>
-      <div id="faq-3" style="background:var(--sf2);border-radius:12px;overflow:hidden">
-        <button onclick="toggleFaq('faq-3')" style="width:100%;background:none;border:none;padding:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-family:inherit">
-          <span style="font-size:13px;font-weight:600;color:var(--tx);text-align:left">単語を削除・編集するには？</span>
-          <span class="faq-arrow" style="color:var(--tx2);font-size:11px;flex-shrink:0;transition:transform .2s">▼</span>
-        </button>
-        <div class="faq-body" style="max-height:0;overflow:hidden;transition:max-height .3s ease">
-          <div style="padding:0 12px 12px;font-size:12px;color:var(--tx2);line-height:1.7">単語帳タブ（または「単語一覧」）で単語をタップすると編集できます。リストをタップして開いた後、単語行を左にスワイプすると削除ボタンが表示されます。リスト自体の削除は、リストを左スワイプして削除ボタンをタップしてください。</div>
-        </div>
-      </div>
-      <div id="faq-4" style="background:var(--sf2);border-radius:12px;overflow:hidden">
-        <button onclick="toggleFaq('faq-4')" style="width:100%;background:none;border:none;padding:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-family:inherit">
-          <span style="font-size:13px;font-weight:600;color:var(--tx);text-align:left">データを別のデバイスに移すには？</span>
-          <span class="faq-arrow" style="color:var(--tx2);font-size:11px;flex-shrink:0;transition:transform .2s">▼</span>
-        </button>
-        <div class="faq-body" style="max-height:0;overflow:hidden;transition:max-height .3s ease">
-          <div style="padding:0 12px 12px;font-size:12px;color:var(--tx2);line-height:1.7">設定→「データ転送」からJSONエクスポートしてください。移行先でJSONをインポートするか、QRコードをスキャンして直接転送することも可能です。CSV形式でのエクスポートにも対応しています（学習記録は含まれません）。</div>
-        </div>
-      </div>
-      <div id="faq-5" style="background:var(--sf2);border-radius:12px;overflow:hidden">
-        <button onclick="toggleFaq('faq-5')" style="width:100%;background:none;border:none;padding:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-family:inherit">
-          <span style="font-size:13px;font-weight:600;color:var(--tx);text-align:left">フラッシュカードモードはある？</span>
-          <span class="faq-arrow" style="color:var(--tx2);font-size:11px;flex-shrink:0;transition:transform .2s">▼</span>
-        </button>
-        <div class="faq-body" style="max-height:0;overflow:hidden;transition:max-height .3s ease">
-          <div style="padding:0 12px 12px;font-size:12px;color:var(--tx2);line-height:1.7">はい。単語帳タブで任意のリストを開き、上部の「フラッシュカード」ボタンをタップすると、カードをめくって単語を確認できます。音声読み上げ機能も搭載しており、発音を確認しながら学習できます。</div>
-        </div>
-      </div>
-      <div id="faq-6" style="background:var(--sf2);border-radius:12px;overflow:hidden">
-        <button onclick="toggleFaq('faq-6')" style="width:100%;background:none;border:none;padding:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-family:inherit">
-          <span style="font-size:13px;font-weight:600;color:var(--tx);text-align:left">連続学習日数（ストリーク）のリセット条件は？</span>
-          <span class="faq-arrow" style="color:var(--tx2);font-size:11px;flex-shrink:0;transition:transform .2s">▼</span>
-        </button>
-        <div class="faq-body" style="max-height:0;overflow:hidden;transition:max-height .3s ease">
-          <div style="padding:0 12px 12px;font-size:12px;color:var(--tx2);line-height:1.7">その日にクイズで1問以上回答するとストリークが維持されます。1日でも学習をスキップするとリセットされます。なお、複数デバイスでJSONをマージした際は、より大きいストリーク値が採用されます。</div>
-        </div>
-      </div>
-      <div id="faq-7" style="background:var(--sf2);border-radius:12px;overflow:hidden">
-        <button onclick="toggleFaq('faq-7')" style="width:100%;background:none;border:none;padding:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-family:inherit">
-          <span style="font-size:13px;font-weight:600;color:var(--tx);text-align:left">対応しているファイル形式は？</span>
-          <span class="faq-arrow" style="color:var(--tx2);font-size:11px;flex-shrink:0;transition:transform .2s">▼</span>
-        </button>
-        <div class="faq-body" style="max-height:0;overflow:hidden;transition:max-height .3s ease">
-          <div style="padding:0 12px 12px;font-size:12px;color:var(--tx2);line-height:1.7">
-            <b style="color:var(--tx)">インポート</b>：CSV（word,meaning形式）、TXT（1行1単語 or カンマ区切り）、JSON（アプリ形式）<br>
-            <b style="color:var(--tx)">エクスポート</b>：JSON（学習記録含む完全バックアップ）、CSV（単語・訳のみ）
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <button onclick="closeHelp()" style="width:100%;padding:14px;background:linear-gradient(135deg,var(--ac),var(--ac2));border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">閉じる</button>
+  <div id="help-modal-inner" style="background:var(--sf);border-radius:20px 20px 0 0;width:100%;max-height:90vh;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding:18px 18px calc(env(safe-area-inset-bottom,0px) + 24px)">
+    <!-- JSで動的生成 -->
   </div>
 </div>
 
@@ -4575,12 +4447,132 @@ function bind(){
   el('modal-bg').addEventListener('click',function(e){if(e.target===this)this.classList.remove('on');});
 }
 
-/* ---- 使用説明モーダル ---- */
+/* ====================================================
+   使用説明モーダル — 機能定義 (HELP_DEF)
+   ★ 機能を追加したらここに追記するだけでヘルプが自動更新されます
+   ==================================================== */
+var HELP_DEF = {
+  version: '3.1',
+  updated: '2025-07',
+  features: [
+    {
+      icon: '📅',
+      title: '今日の復習',
+      body: '忘却曲線に基づき、今日復習すべき単語を表示。不正解単語は複数インターバル（1→2→4→7→14日）を全て完走してはじめて「正解」に昇格します。'
+    },
+    {
+      icon: '⚡',
+      title: 'クイズ各種',
+      body: '<b style="color:var(--tx)">全単語クイズ</b>：登録済み全単語を4択で練習<br><b style="color:var(--tx)">苦手単語</b>：間違えた単語に絞って特訓<br><b style="color:var(--tx)">予習→クイズ</b>：単語帳を予習してからクイズ<br><b style="color:var(--tx)">テスト形式</b>：予習なしで即採点'
+    },
+    {
+      icon: '➕',
+      title: '単語の追加方法',
+      body: '<b style="color:var(--tx)">貼り付け</b>：1行1単語、または「単語,訳」形式でテキスト貼り付け。JSON形式にも対応<br><b style="color:var(--tx)">ファイル</b>：CSV・TXTファイルをアップロード<br><b style="color:var(--tx)">AI抽出</b>：テキストをAIが自動で単語・訳を抽出（APIキー必要）'
+    },
+    {
+      icon: '📁',
+      title: 'フォルダ機能',
+      body: '単語リストをフォルダで整理できます。階層フォルダ（最大3階層）に対応。<br><b style="color:var(--tx)">リスト移動</b>：リストを長押しドラッグ → フォルダにドロップ<br><b style="color:var(--tx)">フォルダ並べ替え</b>：フォルダを長押しドラッグ → 上端/下端にドロップ<br><b style="color:var(--tx)">フォルダをフォルダに入れる</b>：フォルダを長押しドラッグ → 移動先フォルダの中央にドロップ'
+    },
+    {
+      icon: '🧠',
+      title: '忘却曲線設定',
+      body: '設定からエビングハウス忘却曲線による追加復習をON/OFFできます。ONにすると、復習期限が来た単語を優先的に出題します。'
+    },
+    {
+      icon: '📊',
+      title: '学習報告書',
+      body: 'ホーム下部の「学習報告書を作成」ボタンから、学習履歴・習得率・連続学習日数などをまとめたレポートを生成できます。'
+    },
+    {
+      icon: '📤',
+      title: 'バックアップ・共有',
+      body: '設定からデータをJSON/CSVでエクスポート・インポート可能。QRコードで別デバイスにデータを転送することもできます。'
+    }
+  ],
+  faqs: [
+    {
+      q: '習得済みになる条件は？',
+      a: 'クイズで正解すると単語レベルが上がります。レベル5（最高）に達すると「習得済み」になります。ただし不正解になると一部レベルが下がります。忘却曲線モードでは、不正解単語は複数のインターバル（1・2・4・7・14日）を全て正解してはじめてレベルアップします。'
+    },
+    {
+      q: 'AIによる自動翻訳・抽出を使うには？',
+      a: '設定画面でOpenAI / Anthropic / DeepSeek などのAPIキーを登録してください。「単語を追加」→「AI抽出」タブからテキストを貼り付けると、AIが自動で単語と訳を抽出します。APIキーなしでは翻訳なしの単語のみ登録されます。'
+    },
+    {
+      q: '単語を削除・編集するには？',
+      a: '単語帳タブ（または「単語一覧」）で単語をタップすると編集できます。リストをタップして開いた後、単語行を左にスワイプすると削除ボタンが表示されます。リスト自体の削除は、リストを左スワイプして削除ボタンをタップしてください。'
+    },
+    {
+      q: 'データを別のデバイスに移すには？',
+      a: '設定→「データ転送」からJSONエクスポートしてください。移行先でJSONをインポートするか、QRコードをスキャンして直接転送することも可能です。CSV形式でのエクスポートにも対応しています（学習記録は含まれません）。'
+    },
+    {
+      q: 'フラッシュカードモードはある？',
+      a: 'はい。単語帳タブで任意のリストを開き、上部の「フラッシュカード」ボタンをタップすると、カードをめくって単語を確認できます。音声読み上げ機能も搭載しており、発音を確認しながら学習できます。'
+    },
+    {
+      q: '連続学習日数（ストリーク）のリセット条件は？',
+      a: 'その日にクイズで1問以上回答するとストリークが維持されます。1日でも学習をスキップするとリセットされます。なお、複数デバイスでJSONをマージした際は、より大きいストリーク値が採用されます。'
+    },
+    {
+      q: '対応しているファイル形式は？',
+      a: '<b style="color:var(--tx)">インポート</b>：CSV（word,meaning形式）、TXT（1行1単語 or カンマ区切り）、JSON（アプリ形式）<br><b style="color:var(--tx)">エクスポート</b>：JSON（学習記録含む完全バックアップ）、CSV（単語・訳のみ）'
+    },
+    {
+      q: 'フォルダを別のフォルダの中に入れるには？',
+      a: 'フォルダのヘッダー部分を長押しするとドラッグ開始します。移動先フォルダの<b style="color:var(--tx)">中央部分</b>にドロップすると、そのフォルダの中に入れることができます。上端（25%以内）にドロップすると前に並べ替え、下端（25%以内）にドロップすると後ろに並べ替えになります。'
+    }
+  ]
+};
+
+/* ---- 使用説明HTML生成 ---- */
+function buildHelpHTML(){
+  var def = HELP_DEF;
+  var h = '';
+  h += '<div style="width:32px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:0 auto 16px"></div>';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
+  h += '<div style="font-size:20px;font-weight:800;background:linear-gradient(135deg,var(--ac),var(--ac2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">使用説明 &amp; FAQ</div>';
+  h += '<div style="font-size:10px;color:var(--tx2);background:var(--sf2);padding:3px 9px;border-radius:20px;font-weight:600">Ver '+esc(def.version)+'</div>';
+  h += '</div>';
+  h += '<div style="background:rgba(124,92,252,.08);border:1px solid rgba(124,92,252,.2);border-radius:14px;padding:14px;margin-bottom:14px">';
+  h += '<div style="font-size:13px;font-weight:700;color:var(--ac);margin-bottom:8px">🎯 VocabMasterとは？</div>';
+  h += '<div style="font-size:12px;color:var(--tx);line-height:1.8">エビングハウス忘却曲線に基づくSRSアルゴリズムで、<b style="color:var(--ac2)">英語・ドイツ語・フランス語・スペイン語・イタリア語</b>の単語を効率的に暗記できるアプリです。AIによる自動翻訳・抽出にも対応しています。</div>';
+  h += '</div>';
+  h += '<div style="font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">🔧 主要機能</div>';
+  h += '<div style="display:flex;flex-direction:column;gap:7px;margin-bottom:16px">';
+  def.features.forEach(function(f){
+    h += '<div style="background:var(--sf2);border-radius:12px;padding:12px">';
+    h += '<div style="font-size:13px;font-weight:700;margin-bottom:4px">'+f.icon+' '+esc(f.title)+'</div>';
+    h += '<div style="font-size:12px;color:var(--tx2);line-height:1.6">'+f.body+'</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  h += '<div style="font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">❓ よくある質問</div>';
+  h += '<div style="display:flex;flex-direction:column;gap:7px;margin-bottom:20px">';
+  def.faqs.forEach(function(f,i){
+    var fid='faq-dyn-'+i;
+    h += '<div id="'+fid+'" style="background:var(--sf2);border-radius:12px;overflow:hidden">';
+    h += '<button onclick="toggleFaq(\''+fid+'\')" style="width:100%;background:none;border:none;padding:12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-family:inherit">';
+    h += '<span style="font-size:13px;font-weight:600;color:var(--tx);text-align:left">'+esc(f.q)+'</span>';
+    h += '<span class="faq-arrow" style="color:var(--tx2);font-size:11px;flex-shrink:0;transition:transform .2s">▼</span>';
+    h += '</button>';
+    h += '<div class="faq-body" style="max-height:0;overflow:hidden;transition:max-height .3s ease">';
+    h += '<div style="padding:0 12px 12px;font-size:12px;color:var(--tx2);line-height:1.7">'+f.a+'</div>';
+    h += '</div></div>';
+  });
+  h += '</div>';
+  h += '<button onclick="closeHelp()" style="width:100%;padding:14px;background:linear-gradient(135deg,var(--ac),var(--ac2));border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">閉じる</button>';
+  return h;
+}
+
 function openHelp(){
+  var inner=document.getElementById('help-modal-inner');
+  inner.innerHTML=buildHelpHTML();
   var m=document.getElementById('help-modal');
   m.style.display='flex';
-  // スクロールを先頭に戻す
-  m.querySelector('div').scrollTop=0;
+  inner.scrollTop=0;
 }
 function closeHelp(){
   document.getElementById('help-modal').style.display='none';
@@ -4602,6 +4594,7 @@ function toggleFaq(id){
 document.getElementById('help-modal').addEventListener('click',function(e){
   if(e.target===this)closeHelp();
 });
+
 
 /* ---- データ転送ヘルパー ---- */
 function dlJson(data, fname){
