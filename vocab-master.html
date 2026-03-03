@@ -4032,25 +4032,21 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
         if(w.trulyDone){
           nextCell='<td style="text-align:center;color:#aaa;font-size:8.5pt">完走済み ✅</td>';
         } else {
-          /* SRS次回復習日から「何日後に出題されるか」を計算して表示 */
-          var srsCell='';
+          /* SRS次回復習日をそのまま「何日後」で表示 */
           if(w.srsDue){
             var sd=new Date(w.srsDue);
             var now3=new Date(); now3.setHours(0,0,0,0); sd.setHours(0,0,0,0);
             var srsD=Math.round((sd-now3)/86400000);
             var srsDateStr=(sd.getMonth()+1)+'/'+(sd.getDate());
-            var srsDiffLbl=srsD<=0?'今日（出題待ち）':srsD===1?'明日':srsD+'日後';
-            var srsClr=srsD<=0?'#c62828':srsD<=3?'#e65100':'#555';
-            srsCell='<div style="margin-top:3px"><span style="color:'+srsClr+';font-weight:700">'+srsDiffLbl+'</span>'+
-              '<span style="color:#888;margin-left:4px">('+srsDateStr+')</span></div>'+
-              '<div style="font-size:7.5pt;color:#999;margin-top:1px">SRS復習クイズで出題予定</div>';
+            var srsDiffLbl=srsD<=0?'今日':srsD===1?'明日':srsD+'日後';
+            var srsClr=srsD<=0?'#c62828':srsD<=3?'#e65100':'#2e7d32';
+            nextCell='<td style="text-align:center;font-size:8.5pt;min-width:110px">'+
+              '<span style="color:'+srsClr+';font-weight:700;font-size:9pt">'+srsDiffLbl+'</span>'+
+              '<span style="color:#888;margin-left:4px;font-size:8pt">('+srsDateStr+')</span>'+
+            '</td>';
           } else {
-            srsCell='<div style="color:#999;font-size:7.5pt;margin-top:3px">次回の復習で出題</div>';
+            nextCell='<td style="text-align:center;color:#888;font-size:8.5pt">—</td>';
           }
-          nextCell='<td style="text-align:center;font-size:8.5pt;min-width:110px">'+
-            '<span style="font-size:8pt;color:#e65100;font-weight:600">🔄 忘却曲線待機中</span>'+
-            srsCell+
-          '</td>';
         }
       }
       missRows+='<tr><td style="text-align:center">'+(i+1)+'</td><td><strong>'+escHtml(w.word)+'</strong></td>'+
