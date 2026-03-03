@@ -3999,12 +3999,31 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
         var diffD=Math.round((nd-now2)/86400000);
         var dateStr=(nd.getMonth()+1)+'/'+(nd.getDate());
         var diffLbl=diffD<=0?'今日':diffD===1?'明日':diffD+'日後';
-        var stageStr=w.nextIdx!=null?'（第'+(w.nextIdx+1)+'回／5回）':'';
         var clr=diffD<=0?'#c62828':diffD<=3?'#e65100':'#2e7d32';
-        nextCell='<td style="text-align:center;font-size:8.5pt">'+
-          '<span style="color:'+clr+';font-weight:700">'+diffLbl+'</span>'+
-          '<span style="color:#888;margin-left:4px">('+dateStr+')</span>'+
-          '<div style="color:#999;font-size:7.5pt">'+stageStr+'</div>'+
+        /* あと何回の計算：nextIdxは「次に行うステージのインデックス(0始まり)」 */
+        /* ステージ: 0=1日後, 1=3日後, 2=7日後, 3=14日後, 4=30日後 (全5回) */
+        var totalStages=5;
+        var doneStages=w.nextIdx!=null?w.nextIdx:0; /* 完了済みステージ数 */
+        var remainStages=totalStages-doneStages;     /* あと残り回数 */
+        /* プログレスドット（●完了 ○残り） */
+        var dots='';
+        var dotColors=['#c62828','#e65100','#f9a825','#388e3c','#1565c0'];
+        var dotLabels=['1日','3日','7日','14日','30日'];
+        for(var di=0;di<totalStages;di++){
+          if(di<doneStages){
+            dots+='<span title="第'+(di+1)+'回('+dotLabels[di]+'後)：完了" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ccc;margin:0 1px;vertical-align:middle"></span>';
+          } else if(di===doneStages){
+            dots+='<span title="第'+(di+1)+'回('+dotLabels[di]+'後)：次回復習" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'+dotColors[di]+';margin:0 1px;vertical-align:middle;box-shadow:0 0 0 2px '+dotColors[di]+'44"></span>';
+          } else {
+            dots+='<span title="第'+(di+1)+'回('+dotLabels[di]+'後)：未" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:transparent;border:1.5px solid #bbb;margin:0 1px;vertical-align:middle"></span>';
+          }
+        }
+        var remainTxt=remainStages>0?'あと<b style="color:#c62828">'+remainStages+'回</b>':'全完走！';
+        nextCell='<td style="text-align:center;font-size:8.5pt;min-width:110px">'+
+          '<span style="color:'+clr+';font-weight:700;font-size:9pt">'+diffLbl+'</span>'+
+          '<span style="color:#888;margin-left:4px;font-size:8pt">('+dateStr+')</span>'+
+          '<div style="margin:4px 0 2px">'+dots+'</div>'+
+          '<div style="font-size:7.5pt;color:#666">'+remainTxt+'</div>'+
         '</td>';
       } else {
         /* 真の完走済み（不正解歴なし）か、再登録待ちかで表示を分ける */
