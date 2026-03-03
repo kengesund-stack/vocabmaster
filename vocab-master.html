@@ -193,7 +193,16 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 .fb-next { background:var(--ac); color:#fff; border:none; border-radius:9px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; flex-shrink:0; font-family:inherit; -webkit-appearance:none; }
 .fb-next:active { opacity:.8; }
 
-#s-result { background:radial-gradient(ellipse at 50% 30%,rgba(124,92,252,.2) 0%,transparent 55%),var(--bg); align-items:center; justify-content:center; padding:36px 22px; }
+#s-result { background:radial-gradient(ellipse at 50% 30%,rgba(124,92,252,.2) 0%,transparent 55%),var(--bg); align-items:center; justify-content:flex-start; padding:0; overflow-y:scroll; -webkit-overflow-scrolling:touch; }
+.res-inner { display:flex; flex-direction:column; align-items:center; width:100%; padding:36px 22px calc(var(--sb) + 20px); min-height:100%; }
+.res-miss-panel { width:100%; background:var(--sf); border-radius:16px; padding:14px; margin-bottom:16px; }
+.res-miss-title { font-size:12px; color:var(--tx2); font-weight:600; text-transform:uppercase; letter-spacing:.07em; margin-bottom:10px; }
+.res-miss-comment { font-size:13px; color:var(--or); font-weight:500; margin-bottom:10px; line-height:1.5; display:flex; align-items:flex-start; gap:6px; }
+.res-miss-list { display:flex; flex-direction:column; gap:5px; }
+.res-miss-item { background:var(--sf2); border-radius:9px; padding:9px 11px; display:flex; align-items:center; gap:9px; }
+.rmi-n { font-size:11px; color:var(--tx2); width:18px; flex-shrink:0; text-align:right; }
+.rmi-word { font-size:14px; font-weight:500; flex:1; }
+.rmi-mean { font-size:11px; color:var(--ac3); }
 .res-em { font-size:64px; margin-bottom:12px; }
 .res-tl { font-size:26px; font-weight:700; margin-bottom:5px; text-align:center; }
 .res-sub { font-size:13px; color:var(--tx2); margin-bottom:24px; text-align:center; }
@@ -686,16 +695,25 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 
 <!-- RESULT -->
 <div class="scr" id="s-result">
-  <div class="res-em" id="R-em">🎉</div>
-  <div class="res-tl" id="R-tl">よくできました！</div>
-  <div class="res-sub" id="R-sub">学習完了</div>
-  <div class="res-stats">
-    <div class="res-stat"><div class="rs-n" id="R-ok" style="color:var(--gn)">0</div><div class="rs-l">正解</div></div>
-    <div class="res-stat"><div class="rs-n" id="R-ng" style="color:var(--rd)">0</div><div class="rs-l">不正解</div></div>
-    <div class="res-stat"><div class="rs-n" id="R-ac" style="color:var(--ac)">0%</div><div class="rs-l">正解率</div></div>
+  <div class="res-inner">
+    <div class="res-em" id="R-em">🎉</div>
+    <div class="res-tl" id="R-tl">よくできました！</div>
+    <div class="res-sub" id="R-sub">学習完了</div>
+    <div class="res-stats">
+      <div class="res-stat"><div class="rs-n" id="R-ok" style="color:var(--gn)">0</div><div class="rs-l">正解</div></div>
+      <div class="res-stat"><div class="rs-n" id="R-ng" style="color:var(--rd)">0</div><div class="rs-l">不正解</div></div>
+      <div class="res-stat"><div class="rs-n" id="R-ac" style="color:var(--ac)">0%</div><div class="rs-l">正解率</div></div>
+    </div>
+    <!-- 不正解単語パネル -->
+    <div class="res-miss-panel" id="R-miss-panel" style="display:none">
+      <div class="res-miss-comment">📅 以下の単語／熟語は後日復習サイクルに入ります</div>
+      <div class="res-miss-title">不正解リスト</div>
+      <div class="res-miss-list" id="R-miss-list"></div>
+      <button class="btn-primary" id="B-res-ack" style="margin-top:14px">✅ 了承する</button>
+    </div>
+    <button class="btn-primary" id="B-res-home" style="width:260px;display:none">🏠 ホームに戻る</button>
+    <button class="btn-sec" id="B-res-weak" style="width:260px;display:none">🎯 間違いを復習</button>
   </div>
-  <button class="btn-primary" id="B-res-home" style="width:260px">🏠 ホームに戻る</button>
-  <button class="btn-sec" id="B-res-weak" style="width:260px">🎯 間違いを復習</button>
 </div>
 
 <!-- SETTINGS -->
@@ -4120,6 +4138,33 @@ function qResult(){
   var today=new Date().toDateString();
   if(G.stats.lastDay!==today){var yest=new Date(Date.now()-86400000).toDateString();G.stats.streak=(G.stats.lastDay===yest)?(G.stats.streak||0)+1:1;G.stats.lastDay=today;}
   save();
+  /* 不正解リストパネルを構築 */
+  var missPanel=el('R-miss-panel');
+  var missList=el('R-miss-list');
+  var btnHome=el('B-res-home');
+  var btnWeak=el('B-res-weak');
+  var missWords=Q.miss||[];
+  /* 重複排除（同じidが複数回misに入る場合）*/
+  var seenIds={};
+  var uniqueMiss=missWords.filter(function(w){if(seenIds[w.id])return false;seenIds[w.id]=true;return true;});
+  if(uniqueMiss.length>0){
+    missList.innerHTML='';
+    uniqueMiss.forEach(function(w,i){
+      var div=document.createElement('div');
+      div.className='res-miss-item';
+      div.innerHTML='<span class="rmi-n">'+(i+1)+'</span><span class="rmi-word">'+w.word+'</span><span class="rmi-mean">'+(w.meaning||'')+'</span>';
+      missList.appendChild(div);
+    });
+    missPanel.style.display='block';
+    btnHome.style.display='none';
+    btnWeak.style.display='none';
+  } else {
+    missPanel.style.display='none';
+    btnHome.style.display='';
+    btnWeak.style.display='';
+  }
+  /* 画面トップへスクロール */
+  el('s-result').scrollTop=0;
   go('s-result');
 }
 
@@ -4269,6 +4314,11 @@ function bind(){
   el('B-next').addEventListener('click',qNext);
   el('B-res-home').addEventListener('click',function(){go('s-home');});
   el('B-res-weak').addEventListener('click',function(){quizStart('weak');});
+  el('B-res-ack').addEventListener('click',function(){
+    el('R-miss-panel').style.display='none';
+    el('B-res-home').style.display='';
+    el('B-res-weak').style.display='';
+  });
 
   el('B-set-back').addEventListener('click',function(){go('s-home');});
   el('B-save-file').addEventListener('click',function(){saveAsFile();});
