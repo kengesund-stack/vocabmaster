@@ -160,8 +160,11 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 
 #s-quiz { background:radial-gradient(ellipse at 50% 0%,rgba(124,92,252,.12) 0%,transparent 55%),var(--bg); }
 .qz-hdr { display:flex; align-items:center; padding:12px 16px; padding-top:calc(var(--st) + 12px); gap:11px; flex-shrink:0; }
-.qz-prog { flex:1; height:5px; background:var(--sf2); border-radius:3px; overflow:hidden; }
-.qz-fill { height:100%; background:linear-gradient(90deg,var(--ac),var(--ac2)); border-radius:3px; transition:width .35s ease; }
+.qz-prog { flex:1; height:6px; background:var(--sf2); border-radius:3px; overflow:hidden; display:flex; gap:1px; }
+.qz-seg { height:100%; transition:width .35s ease; flex-shrink:0; }
+.qz-seg-ok { background:var(--gn); }
+.qz-seg-ng { background:var(--rd); }
+.qz-seg-un { background:rgba(255,255,255,.13); }
 .qz-cnt { font-size:12px; color:var(--tx2); font-weight:500; white-space:nowrap; }
 .qz-body { flex:1; display:flex; flex-direction:column; padding:13px 16px; overflow:hidden; gap:10px; }
 .qz-card { background:var(--sf); border-radius:18px; padding:22px 18px; text-align:center; flex-shrink:0; }
@@ -661,7 +664,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 <div class="scr" id="s-quiz">
   <div class="qz-hdr">
     <button class="btn btn-back" id="B-quiz-exit">✕</button>
-    <div class="qz-prog"><div class="qz-fill" id="QZ-fill" style="width:0%"></div></div>
+    <div class="qz-prog" id="QZ-prog"><div class="qz-seg qz-seg-ok" id="QZ-seg-ok" style="width:0%"></div><div class="qz-seg qz-seg-ng" id="QZ-seg-ng" style="width:0%"></div><div class="qz-seg qz-seg-un" id="QZ-seg-un" style="width:0%"></div></div>
     <div style="display:flex;align-items:center;gap:7px">
       <div id="QZ-mode-badge" style="display:none;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(252,92,125,.2);color:var(--ac2)">📝 テスト</div>
       <div class="qz-cnt" id="QZ-cnt">0/0</div>
@@ -3894,7 +3897,16 @@ function qRender(){
 
   var totalWords=Q.words.length;
   var mastered=Q.mastered||0;
-  el('QZ-fill').style.width=(mastered/totalWords*100)+'%';
+  /* セグメントバー更新 */
+  var nOk=Object.keys(Q.masteredIds||{}).filter(function(id){return !(Q.miss||[]).some(function(m){return m.id===id;});}).length;
+  var nNg=(Q.miss||[]).filter(function(m){return Q.masteredIds&&Q.masteredIds[m.id];}).length;
+  var nTot=Q.words.length;
+  var pOk=nTot?Math.round(nOk/nTot*100):0;
+  var pNg=nTot?Math.round(nNg/nTot*100):0;
+  var pUn=Math.max(0,100-pOk-pNg);
+  el('QZ-seg-ok').style.width=pOk+'%';
+  el('QZ-seg-ng').style.width=pNg+'%';
+  el('QZ-seg-un').style.width=pUn+'%';
   el('QZ-cnt').textContent=mastered+'/'+totalWords;
   el('QZ-mode-badge').style.display=Q.testMode?'inline-block':'none';
   var rev=G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
