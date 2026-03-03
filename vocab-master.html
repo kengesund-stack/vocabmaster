@@ -2479,6 +2479,8 @@ function listMenu(lid){
   var lst=G.lists.find(function(x){return x.id===lid;}); if(!lst)return;
   var ws=G.words.filter(function(w){return w.lid===lid;});
   var d=ws.filter(due).length;
+  /* 間違い復習：間違えた・わからないを押した単語のみ（未習を除外） */
+  var missWords=ws.filter(function(w){return w.s&&(w.s.l||0)>0;});
   var l=LANGS[lst.lang||'en'];
   var cursor=lst.cursor||0;
   var total=ws.length;
@@ -2489,12 +2491,12 @@ function listMenu(lid){
   var progressInfo=total>0?'進捗 '+pct+'% ('+cursor+'/'+total+'単語完了)':'';
   el('modal-ct').innerHTML=
     '<div class="modal-tl">'+(l?l.flag+' ':'')+esc(lst.name)+'</div>'+
-    '<div style="font-size:12px;color:var(--tx2);margin-bottom:8px">'+ws.length+'単語'+(d?' · 復習'+d+'件':'')+'</div>'+
+    '<div style="font-size:12px;color:var(--tx2);margin-bottom:8px">'+ws.length+'単語'+(missWords.length?' · <span style="color:var(--rd)">間違い'+missWords.length+'件</span>':'')+'</div>'+
     (total>0?'<div style="margin-bottom:14px"><div style="height:5px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:'+pct+'%;background:'+(pct>=100?'var(--gn)':pct>=60?'var(--ac3)':'var(--ac)')+';border-radius:3px;transition:width .3s"></div></div><div style="font-size:11px;color:var(--tx2)">'+progressInfo+(cursor<total?' · 次回: '+cursor+'〜'+nextEnd+'番目':' · 全単語完了！')+'</div></div>':'')+
     '<button class="btn-primary" id="LM-flash" style="margin-bottom:8px">📖 予習してからクイズ</button>'+
     '<button class="btn-sec" id="LM-quiz" style="margin-top:0;margin-bottom:8px">⚡ すぐクイズ（続きから）</button>'+
     '<button class="btn-sec" id="LM-quiz-reset" style="margin-top:0;margin-bottom:8px">🔁 最初からクイズ</button>'+
-    '<button class="btn-sec" id="LM-due" style="margin-top:0;margin-bottom:8px'+(d?'':';opacity:.4;pointer-events:none')+'">📅 復習単語のみ（'+d+'件）</button>'+
+    '<button class="btn-sec" id="LM-due" style="margin-top:0;margin-bottom:8px'+(missWords.length?'':';opacity:.4;pointer-events:none')+'">🔴 間違い単語のみ（'+missWords.length+'件）</button>'+
     '<button class="btn-sec" id="LM-list" style="margin-top:0;margin-bottom:8px">📚 単語一覧を見る</button>'+
     '<button class="btn-sec" id="LM-edit" style="margin-top:0">✏️ リストを編集</button>';
   el('modal-bg').classList.add('on');
@@ -2541,10 +2543,10 @@ function listMenu(lid){
     go('s-quiz');qRender();
   });
   el('LM-due').addEventListener('click',function(){
-    if(!d)return;
+    if(!missWords.length)return;
     el('modal-bg').classList.remove('on');
-    var pool=ws.filter(due);
-    if(pool.length<2){toast('復習単語が少なすぎます（最低2単語）');return;}
+    var pool=missWords;
+    if(pool.length<2){toast('間違い単語が少なすぎます（最低2単語）');return;}
     var qs=(G.cfg.random ? shuffle(pool) : pool).slice(0,size);
     var ebbingIds2={};
     if(G.cfg.ebbing){getEbbingDue().forEach(function(w){ebbingIds2[w.id]=true;});}
