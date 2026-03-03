@@ -3897,12 +3897,18 @@ function qRender(){
 
   var totalWords=Q.words.length;
   var mastered=Q.mastered||0;
-  /* セグメントバー更新 */
-  var nOk=Object.keys(Q.masteredIds||{}).filter(function(id){return !(Q.miss||[]).some(function(m){return m.id===id;});}).length;
-  var nNg=(Q.miss||[]).filter(function(m){return Q.masteredIds&&Q.masteredIds[m.id];}).length;
+  /* セグメントバー更新
+   * 緑：不正解歴なしでmastered（1発正解）
+   * 赤：1回でも不正解/わからない があった単語（requeue中 or mastered問わず）
+   * グレー：未回答
+   */
+  var missIds={};
+  (Q.miss||[]).forEach(function(m){missIds[m.id]=true;});
+  var nNg=Object.keys(missIds).length; /* 不正解/わからないがあった単語数（重複なし）*/
+  var nOk=Object.keys(Q.masteredIds||{}).filter(function(id){return !missIds[id];}).length; /* 1発正解でmastered */
   var nTot=Q.words.length;
-  var pOk=nTot?Math.round(nOk/nTot*100):0;
   var pNg=nTot?Math.round(nNg/nTot*100):0;
+  var pOk=nTot?Math.round(nOk/nTot*100):0;
   var pUn=Math.max(0,100-pOk-pNg);
   el('QZ-seg-ok').style.width=pOk+'%';
   el('QZ-seg-ng').style.width=pNg+'%';
