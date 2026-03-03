@@ -4363,7 +4363,27 @@ function qRender(){
     sameLang=G.words.filter(function(w){return w.id!==q.id&&(w.lang||'en')===(q.lang||'en');});
   }
   var others=sameLang.length>=3?sameLang:G.words.filter(function(w){return w.id!==q.id;});
-  var dist=shuffle(others).slice(0,3).map(function(w){return rev?w.word:(w.meaning||w.word);});
+  /* ダミー選択肢：訳語が正解・他の選択肢と重複しないよう除外してから3件取る */
+  var usedMeanings={};
+  usedMeanings[ca]=true; /* 正解の訳語を使用済みに登録 */
+  var dist=[];
+  var shuffled=shuffle(others);
+  for(var _di=0;_di<shuffled.length&&dist.length<3;_di++){
+    var _dw=shuffled[_di];
+    var _dm=rev?_dw.word:(_dw.meaning||_dw.word);
+    /* 完全一致・先頭部分一致（カンマ区切りの最初の訳語）でも重複とみなす */
+    var _dmNorm=_dm.split(/[,、]/)[0].trim();
+    var _caNorm=ca.split(/[,、]/)[0].trim();
+    var isDup=usedMeanings[_dm]||(_dmNorm&&_dmNorm===_caNorm);
+    /* 既存distとも重複チェック */
+    if(!isDup){
+      for(var _dj=0;_dj<dist.length;_dj++){
+        var _djNorm=dist[_dj].split(/[,、]/)[0].trim();
+        if(dist[_dj]===_dm||(_dmNorm&&_dmNorm===_djNorm)){isDup=true;break;}
+      }
+    }
+    if(!isDup){usedMeanings[_dm]=true;dist.push(_dm);}
+  }
   var choices=shuffle([ca].concat(dist).slice(0,4));
   while(choices.length<4)choices.push('---');
   Q.ca=ca;Q.ci=choices.indexOf(ca);
