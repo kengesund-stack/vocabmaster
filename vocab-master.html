@@ -3369,12 +3369,86 @@ function generateReport(period, lids){
   /* エビングハウス今後30日予測 */
   var ebbingForecast = getEbbingForecast();
 
+  /* ── 昨日データ（日次専用） ── */
+  var yesterdayData = null;
+  if(period==='day'){
+    var yest=new Date(now); yest.setDate(yest.getDate()-1);
+    var yKey=yest.toISOString().slice(0,10);
+    var yLogs=(G.logs||[]).filter(function(l){return l.ts.slice(0,10)===yKey;});
+    if(yLogs.length){
+      var yQ=yLogs.reduce(function(s,l){return s+l.total;},0);
+      var yOk=yLogs.reduce(function(s,l){return s+l.ok;},0);
+      var yDur=yLogs.reduce(function(s,l){return s+(l.durationMs||((l.dur||0)*1000));},0);
+      yesterdayData={sessions:yLogs.length,totalQ:yQ,ok:yOk,acc:yQ?Math.round(yOk/yQ*100):0,durMs:yDur};
+    }
+  }
+
+  /* ── 曜日別集計（週次専用） ── */
+  var dowMap = null;
+  if(period==='week'){
+    dowMap={0:{ok:0,total:0,durMs:0,days:0},1:{ok:0,total:0,durMs:0,days:0},2:{ok:0,total:0,durMs:0,days:0},
+            3:{ok:0,total:0,durMs:0,days:0},4:{ok:0,total:0,durMs:0,days:0},5:{ok:0,total:0,durMs:0,days:0},6:{ok:0,total:0,durMs:0,days:0}};
+    Object.keys(dayMap).forEach(function(d){
+      var dow=new Date(d).getDay();
+      dowMap[dow].ok+=dayMap[d].ok; dowMap[dow].total+=dayMap[d].total;
+      dowMap[dow].durMs+=dayMap[d].durMs; dowMap[dow].days++;
+    });
+  }
+
+  /* ── 週別集計（月次専用） ── */
+  var weeklyTrend = null;
+  if(period==='month'){
+    var wTrendMap={};
+    dayKeys.forEach(function(d){
+      var dt=new Date(d),dow=dt.getDay()||7,mon=new Date(dt);
+      mon.setDate(dt.getDate()-(dow-1));
+      var wk=mon.toISOString().slice(0,10);
+      if(!wTrendMap[wk])wTrendMap[wk]={ok:0,total:0,durMs:0,label:''};
+      wTrendMap[wk].ok+=dayMap[d].ok; wTrendMap[wk].total+=dayMap[d].total;
+      wTrendMap[wk].durMs+=dayMap[d].durMs;
+    });
+    var wkKeys=Object.keys(wTrendMap).sort();
+    weeklyTrend=wkKeys.map(function(k){
+      var dt=new Date(k);
+      var r=wTrendMap[k];
+      return{label:(dt.getMonth()+1)+'/'+(dt.getDate())+'週',
+             ok:r.ok,total:r.total,durMs:r.durMs,
+             acc:r.total?Math.round(r.ok/r.total*100):0};
+    });
+  }
+
+  /* ── 月次：習得昇格数・今月のMVP単語 ── */
+  var masteredThisPeriod = 0;
+  var mvpWords = [];
+  if(period==='month'){
+    /* 期間内にエビングハウス完走した単語（s.l>=5、またはstatus=ok）の数 */
+    masteredThisPeriod=G.words.filter(function(w){
+      if(wordStatus(w)!=='ok')return false;
+      /* 最終更新がcutoff以降か判定 */
+      var lr=w.lr||w.cr;
+      return lr&&new Date(lr)>=cutoff;
+    }).length;
+    /* MVP：期間内で最多出題 & 正答率改善 */
+    var wScoreMap={};
+    logs.forEach(function(l){
+      (l.words||[]).forEach(function(wid){
+        if(!wScoreMap[wid])wScoreMap[wid]=0;
+        wScoreMap[wid]++;
+      });
+    });
+    mvpWords=Object.keys(wScoreMap).sort(function(a,b){return wScoreMap[b]-wScoreMap[a];}).slice(0,3).map(function(wid){
+      var w=G.words.find(function(x){return x.id===wid;});
+      return w?{word:w.word,meaning:w.meaning,count:wScoreMap[wid],status:wordStatus(w)}:null;
+    }).filter(Boolean);
+  }
+
   /* HTML生成（1ウィンドウ・タブ切り替え） */
   var h=buildCombinedReportHTML(periodLabel, now,
     totalSessions, totalQ, totalOk, totalNg, avgAcc, totalDurMs,
     dayKeys, dayMap, logs, modeData, listData, period,
     filterAll?[]:listNames,
-    missArr, slowArr, ebbingForecast);
+    missArr, slowArr, ebbingForecast,
+    yesterdayData, dowMap, weeklyTrend, masteredThisPeriod, mvpWords);
 
   /* 別ウィンドウを1つだけ開く */
   var w=window.open('','_blank','width=900,height=700');
@@ -3390,9 +3464,14 @@ function fmtDateShort(s){
   var d=new Date(s);return (d.getMonth()+1)+'/'+d.getDate();
 }
 
-function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, dayKeys, dayMap, logs, modeData, listData, period, targetListNames, missArr, slowArr, ebbingForecast){
+function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, totalDurMs, dayKeys, dayMap, logs, modeData, listData, period, targetListNames, missArr, slowArr, ebbingForecast, yesterdayData, dowMap, weeklyTrend, masteredThisPeriod, mvpWords){
 
   ebbingForecast = ebbingForecast || [];
+  yesterdayData = yesterdayData || null;
+  dowMap = dowMap || null;
+  weeklyTrend = weeklyTrend || null;
+  masteredThisPeriod = masteredThisPeriod || 0;
+  mvpWords = mvpWords || [];
 
   function makeEbbingHTML(forecast){
     if(!forecast||!forecast.length)forecast=[];
@@ -3616,6 +3695,234 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
       (modeSVG?'<div style="background:#f8f8ff;border:1px solid #e8e8f8;border-radius:8px;padding:12px;margin-bottom:14px"><div style="font-size:9pt;font-weight:600;color:#555;margin-bottom:6px">🎯 モード別学習時間</div>'+modeSVG+'</div>':'');
   }
 
+  /* ══════════════════════════════════════════
+     📅 日次専用：昨日比較カード
+  ══════════════════════════════════════════ */
+  var dayCompareSection = '';
+  if(period==='day'){
+    function diffBadge(cur, prev, unit, higherIsBetter){
+      if(prev==null||prev===undefined)return '';
+      var d=cur-prev;
+      if(d===0)return '<span style="color:#888;font-size:9pt">横ばい</span>';
+      var up=(d>0);
+      var good=(higherIsBetter?up:!up);
+      var clr=good?'#2e7d32':'#c62828';
+      var arrow=up?'▲':'▼';
+      return '<span style="color:'+clr+';font-weight:700;font-size:9pt">'+arrow+' '+Math.abs(d)+unit+'</span>';
+    }
+    var yAcc=yesterdayData?yesterdayData.acc:null;
+    var yDurMin=yesterdayData?Math.round(yesterdayData.durMs/60000):null;
+    var yQ=yesterdayData?yesterdayData.totalQ:null;
+    var todayDurMin=Math.round(totalDurMs/60000);
+
+    /* モチベーションメッセージ */
+    var motivMsg='';
+    if(!sessions){motivMsg='<div style="background:#fff8e1;border-left:4px solid #f9a825;padding:10px 14px;border-radius:6px;font-size:10pt;color:#555;margin-bottom:14px">📭 本日の学習記録がまだありません。今日もコツコツ頑張りましょう！</div>';}
+    else if(acc>=90){motivMsg='<div style="background:#e8f5e9;border-left:4px solid #4caf50;padding:10px 14px;border-radius:6px;font-size:10pt;color:#2e7d32;margin-bottom:14px">🏆 素晴らしい！正答率90%超え。完璧な仕上がりです！</div>';}
+    else if(acc>=75){motivMsg='<div style="background:#e8f5e9;border-left:4px solid #66bb6a;padding:10px 14px;border-radius:6px;font-size:10pt;color:#2e7d32;margin-bottom:14px">✨ 好調です！正答率75%以上。この調子を続けましょう。</div>';}
+    else if(yesterdayData&&acc>yesterdayData.acc){motivMsg='<div style="background:#e3f2fd;border-left:4px solid #42a5f5;padding:10px 14px;border-radius:6px;font-size:10pt;color:#1565c0;margin-bottom:14px">📈 昨日より正答率がアップ！着実に成長しています。</div>';}
+    else if(acc<60&&sessions>0){motivMsg='<div style="background:#fce4ec;border-left:4px solid #ef9a9a;padding:10px 14px;border-radius:6px;font-size:10pt;color:#b71c1c;margin-bottom:14px">💪 苦戦中ですが継続が大切です。苦手単語を重点的に復習しましょう。</div>';}
+    else if(sessions>0){motivMsg='<div style="background:#f3e5f5;border-left:4px solid #ab47bc;padding:10px 14px;border-radius:6px;font-size:10pt;color:#6a1b9a;margin-bottom:14px">🌱 着実に積み上げています。明日も継続しましょう！</div>';}
+
+    dayCompareSection = motivMsg;
+    if(yesterdayData||sessions>0){
+      dayCompareSection +=
+        '<h2 style="border-left-color:#fc5c7d">📅 昨日との比較</h2>'+
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">'+
+          /* 正答率 */
+          '<div style="background:#fff;border:1px solid #e8e8f0;border-radius:10px;padding:13px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)">'+
+            '<div style="font-size:8.5pt;color:#888;margin-bottom:4px">📊 正答率</div>'+
+            '<div style="font-size:20pt;font-weight:700;color:'+(acc>=80?'#2e7d32':acc>=60?'#f57c00':'#c62828')+'">'+(sessions?acc+'%':'—')+'</div>'+
+            '<div style="margin-top:4px">'+diffBadge(acc,yAcc,'%',true)+'</div>'+
+            (yAcc!=null?'<div style="font-size:8pt;color:#aaa;margin-top:2px">昨日 '+yAcc+'%</div>':'<div style="font-size:8pt;color:#ccc;margin-top:2px">昨日データなし</div>')+
+          '</div>'+
+          /* 学習時間 */
+          '<div style="background:#fff;border:1px solid #e8e8f0;border-radius:10px;padding:13px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)">'+
+            '<div style="font-size:8.5pt;color:#888;margin-bottom:4px">⏱️ 学習時間</div>'+
+            '<div style="font-size:20pt;font-weight:700;color:#7c5cfc">'+(sessions?todayDurMin+'分':'—')+'</div>'+
+            '<div style="margin-top:4px">'+diffBadge(todayDurMin,yDurMin,'分',true)+'</div>'+
+            (yDurMin!=null?'<div style="font-size:8pt;color:#aaa;margin-top:2px">昨日 '+yDurMin+'分</div>':'<div style="font-size:8pt;color:#ccc;margin-top:2px">昨日データなし</div>')+
+          '</div>'+
+          /* 出題数 */
+          '<div style="background:#fff;border:1px solid #e8e8f0;border-radius:10px;padding:13px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)">'+
+            '<div style="font-size:8.5pt;color:#888;margin-bottom:4px">🎯 出題数</div>'+
+            '<div style="font-size:20pt;font-weight:700;color:#1a1a2e">'+(sessions?totalQ:'—')+'</div>'+
+            '<div style="margin-top:4px">'+diffBadge(totalQ,yQ,'問',true)+'</div>'+
+            (yQ!=null?'<div style="font-size:8pt;color:#aaa;margin-top:2px">昨日 '+yQ+'問</div>':'<div style="font-size:8pt;color:#ccc;margin-top:2px">昨日データなし</div>')+
+          '</div>'+
+        '</div>';
+    }
+  }
+
+  /* ══════════════════════════════════════════
+     📆 週次専用：曜日別ヒートマップ ＋ 来週アドバイス
+  ══════════════════════════════════════════ */
+  var weekHeatmapSection = '';
+  if(period==='week' && dowMap){
+    var DOW_LABELS=['日','月','火','水','木','金','土'];
+    var DOW_COLORS_BG=['#fce4ec','#f3e5f5','#e8eaf6','#e3f2fd','#e0f2f1','#f9fbe7','#fff8e1'];
+    var DOW_COLORS_BAR=['#e91e63','#9c27b0','#3f51b5','#2196f3','#009688','#8bc34a','#ff9800'];
+    /* 今週の実際の曜日（cutoffから7日） */
+    var maxDurMs=0;
+    for(var di=0;di<7;di++){if(dowMap[di].durMs>maxDurMs)maxDurMs=dowMap[di].durMs;}
+
+    var heatCells='';
+    var studiedDays=0;
+    for(var di=0;di<7;di++){
+      var d=dowMap[di];
+      var intensity=maxDurMs>0?d.durMs/maxDurMs:0;
+      var bgAlpha=0.08+intensity*0.72;
+      var barColor=DOW_COLORS_BAR[di];
+      var accD=d.total?Math.round(d.ok/d.total*100):0;
+      var durMin=Math.round(d.durMs/60000);
+      if(d.days>0)studiedDays++;
+      heatCells+=
+        '<div style="text-align:center;flex:1">'+
+          '<div style="font-size:8pt;font-weight:700;color:#555;margin-bottom:4px">'+DOW_LABELS[di]+'</div>'+
+          '<div style="height:60px;background:'+DOW_COLORS_BG[di]+';border-radius:6px;display:flex;align-items:flex-end;padding:2px;overflow:hidden;margin-bottom:3px">'+
+            (d.days>0?
+              '<div style="width:100%;background:'+barColor+';border-radius:4px;opacity:'+Math.max(0.25,bgAlpha)+';height:'+(intensity*100)+'%;min-height:6px;transition:height .3s"></div>':
+              '<div style="width:100%;background:#ddd;border-radius:4px;height:4px"></div>')+
+          '</div>'+
+          (d.days>0?
+            '<div style="font-size:8pt;color:#333;font-weight:600">'+durMin+'分</div>'+
+            '<div style="font-size:7.5pt;color:#888">'+accD+'%</div>':
+            '<div style="font-size:8pt;color:#ccc">—</div>')+
+        '</div>';
+    }
+
+    /* 最も得意な曜日・苦手な曜日 */
+    var activeDows=[];
+    for(var di=0;di<7;di++){if(dowMap[di].days>0)activeDows.push(di);}
+    var bestDow=activeDows.length?activeDows.reduce(function(a,b){return dowMap[a].total&&dowMap[b].total?Math.round(dowMap[a].ok/dowMap[a].total*100)>=Math.round(dowMap[b].ok/dowMap[b].total*100)?a:b:a;},activeDows[0]):-1;
+    var worstDow=activeDows.length?activeDows.reduce(function(a,b){return dowMap[a].total&&dowMap[b].total?Math.round(dowMap[a].ok/dowMap[a].total*100)<=Math.round(dowMap[b].ok/dowMap[b].total*100)?a:b:a;},activeDows[0]):-1;
+    var laziestDow=-1;
+    for(var di=0;di<7;di++){if(dowMap[di].days===0){laziestDow=di;break;}}
+
+    /* 来週アドバイス */
+    var adviceItems=[];
+    if(studiedDays<5)adviceItems.push('📅 今週は<strong>'+studiedDays+'日</strong>の学習でした。来週は<strong>5日以上</strong>を目指しましょう！');
+    if(laziestDow>=0)adviceItems.push('💤 <strong>'+DOW_LABELS[laziestDow]+'曜日</strong>は学習ゼロです。来週は短時間でも取り組んでみましょう。');
+    if(bestDow>=0&&dowMap[bestDow].total>0){var ba=Math.round(dowMap[bestDow].ok/dowMap[bestDow].total*100);adviceItems.push('🌟 <strong>'+DOW_LABELS[bestDow]+'曜日</strong>が最高正答率（'+ba+'%）！このペースを維持しましょう。');}
+    if(worstDow>=0&&worstDow!==bestDow&&dowMap[worstDow].total>0){var wa=Math.round(dowMap[worstDow].ok/dowMap[worstDow].total*100);adviceItems.push('📝 <strong>'+DOW_LABELS[worstDow]+'曜日</strong>は正答率'+wa+'%と低め。苦手単語の復習を重点的に入れましょう。');}
+    if(acc>=80)adviceItems.push('🚀 週平均正答率'+acc+'%は優秀！来週は問題数を増やしてさらに挑戦してみましょう。');
+    else if(acc<60)adviceItems.push('💡 正答率が低めです。1日の学習単語数を減らして、確実に定着させることを優先しましょう。');
+    if(!adviceItems.length)adviceItems.push('✅ 完璧な1週間！来週も同じペースで継続しましょう。');
+
+    weekHeatmapSection =
+      '<h2 style="border-left-color:#9c27b0">📆 曜日別学習ヒートマップ</h2>'+
+      '<div style="background:#fafafa;border:1px solid #ede8f5;border-radius:10px;padding:14px;margin-bottom:18px">'+
+        '<div style="display:flex;gap:6px;margin-bottom:10px">'+heatCells+'</div>'+
+        '<div style="font-size:8.5pt;color:#888;text-align:center">棒の高さ＝学習時間 ／ 下の数字：学習時間（分）・正答率</div>'+
+      '</div>'+
+      '<h2 style="border-left-color:#ff9800">💡 来週へのアドバイス</h2>'+
+      '<div style="background:#fffde7;border:1px solid #ffe082;border-radius:10px;padding:14px;margin-bottom:18px">'+
+        adviceItems.map(function(a){return '<div style="font-size:10pt;color:#444;line-height:1.8;margin-bottom:4px">'+a+'</div>';}).join('')+
+      '</div>';
+  }
+
+  /* ══════════════════════════════════════════
+     🗓️ 月次専用：成長曲線グラフ ＋ MVP ＋ カレンダー負荷
+  ══════════════════════════════════════════ */
+  var monthGrowthSection = '';
+  if(period==='month'){
+    /* 成長曲線：週別正答率折れ線 */
+    function makeGrowthSVG(wTrend){
+      if(!wTrend||!wTrend.length)return '<p style="color:#888;font-size:9pt">データが不足しています</p>';
+      var n=wTrend.length;
+      var GW=560,GH=130,PL=34,PR=12,PB=26,PT=16;
+      var IW=GW-PL-PR,IH=GH-PT-PB;
+      var step=IW/Math.max(n-1,1);
+      /* グリッド */
+      var grid='',yLbls='';
+      [0,25,50,75,100].forEach(function(v){
+        var y=PT+IH-Math.round(v/100*IH);
+        grid+='<line x1="'+PL+'" y1="'+y+'" x2="'+(GW-PR)+'" y2="'+y+'" stroke="'+(v===0||v===100?'#bbb':'#e0e0e0')+'" stroke-width="'+(v===0||v===100?'1':'0.5')+'" stroke-dasharray="'+(v>0&&v<100?'3,3':'0')+'"/>';
+        yLbls+='<text x="'+(PL-4)+'" y="'+(y+3)+'" text-anchor="end" font-size="7" fill="#888">'+v+'%</text>';
+      });
+      /* 塗りつぶし領域 */
+      var pts=wTrend.map(function(d,i){
+        var x=PL+(n===1?IW/2:i*step);
+        var y=PT+IH-Math.round(d.acc/100*IH);
+        return {x:x,y:y,d:d};
+      });
+      var areaPath='M '+pts[0].x+' '+(PT+IH);
+      pts.forEach(function(p){areaPath+=' L '+p.x+' '+p.y;});
+      areaPath+=' L '+pts[pts.length-1].x+' '+(PT+IH)+' Z';
+      /* 折れ線 */
+      var linePath='';
+      pts.forEach(function(p,i){linePath+=(i===0?'M ':'L ')+p.x+' '+p.y+' ';});
+      /* ドット＋ラベル */
+      var dots='',xlbls='';
+      pts.forEach(function(p,i){
+        var clr=p.d.acc>=80?'#4caf50':p.d.acc>=60?'#ff9800':'#f44336';
+        dots+='<circle cx="'+p.x+'" cy="'+p.y+'" r="4" fill="'+clr+'" stroke="#fff" stroke-width="1.5"/>'+
+          '<text x="'+p.x+'" y="'+(p.y-7)+'" text-anchor="middle" font-size="7.5" font-weight="700" fill="'+clr+'">'+p.d.acc+'%</text>';
+        xlbls+='<text x="'+p.x+'" y="'+(GH-4)+'" text-anchor="middle" font-size="7" fill="#777">'+p.d.label+'</text>';
+      });
+      return '<svg viewBox="0 0 '+GW+' '+GH+'" style="width:100%;max-height:150px;display:block">'+
+        grid+
+        '<path d="'+areaPath+'" fill="url(#growthGrad)" opacity="0.35"/>'+
+        '<defs><linearGradient id="growthGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7c5cfc"/><stop offset="100%" stop-color="#7c5cfc" stop-opacity="0.05"/></linearGradient></defs>'+
+        '<path d="'+linePath+'" fill="none" stroke="#7c5cfc" stroke-width="2.5" stroke-linejoin="round"/>'+
+        dots+xlbls+yLbls+
+      '</svg>';
+    }
+
+    /* MVP単語カード */
+    var mvpHTML='';
+    if(mvpWords.length){
+      var medals=['🥇','🥈','🥉'];
+      mvpHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
+      mvpWords.forEach(function(w,i){
+        var stClr=w.status==='ok'?'#2e7d32':w.status==='ng'?'#c62828':'#f57c00';
+        var stLbl=w.status==='ok'?'習得済み✅':w.status==='ng'?'復習中🔄':'あいまい';
+        mvpHTML+='<div style="flex:1;min-width:120px;background:#f8f8ff;border:1px solid #e0d8ff;border-radius:10px;padding:10px 12px;text-align:center">'+
+          '<div style="font-size:16pt;margin-bottom:2px">'+medals[i]+'</div>'+
+          '<div style="font-size:11pt;font-weight:700;color:#1a1a2e">'+escHtml(w.word)+'</div>'+
+          '<div style="font-size:8.5pt;color:#666;margin:2px 0">'+escHtml(w.meaning)+'</div>'+
+          '<div style="font-size:8pt;color:'+stClr+';font-weight:600">'+stLbl+'</div>'+
+          '<div style="font-size:8pt;color:#888;margin-top:2px">計'+w.count+'回出題</div>'+
+        '</div>';
+      });
+      mvpHTML+='</div>';
+    }
+
+    /* 習得昇格バッジ */
+    var masteredBadge=masteredThisPeriod>0?
+      '<div style="display:inline-flex;align-items:center;gap:6px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:6px 14px;font-size:10pt;color:#2e7d32;font-weight:600;margin-bottom:14px">🏅 今月の習得昇格：<strong style="font-size:14pt">'+masteredThisPeriod+'単語</strong></div>':
+      '<div style="font-size:9pt;color:#aaa;margin-bottom:14px">今月の習得昇格データなし</div>';
+
+    /* 月次アドバイス文 */
+    var monthAdvice=[];
+    if(weeklyTrend&&weeklyTrend.length>=2){
+      var firstAcc=weeklyTrend[0].acc,lastAcc=weeklyTrend[weeklyTrend.length-1].acc;
+      var accDiff=lastAcc-firstAcc;
+      if(accDiff>=10)monthAdvice.push('📈 月間で正答率が<strong>+'+accDiff+'%</strong>向上！学習の成果が着実に出ています。');
+      else if(accDiff<=-10)monthAdvice.push('📉 月末にかけて正答率が<strong>'+accDiff+'%</strong>低下傾向です。復習頻度を上げましょう。');
+      else monthAdvice.push('📊 正答率は安定しています（月初'+firstAcc+'% → 月末'+lastAcc+'%）。');
+    }
+    var totalDurHr=(totalDurMs/3600000).toFixed(1);
+    if(totalDurMs>=3*3600000)monthAdvice.push('⏰ 月間<strong>'+totalDurHr+'時間</strong>学習。充実した月でした！');
+    else monthAdvice.push('⏰ 月間学習時間は<strong>'+totalDurHr+'時間</strong>。来月は毎日10分を目標にしてみましょう。');
+    if(masteredThisPeriod>=5)monthAdvice.push('🎓 <strong>'+masteredThisPeriod+'単語</strong>が習得済みに昇格。語彙が着実に増えています！');
+    if(!monthAdvice.length)monthAdvice.push('🌱 引き続き継続的な学習を心がけましょう！');
+
+    monthGrowthSection =
+      '<h2 style="border-left-color:#7c5cfc">📈 月間成長曲線（週別正答率トレンド）</h2>'+
+      '<div style="background:#f8f8ff;border:1px solid #e0d8ff;border-radius:10px;padding:14px;margin-bottom:18px">'+
+        (weeklyTrend&&weeklyTrend.length?makeGrowthSVG(weeklyTrend):'<p style="color:#888;font-size:9pt">データが不足しています</p>')+
+        '<div style="font-size:8pt;color:#888;text-align:center;margin-top:4px">● 緑:80%以上 ● 橙:60〜79% ● 赤:60%未満</div>'+
+      '</div>'+
+      '<h2 style="border-left-color:#ffd700">🏅 今月の達成状況</h2>'+
+      masteredBadge+
+      (mvpWords.length?'<div style="font-size:9.5pt;font-weight:600;color:#555;margin-bottom:8px">📌 今月のMVP単語（最多出題）</div>'+mvpHTML:'')+
+      '<h2 style="border-left-color:#ff9800">💡 来月へのアドバイス</h2>'+
+      '<div style="background:#fffde7;border:1px solid #ffe082;border-radius:10px;padding:14px;margin-bottom:18px">'+
+        monthAdvice.map(function(a){return '<div style="font-size:10pt;color:#444;line-height:1.8;margin-bottom:4px">'+a+'</div>';}).join('')+
+      '</div>';
+  }
+
   /* 日別テーブル */
   var langNames={en:'英語',de:'ドイツ語',fr:'フランス語',es:'スペイン語',it:'イタリア語'};
   var dayRows='';
@@ -3735,9 +4042,13 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
     '<div style="margin-bottom:12px">'+targetListNames.map(function(n){return'<span style="display:inline-block;background:#7c5cfc22;color:#7c5cfc;border:1px solid #7c5cfc44;border-radius:6px;padding:2px 10px;font-size:9pt;font-weight:600;margin:0 3px 3px 0">'+escHtml(n)+'</span>';}).join('')+'</div>':'';
 
   /* ── 学習報告書ページ ── */
+  /* 期間別アイコン・タイトル */
+  var periodIcon = period==='day'?'📅':period==='week'?'📆':'🗓️';
+  var periodName = period==='day'?'日次報告書':period==='week'?'週次報告書':'月次報告書';
+
   var page1=
     '<div id="tab-summary" class="tab-content" style="display:block">'+
-    '<h1>📊 VocabMaster 学習報告書</h1>'+
+    '<h1>'+periodIcon+' VocabMaster '+periodName+'</h1>'+
     '<div class="subtitle">'+escHtml(title)+' ｜ 作成：'+fmtDate(now)+' '+now.getHours()+'時'+String(now.getMinutes()).padStart(2,'0')+'分</div>'+
     badges+
     '<div class="summary-grid">'+
@@ -3747,14 +4058,23 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
       '<div class="summary-box"><div class="summary-n" style="color:#'+(acc>=80?'2e7d32':acc>=60?'f57c00':'c62828')+'">'+acc+'%</div><div class="summary-l">平均正答率</div></div>'+
       '<div class="summary-box"><div class="summary-n" style="color:#7c5cfc;font-size:14pt">'+fmtDur(totalDurMs)+'</div><div class="summary-l">総学習時間</div></div>'+
     '</div>'+
-    graphSection+
-    '<h2>🧠 エビングハウス忘却曲線 — 今後30日の復習予定</h2>'+
-    '<div style="background:#f0f0ff;border:1px solid #d0d0f0;border-radius:8px;padding:12px;margin-bottom:14px">'+
-      '<div style="font-size:9pt;color:#555;margin-bottom:4px">📍 横軸: 今後の日付 ／ 縦軸: 復習すべき単語数 ／ 棒をタップ（PCはカーソルを合わせる）と単語一覧が表示されます</div>'+
-      '<div style="font-size:8.5pt;color:#7c5cfc;margin-bottom:8px">🟢 不正解になった単語は 1→3→7→14→30日後の全インターバルを正解で完走した時点で「正解」に昇格します</div>'+
-      ebbingHTML+
-    '</div>'+
-    '<h2>📋 日別学習記録</h2>'+
+    dayCompareSection+
+    weekHeatmapSection+
+    (period!=='month'?graphSection:'')+
+    monthGrowthSection+
+    (period==='day'?
+      '<h2>🧠 明日以降の復習予定</h2>'+
+      '<div style="background:#f0f0ff;border:1px solid #d0d0f0;border-radius:8px;padding:12px;margin-bottom:14px">'+
+        '<div style="font-size:9pt;color:#555;margin-bottom:4px">📍 今後の復習スケジュール（今日〜3日後を重点表示）</div>'+
+        ebbingHTML+
+      '</div>':
+      '<h2>🧠 エビングハウス忘却曲線 — 今後30日の復習予定</h2>'+
+      '<div style="background:#f0f0ff;border:1px solid #d0d0f0;border-radius:8px;padding:12px;margin-bottom:14px">'+
+        '<div style="font-size:9pt;color:#555;margin-bottom:4px">📍 横軸: 今後の日付 ／ 縦軸: 復習すべき単語数 ／ 棒をタップ（PCはカーソルを合わせる）と単語一覧が表示されます</div>'+
+        '<div style="font-size:8.5pt;color:#7c5cfc;margin-bottom:8px">🟢 不正解になった単語は 1→3→7→14→30日後の全インターバルを正解で完走した時点で「正解」に昇格します</div>'+
+        ebbingHTML+
+      '</div>')+
+    '<h2>📋 '+(period==='day'?'本日':'期間内')+'の学習記録</h2>'+
     '<table><tr><th>日付</th><th>セッション</th><th>出題数</th><th>正解</th><th>不正解</th><th>正答率</th><th>学習時間</th></tr>'+dayRows+'</table>'+
     '<h2 style="border-left-color:#7c5cfc">📚 使用した単語集</h2>'+
     listCards+
