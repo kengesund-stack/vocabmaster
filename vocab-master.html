@@ -899,9 +899,10 @@ function answer(w,ok){
   if(!w.s)w.s={i:1,e:EASE0,d:null,k:0,l:0};
   var s=w.s;
   if(ok){s.k=(s.k||0)+1;if(s.k<=1)s.i=1;else if(s.k===2)s.i=3;else s.i=Math.round(s.i*s.e);s.e=Math.min(3.0,s.e+0.1);
-    /* エビングハウス進行：dueモードでエビング由来の単語のみ */
-    if(G.cfg.ebbing&&Q.ebbingIds&&Q.ebbingIds[w.id]) ebbingAdvance(w.id);}
+    /* エビングハウス進行：忘却曲線に登録済みの単語は正解でも進める */
+    if(G.cfg.ebbing&&G.ebbing&&G.ebbing[w.id]) ebbingAdvance(w.id);}
   else{s.l=(s.l||0)+1;s.k=0;s.i=1;s.e=Math.max(EMIN,s.e-0.2);
+    /* 不正解/わからない → 即座に忘却曲線へ登録 */
     if(G.cfg.ebbing) ebbingMarkMiss(w.id, w.word, w.meaning||'', w.lang||'en');}
   s.i=Math.max(1,Math.min(s.i,365));
   var dt=new Date();dt.setDate(dt.getDate()+s.i);s.d=dt.toISOString();w.lr=new Date().toISOString();save();
@@ -3993,7 +3994,12 @@ function qSelect(i){
   /* requeueMax=0（再出題なし）の場合、不正解でも再出題しないので即習得扱いにする */
   var justMastered=ok&&(!hadMiss||Q.consec[q.id]>=requeueMax)&&!Q.masteredIds[q.id];
   var justMasteredBySkip=!ok&&requeueMax===0&&!Q.masteredIds[q.id];
-  if(justMastered||justMasteredBySkip){Q.masteredIds[q.id]=true;Q.mastered=(Q.mastered||0)+1;}
+  if(justMastered||justMasteredBySkip){Q.masteredIds[q.id]=true;Q.mastered=(Q.mastered||0)+1;
+    /* 不正解/わからない歴ありでmasteredになった場合、忘却曲線に未登録なら登録する */
+    if(q._hadMiss&&G.cfg.ebbing&&!(G.ebbing&&G.ebbing[q.id])){
+      ebbingMarkMiss(q.id,q.word,q.meaning||'',q.lang||'en');
+    }
+  }
 
   var needMore=requeueMax>0&&hadMiss&&!justMastered&&ok;
   el('FB-tx').innerHTML=ok
