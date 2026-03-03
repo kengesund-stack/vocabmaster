@@ -326,6 +326,20 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
   </div>
 </div>
 
+<!-- エビングハウス期限超過ポップアップ -->
+<div id="overdue-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:180;align-items:center;justify-content:center;padding:24px">
+  <div id="overdue-modal-inner" style="background:var(--sf);border-radius:22px;width:100%;max-width:360px;padding:28px 22px 22px;position:relative;box-shadow:0 12px 48px rgba(0,0,0,.6)">
+    <!-- 上部アクセントバー -->
+    <div style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--rd),var(--or));border-radius:22px 22px 0 0"></div>
+    <div style="font-size:36px;text-align:center;margin-bottom:10px">⏰</div>
+    <div style="font-size:17px;font-weight:700;text-align:center;margin-bottom:8px;color:var(--tx)">復習の期限が過ぎています！</div>
+    <div id="overdue-msg" style="font-size:14px;color:var(--tx2);text-align:center;margin-bottom:6px;line-height:1.6"></div>
+    <div style="font-size:13px;color:var(--or);text-align:center;margin-bottom:22px;font-weight:500">間違えた単語で学習してください 📚</div>
+    <button id="overdue-study-btn" style="width:100%;padding:14px;background:linear-gradient(135deg,var(--rd),var(--or));border:none;border-radius:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:9px">🎯 今すぐ復習する</button>
+    <button id="overdue-close-btn" style="width:100%;padding:12px;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:13px;color:var(--tx2);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">後で</button>
+  </div>
+</div>
+
 <!-- HOME -->
 <div class="scr on" id="s-home">
   <div class="home-top">
@@ -5161,6 +5175,51 @@ window.onload=function(){
     }catch(e){/* 無効なハッシュは無視 */}
   }
   bind();loadSample();homeRefresh();updateLevelHint();
+
+  /* ── エビングハウス期限超過ポップアップ ── */
+  /* アプリ起動時に2日以上超過した単語があれば警告 */
+  setTimeout(function(){
+    if(!G.cfg.ebbing||!G.ebbing)return;
+    var now=new Date();
+    var twoDaysAgo=new Date(now.getTime()-2*24*60*60*1000);
+    /* 2日以上前に復習予定だった単語を収集 */
+    var overdueRecs=Object.values(G.ebbing).filter(function(rec){
+      return new Date(rec.nextDate)<=twoDaysAgo;
+    });
+    if(!overdueRecs.length)return;
+    var cnt=overdueRecs.length;
+    el('overdue-msg').textContent='復習日を過ぎた単語が '+cnt+' 個あります。';
+    el('overdue-modal').style.display='flex';
+
+    /* 「今すぐ復習する」→ 超過単語をクイズ */
+    el('overdue-study-btn').onclick=function(){
+      el('overdue-modal').style.display='none';
+      /* 超過単語に対応するwordオブジェクトを収集 */
+      var pool=[];
+      overdueRecs.forEach(function(rec){
+        var w=G.words.find(function(x){return x.id===rec.wordId;});
+        if(w)pool.push(w);
+      });
+      if(pool.length<1){toast('対象単語が見つかりません');return;}
+      if(pool.length<2){toast('クイズには最低2単語必要です（'+pool.length+'単語）');return;}
+      var size=parseInt(G.cfg.size)||20;
+      var qs=(G.cfg.random?shuffle(pool):pool).slice(0,size);
+      var ebbingIds2={};
+      if(G.cfg.ebbing){getEbbingDue().forEach(function(w){ebbingIds2[w.id]=true;});}
+      Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'due',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{},ebbingIds:ebbingIds2};
+      go('s-quiz');qRender();
+    };
+
+    /* 「後で」ボタン */
+    el('overdue-close-btn').onclick=function(){
+      el('overdue-modal').style.display='none';
+    };
+
+    /* 背景タップで閉じる */
+    el('overdue-modal').onclick=function(e){
+      if(e.target===this)this.style.display='none';
+    };
+  }, 600); /* homeRefreshの後に実行 */
 };
 </script>
 </body>
