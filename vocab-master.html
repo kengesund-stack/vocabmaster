@@ -580,11 +580,41 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         <button class="opt-btn" data-type="phrases" id="TY-phrases" style="flex:1;padding:8px">💬<br>熟語のみ</button>
         <button class="opt-btn" data-type="both" id="TY-both" style="flex:1;padding:8px">✨<br>単語＋熟語</button>
       </div>
-      <div class="lbl">テキストを貼り付け</div>
-      <textarea class="inp ta" id="IN-ai-text" style="height:140px" placeholder="テキストを貼り付けてください。AIが重要単語・熟語を自動抽出・翻訳します。&#10;&#10;例 (独): Das Haus ist sehr schön und die Schule liegt in der Nähe...&#10;例 (英): The enigmatic professor was known for his perspicacious observations..."></textarea>
+
+      <!-- カメラ撮影エリア -->
+      <div class="lbl">📷 写真から抽出（カメラ・画像）</div>
+      <div id="CAM-area">
+        <div id="CAM-btns" style="display:flex;gap:8px;margin-bottom:10px">
+          <button id="B-cam-shoot" style="flex:1;padding:13px 8px;background:linear-gradient(135deg,rgba(124,92,252,.25),rgba(92,248,252,.15));border:1.5px solid rgba(124,92,252,.5);border-radius:var(--r);color:var(--tx);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:5px;-webkit-appearance:none">
+            <span style="font-size:26px">📷</span>カメラで撮影
+          </button>
+          <button id="B-cam-gallery" style="flex:1;padding:13px 8px;background:var(--sf2);border:1.5px solid rgba(255,255,255,.12);border-radius:var(--r);color:var(--tx);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:5px;-webkit-appearance:none">
+            <span style="font-size:26px">🖼️</span>画像を選択
+          </button>
+        </div>
+        <div id="CAM-preview-wrap" style="display:none;margin-bottom:10px">
+          <div style="position:relative;border-radius:var(--r);overflow:hidden;background:var(--sf2)">
+            <img id="CAM-preview-img" style="width:100%;max-height:260px;object-fit:contain;display:block" alt="">
+            <button id="B-cam-retake" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-size:12px;font-weight:600;padding:5px 11px;cursor:pointer;font-family:inherit">✕ 撮り直す</button>
+          </div>
+          <button class="btn-primary" id="B-cam-extract" style="margin-top:10px">📷 この画像から単語を抽出</button>
+        </div>
+      </div>
+      <input type="file" id="IN-cam-shoot" accept="image/*" capture="environment" style="display:none">
+      <input type="file" id="IN-cam-gallery" accept="image/*" style="display:none">
+
+      <div style="display:flex;align-items:center;gap:8px;margin:4px 0 10px">
+        <div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div>
+        <span style="font-size:11px;color:var(--tx2);font-weight:500">またはテキストを貼り付け</span>
+        <div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div>
+      </div>
+
+      <textarea class="inp ta" id="IN-ai-text" style="height:120px" placeholder="テキストを貼り付けてください。AIが重要単語・熟語を自動抽出・翻訳します。&#10;&#10;例 (独): Das Haus ist sehr schön und die Schule liegt in der Nähe...&#10;例 (英): The enigmatic professor was known for his perspicacious observations..."></textarea>
       <div class="hint">✨ AIが重要単語・熟語を抽出し日本語訳を付与します。APIキーなしでもオフライン抽出が使えます。</div>
-      <button class="btn-primary" id="B-ai-extract">✨ AI で単語・熟語を抽出</button>
+      <button class="btn-primary" id="B-ai-extract">✨ AI でテキストから抽出</button>
     </div>
+
+
 
     <!-- PREVIEW -->
     <div id="PRV" style="display:none;margin-top:16px">
@@ -2289,6 +2319,86 @@ function aiExtractAPI(txt){
       }
     }
   );
+}
+
+/* ── カメラ画像からAI単語抽出 ── */
+function camAiExtract(dataUrl){
+  /* data:image/jpeg;base64,XXX から mediaType と base64 data を分離 */
+  var m=dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if(!m){toast('画像データが不正です');return;}
+  var mediaType=m[1]; /* image/jpeg など */
+  var b64=m[2];
+
+  var ln=langName(selLang);
+  var def=getLevelDef(selLang,selLevel);
+  var typeCond={
+    words:'単語のみ（2語以上の熟語・イディオムは含めない）',
+    phrases:'熟語・イディオム・慣用句のみ（2語以上のフレーズ）',
+    both:'単語と熟語・イディオム・慣用句の両方'
+  };
+  var articleRule={
+    en:'',
+    de:'名詞には必ず定冠詞を付けてください（例: der Mann, die Frau, das Kind）。動詞は不定詞形、形容詞は原形で記載してください。',
+    fr:'名詞には必ず定冠詞を付けてください（例: le livre, la maison）。動詞は不定詞形、形容詞は男性単数形で記載してください。',
+    es:'名詞には必ず定冠詞を付けてください（例: el libro, la casa）。動詞は不定詞形、形容詞は男性単数形で記載してください。',
+    it:'名詞には必ず定冠詞を付けてください（例: il libro, la casa）。動詞は不定詞形、形容詞は男性単数形で記載してください。'
+  };
+  var articleInstr=articleRule[selLang]||'';
+
+  var prompt=
+    'この画像に写っている'+ln+'のテキストから、「'+def.cond+'」に該当する'+typeCond[selType]+'をできるだけ多く抽出し、それぞれ日本語訳をつけてください。
+'+
+    (articleInstr?articleInstr+'
+':'')+
+    '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。
+'+
+    '画像にテキストが見つからない場合は {"words":[]} を返してください。
+'+
+    '以下のJSON形式のみで返してください（前後に説明文や```は不要）:
+'+
+    '{"words":[{"word":"primate","meaning":"霊長類"},{"word":"be put upon","meaning":"利用される"}]}';
+
+  loading('📷 画像を解析中...');
+
+  var body={
+    model:'claude-sonnet-4-20250514',
+    max_tokens:4096,
+    messages:[{
+      role:'user',
+      content:[
+        {type:'image',source:{type:'base64',media_type:mediaType,data:b64}},
+        {type:'text',text:prompt}
+      ]
+    }]
+  };
+
+  apiCall(body,function(d){
+    loaded();
+    try{
+      var raw=(d.content[0].text||'').replace(/```json|```/g,'').trim();
+      var match=raw.match(/\{[\s\S]*\}/);
+      if(!match){toast('❌ 抽出結果を解析できませんでした');return;}
+      var words=(JSON.parse(match[0]).words||[]).filter(function(w){return w.word&&w.word.trim();});
+      /* 重複除去 */
+      var seen={};
+      words=words.filter(function(w){
+        var k=w.word.toLowerCase().trim();
+        if(seen[k])return false; seen[k]=true; return true;
+      });
+      if(!words.length){toast('❌ 画像から単語が見つかりませんでした');return;}
+      toast('✅ '+words.length+'語を画像から抽出しました');
+      prvShow(words);
+      /* リスト名が空なら自動設定 */
+      var ni=el('IN-ai-name');
+      if(ni&&!ni.value)ni.value='📷 '+(LANGS[selLang]?LANGS[selLang].name:'')+'_カメラ抽出';
+    }catch(e){
+      toast('❌ 解析エラー: '+e.message);
+    }
+  },function(e){
+    loaded();
+    var msg=e.message||'';
+    toast(msg.indexOf('401')>=0?'❌ APIキーが無効です':'❌ エラー: '+msg.slice(0,50));
+  });
 }
 
 /* 単語リストを150語ずつ分割してAI翻訳 */
@@ -4703,6 +4813,35 @@ function bind(){
     b.addEventListener('click',function(){setJsonSection(this.getAttribute('data-jsec'));});
   });
   el('B-ai-extract').addEventListener('click',aiExtract);
+
+  /* ---- カメラ撮影 ---- */
+  var _camBase64=null; /* 選択中の画像データ */
+  function camLoadImage(file){
+    if(!file)return;
+    var reader=new FileReader();
+    reader.onload=function(e){
+      _camBase64=e.target.result; /* data:image/jpeg;base64,... */
+      el('CAM-preview-img').src=_camBase64;
+      el('CAM-preview-wrap').style.display='block';
+      el('CAM-btns').style.display='none';
+    };
+    reader.readAsDataURL(file);
+  }
+  el('B-cam-shoot').addEventListener('click',function(){el('IN-cam-shoot').click();});
+  el('B-cam-gallery').addEventListener('click',function(){el('IN-cam-gallery').click();});
+  el('IN-cam-shoot').addEventListener('change',function(){camLoadImage(this.files[0]);this.value='';});
+  el('IN-cam-gallery').addEventListener('change',function(){camLoadImage(this.files[0]);this.value='';});
+  el('B-cam-retake').addEventListener('click',function(){
+    _camBase64=null;
+    el('CAM-preview-wrap').style.display='none';
+    el('CAM-btns').style.display='flex';
+    el('CAM-preview-img').src='';
+  });
+  el('B-cam-extract').addEventListener('click',function(){
+    if(!_camBase64){toast('画像が選択されていません');return;}
+    if(!G.cfg.key){toast('画像抽出にはAPIキーが必要です（設定画面で入力）');return;}
+    camAiExtract(_camBase64);
+  });
   el('B-save').addEventListener('click',saveList);
   el('B-clr-prv').addEventListener('click',prvHide);
 
