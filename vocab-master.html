@@ -968,18 +968,20 @@ function answer(w,ok){
     /* エビングハウス進行 */
     if(!G.ebbing)G.ebbing={};
     if(G.ebbing[w.id]){
-      /* 既登録：次のインターバルへ進める */
-      ebbingAdvance(w.id);
-    } else if((w.s.l||0)>0){
-      /* 未登録だが不正解歴あり（s.l>0）：今登録してすぐ1段進める
-         これにより次回復習日が正解のたびに正しく更新される */
+      /* 既登録かつ期限が来ている → ステージを1つ進める */
+      var _rec=G.ebbing[w.id];
+      var _due=new Date(_rec.nextDate)<=new Date();
+      if(_due) ebbingAdvance(w.id);
+      /* 期限前の正解は無視（まだ復習タイミングではない） */
+    } else if((s.l||0)>0){
+      /* G.ebbingに未登録だが不正解歴あり → ステージ0で新規登録
+         次回この単語が期限切れで出題され正解したときにAdvanceされる */
       ebbingMarkMiss(w.id, w.word, w.meaning||'', w.lang||'en');
-      ebbingAdvance(w.id);
     }
   }
   else{s.l=(s.l||0)+1;s.k=0;s.i=1;s.e=Math.max(EMIN,s.e-0.2);
-    /* 不正解/わからない → 即座に忘却曲線へ登録（または再登録） */
-    ebbingMarkMiss(w.id, w.word, w.meaning||'', w.lang||'en');}
+    /* 不正解/わからない → ステージ0にリセットして再登録 */
+    ebbingMarkMissReset(w.id, w.word, w.meaning||'', w.lang||'en');}
   s.i=Math.max(1,Math.min(s.i,365));
   var dt=new Date();dt.setDate(dt.getDate()+s.i);s.d=dt.toISOString();w.lr=new Date().toISOString();save();
 }
@@ -1014,6 +1016,25 @@ function ebbingMarkMiss(wordId, word, meaning, lang) {
     meaning: meaning,
     lang: lang,
     nextIdx: nextIdx,
+    nextDate: nextDate.toISOString(),
+    createdAt: existing ? existing.createdAt : now.toISOString()
+  };
+  save();
+}
+
+function ebbingMarkMissReset(wordId, word, meaning, lang) {
+  /* 不正解時：ステージを0にリセットして再登録 */
+  if (!G.ebbing) G.ebbing = {};
+  var now = new Date();
+  var existing = G.ebbing[wordId];
+  var nextDate = new Date(now);
+  nextDate.setDate(nextDate.getDate() + EBBING_INTERVALS[0]); /* 常に1日後から再スタート */
+  G.ebbing[wordId] = {
+    wordId: wordId,
+    word: word,
+    meaning: meaning,
+    lang: lang,
+    nextIdx: 0,
     nextDate: nextDate.toISOString(),
     createdAt: existing ? existing.createdAt : now.toISOString()
   };
