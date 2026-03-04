@@ -935,7 +935,14 @@ var LANGS={
 function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 if(!G.folders) G.folders=[];
-function save(){sSet(G);}
+function save(){
+  sSet(G);
+  /* embedded-dataも常に最新に更新しておく（ファイル保存なしでも再読込時にデータが残る） */
+  try{
+    var ed=document.getElementById('embedded-data');
+    if(ed) ed.textContent=JSON.stringify(G);
+  }catch(e){}
+}
 
 /* ── ファイル保存（HTMLにデータ埋め込み） ── */
 function saveAsFile(){
