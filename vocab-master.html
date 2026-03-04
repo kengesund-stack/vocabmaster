@@ -965,18 +965,15 @@ function answer(w,ok){
   if(!w.s)w.s={i:1,e:EASE0,d:null,k:0,l:0};
   var s=w.s;
   if(ok){s.k=(s.k||0)+1;if(s.k<=1)s.i=1;else if(s.k===2)s.i=3;else s.i=Math.round(s.i*s.e);s.e=Math.min(3.0,s.e+0.1);
-    /* エビングハウス進行 */
-    if(!G.ebbing)G.ebbing={};
-    if(G.ebbing[w.id]){
-      /* 既登録かつ期限が来ている → ステージを1つ進める */
-      var _rec=G.ebbing[w.id];
-      var _due=new Date(_rec.nextDate)<=new Date();
-      if(_due) ebbingAdvance(w.id);
-      /* 期限前の正解は無視（まだ復習タイミングではない） */
-    } else if((s.l||0)>0){
-      /* G.ebbingに未登録だが不正解歴あり → ステージ0で新規登録
-         次回この単語が期限切れで出題され正解したときにAdvanceされる */
-      ebbingMarkMiss(w.id, w.word, w.meaning||'', w.lang||'en');
+    /* エビングハウス進行：不正解歴のある単語は正解のたびにステージを進める */
+    if((s.l||0)>0){
+      if(!G.ebbing)G.ebbing={};
+      if(!G.ebbing[w.id]){
+        /* 未登録 → まずステージ0で登録してからすぐ進める */
+        ebbingMarkMiss(w.id, w.word, w.meaning||'', w.lang||'en');
+      }
+      /* 期限チェックなしで常に進める（正解したのだから次ステージへ） */
+      ebbingAdvance(w.id);
     }
   }
   else{s.l=(s.l||0)+1;s.k=0;s.i=1;s.e=Math.max(EMIN,s.e-0.2);
@@ -3465,21 +3462,14 @@ function generateReport(period, lids){
     });
   });
   var missArr=Object.values(missMap).map(function(m){
-    /* エビングハウス次回復習日を付加 */
+    /* エビングハウス次回復習日を付加（読み取り専用。データ修復はしない） */
     var rec=G.ebbing&&G.ebbing[m.id];
-    /* データ修復：不正解歴があるのにG.ebbingに登録がない場合は再登録 */
-    if(!rec && G.cfg.ebbing){
-      var wObj=G.words.find(function(x){return x.id===m.id;});
-      if(wObj&&(wObj.s&&(wObj.s.l||0)>0)){
-        ebbingMarkMiss(m.id, m.word, m.meaning||'', m.lang||'en');
-        rec=G.ebbing&&G.ebbing[m.id];
-      }
-    }
     m.nextDate=rec?rec.nextDate:null;
     m.nextIdx=rec?rec.nextIdx:null;
-    /* 真の完走済み：不正解歴なし（s.l===0）かつG.ebbingにない */
+    /* 完走済み：G.ebbingにない かつ s.l===0（不正解歴なし）または忘却曲線完走 */
     var wObj2=G.words.find(function(x){return x.id===m.id;});
-    m.trulyDone=!rec&&wObj2&&(wObj2.s&&(wObj2.s.l||0)===0);
+    var sl=wObj2&&wObj2.s?(wObj2.s.l||0):0;
+    m.trulyDone=!rec&&sl===0;
     /* SRS次回復習日（ebbingがない場合の代替表示用） */
     m.srsDue=wObj2&&wObj2.s&&wObj2.s.d?wObj2.s.d:null;
     return m;
