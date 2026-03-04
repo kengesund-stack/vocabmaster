@@ -720,12 +720,12 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     <div class="qz-prog" id="QZ-prog"><div class="qz-seg qz-seg-ok" id="QZ-seg-ok" style="width:0%"></div><div class="qz-seg qz-seg-ng" id="QZ-seg-ng" style="width:0%"></div><div class="qz-seg qz-seg-un" id="QZ-seg-un" style="width:0%"></div></div>
     <div style="display:flex;align-items:center;gap:7px">
       <div id="QZ-mode-badge" style="display:none;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(252,92,125,.2);color:var(--ac2)">📝 テスト</div>
-      <div id="QZ-eb-badge" style="display:none;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(124,92,252,.25);color:var(--ac)">🧠 復習</div>
       <div class="qz-cnt" id="QZ-cnt">0/0</div>
     </div>
   </div>
   <div class="qz-body">
     <div class="qz-card">
+      <div id="QZ-eb-badge" style="display:none;font-size:11px;font-weight:700;padding:3px 14px;border-radius:20px;background:linear-gradient(90deg,rgba(124,92,252,.3),rgba(92,248,252,.18));border:1px solid rgba(124,92,252,.55);color:var(--ac);letter-spacing:.05em;margin-bottom:4px;align-self:center">🧠 復習サイクル</div>
       <div class="qz-badge" id="QZ-badge">日本語を選べ</div>
       <div class="qz-word" id="QZ-word">word</div>
       <button id="B-speak" style="margin-top:10px;background:rgba(124,92,252,.15);border:none;border-radius:20px;padding:6px 16px;color:var(--ac);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:none">🔊 発音</button>
@@ -832,7 +832,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         <button class="toggle" id="TG-ebbing"></button>
       </div>
       <div class="set-row" style="cursor:default">
-        <span style="font-size:11px;color:var(--tx2);line-height:1.6">間違えた・わからなかった単語を1日後・3日後・7日後・14日後・30日後に復習スケジュールします。期限が来た単語はすべてのクイズ（全単語・リスト別・苦手単語）に自動追加されます。全インターバルを正解で完走した単語は「正解 🟢」に昇格します。</span>
+        <span style="font-size:11px;color:var(--tx2);line-height:1.6">間違えた・わからなかった単語を1日後・3日後・7日後・14日後・30日後に通常クイズへ自動追加します。全インターバルを正解で完走した単語は「正解 🟢」に昇格します。</span>
       </div>
       <div class="set-row" style="cursor:default" id="ROW-ebbing-max">
         <span class="set-lbl">📊 追加復習の上限単語数</span>
@@ -2646,29 +2646,25 @@ function listMenu(lid){
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     flashStart(r.pool,'list',lid);
   });
-  /* リストメニュー共通：エビングハウス注入ヘルパー */
-  function injectEbbing(pool){
-    var ebbingIds3={};
-    var ebExtra2=[];
-    if(G.cfg.ebbing){
-      var ebDue3=getEbbingDue();
-      var pids=pool.map(function(w){return w.id;});
-      ebDue3.forEach(function(w){
-        if(pids.indexOf(w.id)<0){ebExtra2.push(w);ebbingIds3[w.id]=true;}
-      });
-      var ebSize2=G.cfg.ebbingMax||5;
-      var ebSlice=(G.cfg.random?shuffle(ebExtra2):ebExtra2).slice(0,ebSize2);
-      ebSlice.forEach(function(w){pool.push(w);ebbingIds3[w.id]=true;});
-      if(ebSlice.length>0)setTimeout(function(){toast('🧠 復習語 '+ebSlice.length+'語 を追加しました');},400);
-    }
-    return ebbingIds3;
+  /* リストクイズ共通：エビングハウス復習語注入 */
+  function lmInjectEbbing(pool){
+    var eids={};
+    if(!G.cfg.ebbing)return eids;
+    var ebDueL=getEbbingDue();
+    var pids=pool.map(function(w){return w.id;});
+    var extra=[];
+    ebDueL.forEach(function(w){if(pids.indexOf(w.id)<0){extra.push(w);eids[w.id]=true;}});
+    var ebSz=G.cfg.ebbingMax||5;
+    var slc=(G.cfg.random?shuffle(extra):extra).slice(0,ebSz);
+    slc.forEach(function(w){pool.push(w);});
+    if(slc.length>0)setTimeout(function(){toast('🧠 復習語 '+slc.length+'語 を追加しました');},350);
+    return eids;
   }
-
   el('LM-quiz').addEventListener('click',function(){
     el('modal-bg').classList.remove('on');
     var r=makePool(false);
     if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
-    var eids=injectEbbing(r.pool);
+    var eids=lmInjectEbbing(r.pool);
     Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{},ebbingIds:eids};
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     go('s-quiz');qRender();
@@ -2677,7 +2673,7 @@ function listMenu(lid){
     el('modal-bg').classList.remove('on');
     var r=makePool(true);
     if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
-    var eids=injectEbbing(r.pool);
+    var eids=lmInjectEbbing(r.pool);
     Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{},ebbingIds:eids};
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     go('s-quiz');qRender();
@@ -4418,42 +4414,32 @@ function quizStart(mode,lid){
   else if(mode==='list')pool=G.words.filter(function(w){return w.lid===lid;});
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
 
-  /* 通常クイズ（all/list/weak）にもエビングハウス復習語を追加注入 */
-  var ebbingIds={};
-  var ebExtra=[];
-  if(G.cfg.ebbing && mode!=='due'){
-    var ebDue2=getEbbingDue();
-    var mainIds=pool.map(function(w){return w.id;});
-    ebDue2.forEach(function(w){
-      if(mainIds.indexOf(w.id)<0){
-        ebExtra.push(w);
-        ebbingIds[w.id]=true;
-      }
-    });
-  }
-  if(mode==='due'&&G.cfg.ebbing){
-    getEbbingDue().forEach(function(w){ebbingIds[w.id]=true;});
-  }
-
-  /* 通常枠はsize件、復習語は別枠で追加（上限ebbingMax件） */
+  /* 通常枠（設定のクイズ語数） */
   var size=parseInt(G.cfg.size)||20;
-  var mainPool=(G.cfg.random ? shuffle(pool) : pool).slice(0,size);
-  var ebSize=G.cfg.ebbingMax||5;
-  var ebPool=(G.cfg.random ? shuffle(ebExtra) : ebExtra).slice(0,ebSize);
+  var mainWs=(G.cfg.random?shuffle(pool):pool).slice(0,size);
+  var ebbingIds={};
 
-  /* 通常枠の末尾に復習語を追加（重複なし） */
-  var mainIds2=mainPool.map(function(w){return w.id;});
-  ebPool.forEach(function(w){if(mainIds2.indexOf(w.id)<0)mainPool.push(w);});
-
-  var ws=mainPool;
-  if(ws.length<2){toast('クイズには最低2単語必要です');return;}
-
-  /* 復習語追加があればトースト通知 */
-  if(ebPool.length>0&&mode!=='due'){
-    setTimeout(function(){toast('🧠 復習語 '+ebPool.length+'語 を追加しました');},400);
+  if(mode==='due'&&G.cfg.ebbing){
+    /* dueモード：すでにpool済みなのでID記録のみ */
+    mainWs.forEach(function(w){
+      if(G.ebbing&&G.ebbing[w.id])ebbingIds[w.id]=true;
+    });
+  } else if(G.cfg.ebbing){
+    /* 通常クイズ：エビングハウス復習語を別枠追加 */
+    var ebDueN=getEbbingDue();
+    var mainIds=mainWs.map(function(w){return w.id;});
+    var ebExtra=[];
+    ebDueN.forEach(function(w){
+      if(mainIds.indexOf(w.id)<0){ebExtra.push(w);ebbingIds[w.id]=true;}
+    });
+    var ebSize=G.cfg.ebbingMax||5;
+    var ebSlice=(G.cfg.random?shuffle(ebExtra):ebExtra).slice(0,ebSize);
+    ebSlice.forEach(function(w){mainWs.push(w);});
+    if(ebSlice.length>0)setTimeout(function(){toast('🧠 復習語 '+ebSlice.length+'語 を追加しました');},350);
   }
 
-  Q={words:ws,q:ws.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now(),
+  if(mainWs.length<2){toast('クイズには最低2単語必要です');return;}
+  Q={words:mainWs,q:mainWs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now(),
      consec:{},mastered:0,masteredIds:{},ebbingIds:ebbingIds};
   go('s-quiz');qRender();
 }
@@ -4487,12 +4473,9 @@ function qRender(){
   el('QZ-seg-un').style.width=pUn+'%';
   el('QZ-cnt').textContent=mastered+'/'+totalWords;
   el('QZ-mode-badge').style.display=Q.testMode?'inline-block':'none';
-  /* 🧠 エビングハウス復習語バッジ */
-  var ebBadgeEl=el('QZ-eb-badge');
-  if(ebBadgeEl){
-    var isEbWord=Q.ebbingIds&&Q.ebbingIds[q.id];
-    ebBadgeEl.style.display=isEbWord?'inline-block':'none';
-  }
+  /* 🧠 復習サイクルバッジ */
+  var _ebB=el('QZ-eb-badge');
+  if(_ebB){var _isEb=!!(Q.ebbingIds&&Q.ebbingIds[q.id]);_ebB.style.display=_isEb?'flex':'none';}
   var rev=G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
   var l=LANGS[q.lang||'en'];
   el('QZ-badge').textContent=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
