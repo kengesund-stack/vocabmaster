@@ -1067,6 +1067,21 @@ function getEbbingDue() {
   return result;
 }
 
+/* 副作用なし版：繰り越し処理をせず期限切れ単語を全件返す（クイズ注入用） */
+function getEbbingOverdue() {
+  if (!G.cfg.ebbing || !G.ebbing) return [];
+  var now = new Date();
+  var result = [];
+  Object.keys(G.ebbing).forEach(function(wid) {
+    var rec = G.ebbing[wid];
+    if (new Date(rec.nextDate) <= now) {
+      var w = G.words.find(function(x) { return x.id === wid; });
+      if (w) result.push(w);
+    }
+  });
+  return result;
+}
+
 function getEbbingForecast() {
   /* 今後30日の日別復習予定 {date, words:[]} の配列を返す */
   if (!G.ebbing) return [];
@@ -2646,14 +2661,14 @@ function listMenu(lid){
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     flashStart(r.pool,'list',lid);
   });
-  /* リストクイズ共通：エビングハウス復習語注入 */
+  /* リストクイズ共通：エビングハウス復習語注入（副作用なし版を使用） */
   function lmInjectEbbing(pool){
     var eids={};
     if(!G.cfg.ebbing)return eids;
-    var ebDueL=getEbbingDue();
+    var allOverdue=getEbbingOverdue(); /* 繰り越し書き換えをしない全件取得 */
     var pids=pool.map(function(w){return w.id;});
     var extra=[];
-    ebDueL.forEach(function(w){if(pids.indexOf(w.id)<0){extra.push(w);eids[w.id]=true;}});
+    allOverdue.forEach(function(w){if(pids.indexOf(w.id)<0){extra.push(w);eids[w.id]=true;}});
     var ebSz=G.cfg.ebbingMax||5;
     var slc=(G.cfg.random?shuffle(extra):extra).slice(0,ebSz);
     slc.forEach(function(w){pool.push(w);});
@@ -4425,11 +4440,11 @@ function quizStart(mode,lid){
       if(G.ebbing&&G.ebbing[w.id])ebbingIds[w.id]=true;
     });
   } else if(G.cfg.ebbing){
-    /* 通常クイズ：エビングハウス復習語を別枠追加 */
-    var ebDueN=getEbbingDue();
+    /* 通常クイズ：副作用なし版で全期限切れ単語を取得して別枠追加 */
+    var ebOverdue=getEbbingOverdue();
     var mainIds=mainWs.map(function(w){return w.id;});
     var ebExtra=[];
-    ebDueN.forEach(function(w){
+    ebOverdue.forEach(function(w){
       if(mainIds.indexOf(w.id)<0){ebExtra.push(w);ebbingIds[w.id]=true;}
     });
     var ebSize=G.cfg.ebbingMax||5;
