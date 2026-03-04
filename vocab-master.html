@@ -3428,11 +3428,13 @@ function generateReport(period, lids){
     dayMap[d].durMs+=(l.durationMs||((l.dur||0)*1000));
   });
 
-  /* 間違えた単語の集計（回数順） */
+  /* 間違えた単語の集計（回数順）：単語集フィルタでlid絞り込み */
   var missMap={};
   logs.forEach(function(l){
     var logDate=l.ts?l.ts.slice(0,10):null;
     (l.miss||[]).forEach(function(w){
+      /* 単語集フィルタが有効な場合、missのlidも確認 */
+      if(!filterAll && w.lid && lids.indexOf(w.lid)<0) return;
       if(!missMap[w.id])missMap[w.id]={word:w.word,meaning:w.meaning,lang:w.lang,count:0,firstMiss:logDate,lastMiss:logDate};
       else{
         missMap[w.id].lastMiss=logDate;
@@ -3462,10 +3464,11 @@ function generateReport(period, lids){
     return m;
   }).sort(function(a,b){return b.count-a.count;});
 
-  /* 準苦手：正解したが5秒以上かかった単語 */
+  /* 準苦手：正解したが5秒以上かかった単語（lid絞り込み） */
   var slowMap={};
   logs.forEach(function(l){
     (l.slow||[]).forEach(function(w){
+      if(!filterAll && w.lid && lids.indexOf(w.lid)<0) return;
       if(!slowMap[w.id])slowMap[w.id]={word:w.word,meaning:w.meaning||'',lang:w.lang||'en',count:0,totalMs:0};
       slowMap[w.id].count++;
       slowMap[w.id].totalMs+=(w.answerMs||0);
@@ -4706,10 +4709,22 @@ function qResult(){
   /* セッションログを保存 */
   var _durMs=Q.sessionStart?Date.now()-Q.sessionStart:(Q.startMs?Date.now()-Q.startMs:0);
   if(!G.logs)G.logs=[];
-  /* 使用リストIDを収集（重複排除） */
+  /* 使用リストIDを収集：復習語（ebbingIds）は除外してメインのリストのみ */
   var _lidSet={};
-  Q.words.forEach(function(w){if(w.lid)_lidSet[w.lid]=true;});
+  Q.words.forEach(function(w){
+    if(w.lid && !(Q.ebbingIds && Q.ebbingIds[w.id])) _lidSet[w.lid]=true;
+  });
+  /* lidsが空の場合（全単語クイズなど）は全単語のlidを使う */
+  if(!Object.keys(_lidSet).length){
+    Q.words.forEach(function(w){if(w.lid)_lidSet[w.lid]=true;});
+  }
   var _lids=Object.keys(_lidSet);
+  /* miss/slowも：復習語由来の場合はメインlidsのlidに付け替える */
+  var _mainLid=_lids.length===1?_lids[0]:null;
+  function normLid(w){
+    if(_mainLid && Q.ebbingIds && Q.ebbingIds[w.id]) return _mainLid;
+    return w.lid;
+  }
   G.logs.push({
     ts: new Date().toISOString(),
     ok: Q.ok, ng: Q.ng, acc: acc, total: tot,
@@ -4717,8 +4732,8 @@ function qResult(){
     quizMode: Q.quizMode||'all',
     testMode: !!Q.testMode,
     lids: _lids,
-    miss: Q.miss.map(function(w){return{id:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',lid:w.lid};}),
-    slow: (Q.slow||[]).map(function(w){return{id:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',lid:w.lid,answerMs:w.answerMs};}),
+    miss: Q.miss.map(function(w){return{id:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',lid:normLid(w)};}),
+    slow: (Q.slow||[]).map(function(w){return{id:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',lid:normLid(w),answerMs:w.answerMs};}),
     words: Q.words.map(function(w){return w.id;})
   });
   if(G.logs.length>365)G.logs=G.logs.slice(-365);
