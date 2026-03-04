@@ -965,11 +965,21 @@ function answer(w,ok){
   if(!w.s)w.s={i:1,e:EASE0,d:null,k:0,l:0};
   var s=w.s;
   if(ok){s.k=(s.k||0)+1;if(s.k<=1)s.i=1;else if(s.k===2)s.i=3;else s.i=Math.round(s.i*s.e);s.e=Math.min(3.0,s.e+0.1);
-    /* エビングハウス進行：忘却曲線に登録済みの単語は正解でも進める */
-    if(G.cfg.ebbing&&G.ebbing&&G.ebbing[w.id]) ebbingAdvance(w.id);}
+    /* エビングハウス進行 */
+    if(!G.ebbing)G.ebbing={};
+    if(G.ebbing[w.id]){
+      /* 既登録：次のインターバルへ進める */
+      ebbingAdvance(w.id);
+    } else if((w.s.l||0)>0){
+      /* 未登録だが不正解歴あり（s.l>0）：今登録してすぐ1段進める
+         これにより次回復習日が正解のたびに正しく更新される */
+      ebbingMarkMiss(w.id, w.word, w.meaning||'', w.lang||'en');
+      ebbingAdvance(w.id);
+    }
+  }
   else{s.l=(s.l||0)+1;s.k=0;s.i=1;s.e=Math.max(EMIN,s.e-0.2);
-    /* 不正解/わからない → 即座に忘却曲線へ登録 */
-    if(G.cfg.ebbing) ebbingMarkMiss(w.id, w.word, w.meaning||'', w.lang||'en');}
+    /* 不正解/わからない → 即座に忘却曲線へ登録（または再登録） */
+    ebbingMarkMiss(w.id, w.word, w.meaning||'', w.lang||'en');}
   s.i=Math.max(1,Math.min(s.i,365));
   var dt=new Date();dt.setDate(dt.getDate()+s.i);s.d=dt.toISOString();w.lr=new Date().toISOString();save();
 }
@@ -986,8 +996,7 @@ function ebbingSchedule(wordId) {
 }
 
 function ebbingMarkMiss(wordId, word, meaning, lang) {
-  /* 間違えた単語に復習スケジュールを追加 */
-  if (!G.cfg.ebbing) return;
+  /* 間違えた単語に復習スケジュールを追加（設定ON/OFFに関わらず登録） */
   if (!G.ebbing) G.ebbing = {};
   var now = new Date();
   var existing = G.ebbing[wordId];
