@@ -2661,17 +2661,18 @@ function listMenu(lid){
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     flashStart(r.pool,'list',lid);
   });
-  /* リストクイズ共通：エビングハウス復習語注入（副作用なし版を使用） */
+  /* リストクイズ共通：間違い単語を復習語として注入
+     G.ebbingの有無に関わらず s.l>0（不正解歴あり）の単語を使う */
   function lmInjectEbbing(pool){
     var eids={};
-    if(!G.cfg.ebbing)return eids;
-    var allOverdue=getEbbingOverdue(); /* 繰り越し書き換えをしない全件取得 */
     var pids=pool.map(function(w){return w.id;});
-    var extra=[];
-    allOverdue.forEach(function(w){if(pids.indexOf(w.id)<0){extra.push(w);eids[w.id]=true;}});
+    /* s.l>0 の単語をプール外から収集（不正解数が多い順） */
+    var missWords=G.words.filter(function(w){
+      return (w.s&&(w.s.l||0)>0) && pids.indexOf(w.id)<0;
+    }).sort(function(a,b){return (b.s.l||0)-(a.s.l||0);});
     var ebSz=G.cfg.ebbingMax||5;
-    var slc=(G.cfg.random?shuffle(extra):extra).slice(0,ebSz);
-    slc.forEach(function(w){pool.push(w);});
+    var slc=(G.cfg.random?shuffle(missWords):missWords).slice(0,ebSz);
+    slc.forEach(function(w){pool.push(w);eids[w.id]=true;});
     if(slc.length>0)setTimeout(function(){toast('🧠 復習語 '+slc.length+'語 を追加しました');},350);
     return eids;
   }
@@ -4434,22 +4435,21 @@ function quizStart(mode,lid){
   var mainWs=(G.cfg.random?shuffle(pool):pool).slice(0,size);
   var ebbingIds={};
 
-  if(mode==='due'&&G.cfg.ebbing){
-    /* dueモード：すでにpool済みなのでID記録のみ */
+  if(mode==='due'){
+    /* dueモード：G.ebbingに入っている単語にIDフラグ */
     mainWs.forEach(function(w){
       if(G.ebbing&&G.ebbing[w.id])ebbingIds[w.id]=true;
     });
-  } else if(G.cfg.ebbing){
-    /* 通常クイズ：副作用なし版で全期限切れ単語を取得して別枠追加 */
-    var ebOverdue=getEbbingOverdue();
+  } else {
+    /* 通常クイズ：s.l>0（不正解歴あり）の単語をプール外から別枠追加
+       G.ebbingの有無・ebbing設定ON/OFFに関わらず動作する */
     var mainIds=mainWs.map(function(w){return w.id;});
-    var ebExtra=[];
-    ebOverdue.forEach(function(w){
-      if(mainIds.indexOf(w.id)<0){ebExtra.push(w);ebbingIds[w.id]=true;}
-    });
+    var missExtra=G.words.filter(function(w){
+      return (w.s&&(w.s.l||0)>0) && mainIds.indexOf(w.id)<0;
+    }).sort(function(a,b){return (b.s.l||0)-(a.s.l||0);});
     var ebSize=G.cfg.ebbingMax||5;
-    var ebSlice=(G.cfg.random?shuffle(ebExtra):ebExtra).slice(0,ebSize);
-    ebSlice.forEach(function(w){mainWs.push(w);});
+    var ebSlice=(G.cfg.random?shuffle(missExtra):missExtra).slice(0,ebSize);
+    ebSlice.forEach(function(w){mainWs.push(w);ebbingIds[w.id]=true;});
     if(ebSlice.length>0)setTimeout(function(){toast('🧠 復習語 '+ebSlice.length+'語 を追加しました');},350);
   }
 
