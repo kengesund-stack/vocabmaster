@@ -961,24 +961,29 @@ function saveAsFile(){
 function lvl(w){var s=w.s;if(!s)return 0;if(s.i>=60)return 5;if(s.i>=30)return 4;if(s.i>=14)return 3;if(s.i>=7)return 2;if(s.i>=3)return 1;return 0;}
 function due(w){if(!w.s||!w.s.d)return true;return new Date(w.s.d)<=new Date();}
 function answer(w,ok){
-  if(Q.testMode)return; /* テストモードはSRS更新しない */
+  if(Q.testMode)return;
   if(!w.s)w.s={i:1,e:EASE0,d:null,k:0,l:0};
   var s=w.s;
-  if(ok){s.k=(s.k||0)+1;if(s.k<=1)s.i=1;else if(s.k===2)s.i=3;else s.i=Math.round(s.i*s.e);s.e=Math.min(3.0,s.e+0.1);
-    /* エビングハウス進行：不正解歴のある単語は正解のたびにステージを進める */
+  if(ok){
+    s.k=(s.k||0)+1;
+    if(s.k<=1)s.i=1;else if(s.k===2)s.i=3;else s.i=Math.round(s.i*s.e);
+    s.e=Math.min(3.0,s.e+0.1);
+    /* エビングハウス：不正解歴あり → 必ずステージを1進める */
     if((s.l||0)>0){
       if(!G.ebbing)G.ebbing={};
       if(!G.ebbing[w.id]){
-        /* 未登録 → まずステージ0で登録してからすぐ進める */
-        ebbingMarkMiss(w.id, w.word, w.meaning||'', w.lang||'en');
+        /* 未登録の場合はまずnextIdx=0で登録する */
+        _ebbingRegister(w.id, w.word, w.meaning||'', w.lang||'en', 0);
       }
-      /* 期限チェックなしで常に進める（正解したのだから次ステージへ） */
       ebbingAdvance(w.id);
     }
+  } else {
+    s.l=(s.l||0)+1;s.k=0;s.i=1;s.e=Math.max(EMIN,s.e-0.2);
+    /* 不正解 → nextIdx=0でリセット登録 */
+    if(!G.ebbing)G.ebbing={};
+    var _ex=G.ebbing[w.id];
+    _ebbingRegister(w.id, w.word, w.meaning||'', w.lang||'en', 0);
   }
-  else{s.l=(s.l||0)+1;s.k=0;s.i=1;s.e=Math.max(EMIN,s.e-0.2);
-    /* 不正解/わからない → ステージ0にリセットして再登録 */
-    ebbingMarkMissReset(w.id, w.word, w.meaning||'', w.lang||'en');}
   s.i=Math.max(1,Math.min(s.i,365));
   var dt=new Date();dt.setDate(dt.getDate()+s.i);s.d=dt.toISOString();w.lr=new Date().toISOString();save();
 }
@@ -4633,10 +4638,6 @@ function qSelect(i){
   var justMastered=ok&&(!hadMiss||Q.consec[q.id]>=requeueMax)&&!Q.masteredIds[q.id];
   var justMasteredBySkip=!ok&&requeueMax===0&&!Q.masteredIds[q.id];
   if(justMastered||justMasteredBySkip){Q.masteredIds[q.id]=true;Q.mastered=(Q.mastered||0)+1;
-    /* 不正解/わからない歴ありでmasteredになった場合、忘却曲線に未登録なら登録する */
-    if(q._hadMiss&&G.cfg.ebbing&&!(G.ebbing&&G.ebbing[q.id])){
-      ebbingMarkMiss(q.id,q.word,q.meaning||'',q.lang||'en');
-    }
   }
 
   var needMore=requeueMax>0&&hadMiss&&!justMastered&&ok;
