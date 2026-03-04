@@ -965,38 +965,37 @@ function answer(w,ok){
   if(!w.s)w.s={i:1,e:EASE0,d:null,k:0,l:0};
   var s=w.s;
   if(!G.ebbing)G.ebbing={};
+  var IVALS=[1,3,7,14,30];
   if(ok){
     s.k=(s.k||0)+1;
     if(s.k<=1)s.i=1;else if(s.k===2)s.i=3;else s.i=Math.round(s.i*s.e);
     s.e=Math.min(3.0,s.e+0.1);
-    /* エビングハウス：不正解歴あり → 1セッション内で1単語につき1回だけ進める */
+    /* エビングハウス：不正解歴あり → 1セッション内で1単語につき1回だけステージを進める */
     if((s.l||0)>0){
       if(!Q._ebbAdv)Q._ebbAdv={};
       if(!Q._ebbAdv[w.id]){
         Q._ebbAdv[w.id]=true;
-        /* 未登録なら nextIdx=0 で新規登録してから進める */
+        var _now=new Date();
         if(!G.ebbing[w.id]){
-          var _nd0=new Date(); _nd0.setDate(_nd0.getDate()+EBBING_INTERVALS[0]);
-          G.ebbing[w.id]={wordId:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',nextIdx:0,nextDate:_nd0.toISOString(),createdAt:new Date().toISOString()};
+          /* 未登録 → idx=0で登録 */
+          var _d0=new Date(_now); _d0.setDate(_d0.getDate()+IVALS[0]);
+          G.ebbing[w.id]={wordId:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',nextIdx:0,nextDate:_d0.toISOString(),createdAt:_now.toISOString()};
         }
-        /* 次のインターバルへ進める */
-        var _rec=G.ebbing[w.id];
-        var _ni=(_rec.nextIdx||0)+1;
-        if(_ni>=EBBING_INTERVALS.length){
-          delete G.ebbing[w.id];
-        } else {
-          var _nd=new Date(); _nd.setDate(_nd.getDate()+EBBING_INTERVALS[_ni]);
-          _rec.nextIdx=_ni; _rec.nextDate=_nd.toISOString();
-        }
+        /* idx+1へ進める。最終(4)を超えたら4のまま30日後をセット */
+        var _r=G.ebbing[w.id];
+        var _ni=Math.min((_r.nextIdx||0)+1, IVALS.length-1);
+        var _dn=new Date(_now); _dn.setDate(_dn.getDate()+IVALS[_ni]);
+        _r.nextIdx=_ni; _r.nextDate=_dn.toISOString();
         save();
       }
     }
   } else {
     s.l=(s.l||0)+1;s.k=0;s.i=1;s.e=Math.max(EMIN,s.e-0.2);
-    /* 不正解 → nextIdx=0 にリセット登録 */
-    var _nd0r=new Date(); _nd0r.setDate(_nd0r.getDate()+EBBING_INTERVALS[0]);
-    var _exCA=G.ebbing[w.id]?G.ebbing[w.id].createdAt:new Date().toISOString();
-    G.ebbing[w.id]={wordId:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',nextIdx:0,nextDate:_nd0r.toISOString(),createdAt:_exCA};
+    /* 不正解 → idx=0にリセット登録 */
+    var _now2=new Date();
+    var _d0r=new Date(_now2); _d0r.setDate(_d0r.getDate()+1);
+    var _ca=G.ebbing[w.id]?G.ebbing[w.id].createdAt:_now2.toISOString();
+    G.ebbing[w.id]={wordId:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',nextIdx:0,nextDate:_d0r.toISOString(),createdAt:_ca};
     save();
   }
   s.i=Math.max(1,Math.min(s.i,365));
@@ -1059,19 +1058,14 @@ function ebbingMarkMissReset(wordId, word, meaning, lang) {
 }
 
 function ebbingAdvance(wordId) {
-  /* 正解後: 次のインターバルへ進む。全完了で削除 */
+  /* 正解後: 次のインターバルへ進む。最終ステージ以降は30日後を繰り返す（削除しない） */
   if (!G.ebbing || !G.ebbing[wordId]) return;
   var rec = G.ebbing[wordId];
-  var nextIdx = (rec.nextIdx || 0) + 1;
-  if (nextIdx >= EBBING_INTERVALS.length) {
-    /* 全インターバル完了 → 削除 */
-    delete G.ebbing[wordId];
-  } else {
-    var nextDate = new Date();
-    nextDate.setDate(nextDate.getDate() + EBBING_INTERVALS[nextIdx]);
-    rec.nextIdx = nextIdx;
-    rec.nextDate = nextDate.toISOString();
-  }
+  var nextIdx = Math.min((rec.nextIdx || 0) + 1, EBBING_INTERVALS.length - 1);
+  var nextDate = new Date();
+  nextDate.setDate(nextDate.getDate() + EBBING_INTERVALS[nextIdx]);
+  rec.nextIdx = nextIdx;
+  rec.nextDate = nextDate.toISOString();
   save();
 }
 
