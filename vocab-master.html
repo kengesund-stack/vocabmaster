@@ -3476,15 +3476,26 @@ function generateReport(period, lids){
     });
   });
   var missArr=Object.values(missMap).map(function(m){
-    /* エビングハウス次回復習日を付加（読み取り専用。データ修復はしない） */
+    /* エビングハウス次回復習日を付加 */
     var rec=G.ebbing&&G.ebbing[m.id];
-    m.nextDate=rec?rec.nextDate:null;
-    m.nextIdx=rec?rec.nextIdx:null;
-    /* 完走済み：G.ebbingにない かつ s.l===0（不正解歴なし）または忘却曲線完走 */
+    if(rec){
+      /* G.ebbingに登録済み：そのまま使う */
+      m.nextDate=rec.nextDate;
+      m.nextIdx=rec.nextIdx;
+      m.trulyDone=false;
+    } else {
+      /* G.ebbingに未登録：lastMissから1日後を予測日として表示（trulyDoneにしない） */
+      m.nextIdx=0;
+      m.trulyDone=false;
+      if(m.lastMiss){
+        var _lm=new Date(m.lastMiss); _lm.setDate(_lm.getDate()+1);
+        m.nextDate=_lm.toISOString();
+      } else {
+        var _now=new Date(); _now.setDate(_now.getDate()+1);
+        m.nextDate=_now.toISOString();
+      }
+    }
     var wObj2=G.words.find(function(x){return x.id===m.id;});
-    var sl=wObj2&&wObj2.s?(wObj2.s.l||0):0;
-    m.trulyDone=!rec&&sl===0;
-    /* SRS次回復習日（ebbingがない場合の代替表示用） */
     m.srsDue=wObj2&&wObj2.s&&wObj2.s.d?wObj2.s.d:null;
     return m;
   }).sort(function(a,b){return b.count-a.count;});
