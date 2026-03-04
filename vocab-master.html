@@ -2668,7 +2668,7 @@ function listMenu(lid){
     var pids=pool.map(function(w){return w.id;});
     /* s.l>0 の単語をプール外から収集（不正解数が多い順） */
     var missWords=G.words.filter(function(w){
-      return (w.s&&(w.s.l||0)>0) && pids.indexOf(w.id)<0;
+      return w.lid===lid && (w.s&&(w.s.l||0)>0) && pids.indexOf(w.id)<0;
     }).sort(function(a,b){return (b.s.l||0)-(a.s.l||0);});
     var ebSz=G.cfg.ebbingMax||5;
     var slc=(G.cfg.random?shuffle(missWords):missWords).slice(0,ebSz);
