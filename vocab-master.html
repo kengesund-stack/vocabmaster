@@ -3491,14 +3491,22 @@ function generateReport(period, lids){
       m.nextIdx=rec.nextIdx;
       m.trulyDone=false;
     } else {
-      /* G.ebbingに未登録：lastMissから1日後を予測日として表示（trulyDoneにしない） */
-      m.nextIdx=0;
+      /* G.ebbingに未登録：G.wordsのs.kから進行ステージを推定して表示 */
       m.trulyDone=false;
+      /* s.kから推定：不正解後の連続正解数でステージを近似 */
+      var _wObj=G.words.find(function(x){return x.id===m.id;});
+      var _sk=_wObj&&_wObj.s?(_wObj.s.k||0):0;
+      var _sl=_wObj&&_wObj.s?(_wObj.s.l||0):0;
+      /* 不正解歴ありで連続正解がある → その分ステージが進んでいると推定 */
+      var _estIdx=_sl>0?Math.min(_sk, 4):0;
+      m.nextIdx=_estIdx;
+      /* lastMissからステージに対応する日数後を次回日とする */
+      var _ivals=[1,3,7,14,30];
       if(m.lastMiss){
-        var _lm=new Date(m.lastMiss); _lm.setDate(_lm.getDate()+1);
+        var _lm=new Date(m.lastMiss); _lm.setDate(_lm.getDate()+_ivals[_estIdx]);
         m.nextDate=_lm.toISOString();
       } else {
-        var _now=new Date(); _now.setDate(_now.getDate()+1);
+        var _now=new Date(); _now.setDate(_now.getDate()+_ivals[_estIdx]);
         m.nextDate=_now.toISOString();
       }
     }
@@ -4243,8 +4251,8 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
         var nd=new Date(w.nextDate);
         var now2=new Date(); now2.setHours(0,0,0,0); nd.setHours(0,0,0,0);
         var diffD=Math.round((nd-now2)/86400000);
-        var clr=diffD<0?'#c62828':diffD===0?'#c62828':diffD<=3?'#e65100':'#2e7d32';
-        var diffLbl=diffD<0?diffD*-1+'日前（期限切れ）':diffD===0?'今日':diffD===1?'明日':diffD+'日後';
+        var clr=diffD<=0?'#c62828':diffD<=3?'#e65100':'#2e7d32';
+        var diffLbl=diffD<0?'要復習':diffD===0?'今日':diffD===1?'明日':diffD+'日後';
         var totalStages=5;
         var doneStages=w.nextIdx!=null?w.nextIdx:0;
         var remainStages=totalStages-doneStages;
