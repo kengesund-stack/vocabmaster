@@ -4243,8 +4243,8 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
         var nd=new Date(w.nextDate);
         var now2=new Date(); now2.setHours(0,0,0,0); nd.setHours(0,0,0,0);
         var diffD=Math.round((nd-now2)/86400000);
-        var clr=diffD<=0?'#c62828':diffD<=3?'#e65100':'#2e7d32';
-        var diffLbl=diffD<=0?'今日':diffD===1?'明日':diffD+'日後';
+        var clr=diffD<0?'#c62828':diffD===0?'#c62828':diffD<=3?'#e65100':'#2e7d32';
+        var diffLbl=diffD<0?diffD*-1+'日前（期限切れ）':diffD===0?'今日':diffD===1?'明日':diffD+'日後';
         var totalStages=5;
         var doneStages=w.nextIdx!=null?w.nextIdx:0;
         var remainStages=totalStages-doneStages;
