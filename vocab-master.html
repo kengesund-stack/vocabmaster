@@ -1164,12 +1164,12 @@ function homeRefresh(){
   el('H-total').textContent=G.words.length;
   el('H-mastered').textContent=G.words.filter(function(w){return w.s&&w.s.i>=14;}).length;
   el('H-streak').textContent=G.stats.streak||0;
-  var dueCount=getDue().length;
-  var ebDueCount=G.cfg.ebbing?getEbbingDue().filter(function(w){return !getDue().some(function(d){return d.id===w.id;});}).length:0;
-  el('H-due').textContent=dueCount+ebDueCount;
-  /* 忘却曲線バッジ */
+  /* 今日の復習カウント：G.ebbingに登録された期限切れ単語のみ（未習は含まない） */
+  var ebDueCount=getEbbingOverdue().length;
+  el('H-due').textContent=ebDueCount;
+  /* 忘却曲線バッジは不要になったので非表示 */
   var ebBadge=el('H-eb-badge');
-  if(ebBadge){ebBadge.style.display=ebDueCount>0?'inline':'none';ebBadge.textContent='🧠+'+ebDueCount;}
+  if(ebBadge){ebBadge.style.display='none';}
   homeListsRender();
 }
 function homeListsRender(){
@@ -4430,12 +4430,9 @@ function showListSelectModal(mode){
 function quizStart(mode,lid){
   var pool=[];
   if(mode==='due'){
-    pool=getDue();
-    if(G.cfg.ebbing){
-      var ebDue=getEbbingDue();
-      var poolIds=pool.map(function(w){return w.id;});
-      ebDue.forEach(function(w){if(poolIds.indexOf(w.id)<0){pool.push(w);}});
-    }
+    /* 今日の復習：間違えた・わからないを選んだ単語（G.ebbing登録済み）のみ */
+    pool=getEbbingOverdue();
+    if(!pool.length){toast('復習サイクルの単語がありません');return;}
   }
   else if(mode==='all')pool=G.words.slice();
   else if(mode==='weak'){pool=getWeak();if(!pool.length){toast('間違えた単語がありません');return;}}
@@ -4448,10 +4445,8 @@ function quizStart(mode,lid){
   var ebbingIds={};
 
   if(mode==='due'){
-    /* dueモード：G.ebbingに入っている単語にIDフラグ */
-    mainWs.forEach(function(w){
-      if(G.ebbing&&G.ebbing[w.id])ebbingIds[w.id]=true;
-    });
+    /* dueモード：全単語がebbing由来 */
+    mainWs.forEach(function(w){ebbingIds[w.id]=true;});
   } else {
     /* 通常クイズ：s.l>0（不正解歴あり）の単語をプール外から別枠追加
        G.ebbingの有無・ebbing設定ON/OFFに関わらず動作する */
