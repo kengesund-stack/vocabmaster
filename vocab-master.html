@@ -3498,6 +3498,8 @@ function generateReport(period, lids){
   var listMap={};
   logs.forEach(function(l){
     (l.lids||[]).forEach(function(lid){
+      /* 単語集フィルタが有効な場合、選択外のlidはスキップ */
+      if(!filterAll && lids.indexOf(lid)<0) return;
       if(!listMap[lid])listMap[lid]={sessions:0,total:0,ok:0,durMs:0};
       listMap[lid].sessions++;
       listMap[lid].total+=l.total;
@@ -3512,6 +3514,7 @@ function generateReport(period, lids){
         if(w&&w.lid)lidSet[w.lid]=true;
       });
       Object.keys(lidSet).forEach(function(lid){
+        if(!filterAll && lids.indexOf(lid)<0) return;
         if(!listMap[lid])listMap[lid]={sessions:0,total:0,ok:0,durMs:0};
         listMap[lid].sessions++;
         listMap[lid].total+=l.total;
