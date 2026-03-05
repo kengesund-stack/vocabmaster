@@ -2838,6 +2838,12 @@ function listMenu(lid){
   var nextEnd=Math.min(cursor+size, total);
   var pct=total>0?Math.min(100,Math.round(cursor/total*100)):0;
   var progressInfo=total>0?'進捗 '+pct+'% ('+cursor+'/'+total+'単語完了)':'';
+
+  /* 単語のみ・熟語のみの件数を事前算出 */
+  var wordsOnly=ws.filter(function(w){return !isPhrase(w.word);});
+  var phrasesOnly=ws.filter(function(w){return isPhrase(w.word);});
+  var wCnt=wordsOnly.length, pCnt=phrasesOnly.length;
+
   el('modal-ct').innerHTML=
     '<div class="modal-tl">'+(l?l.flag+' ':'')+esc(lst.name)+'</div>'+
     '<div style="font-size:12px;color:var(--tx2);margin-bottom:8px">'+ws.length+'単語'+(missWords.length?' · <span style="color:var(--rd)">間違い'+missWords.length+'件</span>':'')+'</div>'+
@@ -2846,27 +2852,35 @@ function listMenu(lid){
     '<button class="btn-sec" id="LM-quiz" style="margin-top:0;margin-bottom:8px">⚡ すぐクイズ（続きから）</button>'+
     '<button class="btn-sec" id="LM-quiz-reset" style="margin-top:0;margin-bottom:8px">🔁 最初からクイズ</button>'+
     '<button class="btn-sec" id="LM-due" style="margin-top:0;margin-bottom:8px'+((function(){var _n=new Date();return G.ebbing?Object.values(G.ebbing).filter(function(r){var w=G.words.find(function(x){return x.id===r.wordId;});return w&&w.lid===lid&&new Date(r.nextDate)<=_n;}).length:0;})()>0?'':';opacity:.4;pointer-events:none')+'">🧠 復習サイクル単語（'+(function(){var _n=new Date();return G.ebbing?Object.values(G.ebbing).filter(function(r){var w=G.words.find(function(x){return x.id===r.wordId;});return w&&w.lid===lid&&new Date(r.nextDate)<=_n;}).length:0;})()+'件）</button>'+
+    /* ── 単語のみ・熟語のみクイズ ── */
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:0;margin-bottom:8px">'+
+      '<button class="btn-sec" id="LM-words-only"'+(wCnt<2?' style="opacity:.4;pointer-events:none"':'')+'>📝 単語のみ（'+wCnt+'）</button>'+
+      '<button class="btn-sec" id="LM-phrases-only"'+(pCnt<2?' style="opacity:.4;pointer-events:none"':'')+'>💬 熟語のみ（'+pCnt+'）</button>'+
+    '</div>'+
     '<button class="btn-sec" id="LM-list" style="margin-top:0;margin-bottom:8px">📚 単語一覧を見る</button>'+
     '<button class="btn-sec" id="LM-edit" style="margin-top:0">✏️ リストを編集</button>';
   el('modal-bg').classList.add('on');
 
   /* カーソル位置以降の全未習単語からランダム抽出する共通関数 */
-  function makePool(fromStart){
+  function makePool(fromStart, filterFn){
+    var src_ws = filterFn ? ws.filter(filterFn) : ws;
     var cur=fromStart?0:(lst.cursor||0);
-    if(cur>=total)cur=0;
+    var tot=src_ws.length;
+    if(cur>=tot)cur=0;
     /* 既習（正解済み）を除外した未習・復習中の単語のみ対象 */
-    var notDone=ws.filter(function(w){return wordStatus(w)!=='ok';});
-    /* notDoneが少なすぎる場合はwsそのままを使う */
-    var src=notDone.length>=2?notDone:ws;
+    var notDone=src_ws.filter(function(w){return wordStatus(w)!=='ok';});
+    /* notDoneが少なすぎる場合はsrc_wsそのままを使う */
+    var src=notDone.length>=2?notDone:src_ws;
     /* cursor以降をシャッフルしてsize件取る */
+    var sz=Math.min(parseInt(G.cfg.size)||20, src.length);
     var srcCur=Math.min(cur, src.length);
     var remaining=src.slice(srcCur);
-    var pool=G.cfg.random ? shuffle(remaining).slice(0,size) : remaining.slice(0,size);
+    var pool=G.cfg.random ? shuffle(remaining).slice(0,sz) : remaining.slice(0,sz);
     if(pool.length<2&&src.length>=2){
       var all=G.cfg.random ? shuffle(src.slice()) : src.slice();
-      pool=all.slice(0,size);
+      pool=all.slice(0,sz);
     }
-    var nextCursor=Math.min(srcCur+size, src.length);
+    var nextCursor=Math.min(srcCur+sz, src.length);
     return {pool:pool, nextCursor:nextCursor};
   }
 
@@ -2948,6 +2962,27 @@ function listMenu(lid){
     Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'due',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{},ebbingIds:ebbingIds2};
     go('s-quiz');qRender();
   });
+
+  /* ── 単語のみ・熟語のみクイズ共通処理 ── */
+  function startFilteredQuiz(filterFn, label){
+    el('modal-bg').classList.remove('on');
+    var r=makePool(false, filterFn);
+    if(r.pool.length<2){toast(label+'が2件未満のためクイズできません');return;}
+    /* 通常クイズと同じルール：既習カウント・間違い→復習サイクル追加 */
+    var eids=lmInjectEbbing(r.pool);
+    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',
+       testMode:false,quizMode:'study',sessionStart:Date.now(),
+       consec:{},mastered:0,masteredIds:{},ebbingIds:eids};
+    Q._pendingCursor={lid:lid, next:r.nextCursor};
+    go('s-quiz');qRender();
+  }
+  el('LM-words-only').addEventListener('click',function(){
+    startFilteredQuiz(function(w){return !isPhrase(w.word);},'単語');
+  });
+  el('LM-phrases-only').addEventListener('click',function(){
+    startFilteredQuiz(function(w){return isPhrase(w.word);},'熟語');
+  });
+
   el('LM-list').addEventListener('click',function(){
     el('modal-bg').classList.remove('on');
     go('s-list');
