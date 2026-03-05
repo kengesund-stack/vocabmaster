@@ -356,6 +356,10 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
       <div class="stat"><div class="stat-n" id="H-mastered">0</div><div class="stat-l">習得済み</div></div>
       <div class="stat"><div class="stat-n" id="H-streak">0</div><div class="stat-l">連続日数</div></div>
     </div>
+    <div id="H-lang-filter-wrap" style="display:flex;gap:7px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+      <span style="font-size:11px;color:var(--tx2);font-weight:600;white-space:nowrap;">クイズ言語：</span>
+      <div id="H-lang-filter-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
     <button class="due-btn" id="B-quiz-due">
       <div class="due-txt"><h3>今日の復習</h3><p>忘却曲線に基づく最適タイミング</p><p style="font-size:10px;opacity:.75;margin-top:2px">🧠 不正解単語は全インターバル完走で正解に昇格</p></div>
       <div class="due-n" id="H-due">0</div>
@@ -932,9 +936,12 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5,homeLangFilter:'en'},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 if(!G.folders) G.folders=[];
+/* 既存ユーザーに新設定のデフォルトを付与 */
+if(!G.cfg) G.cfg=mkDB().cfg;
+if(G.cfg.homeLangFilter===undefined) G.cfg.homeLangFilter='en';
 function save(){
   sSet(G);
   /* embedded-dataも常に最新に更新しておく（ファイル保存なしでも再読込時にデータが残る） */
@@ -1193,8 +1200,36 @@ function homeRefresh(){
   el('H-total').textContent=G.words.length;
   el('H-mastered').textContent=G.words.filter(function(w){return w.s&&w.s.i>=14;}).length;
   el('H-streak').textContent=G.stats.streak||0;
+
+  /* 言語フィルターボタンを描画 */
+  (function(){
+    var usedLangs=['all'];
+    G.words.forEach(function(w){var l=w.lang||'en';if(usedLangs.indexOf(l)<0)usedLangs.push(l);});
+    var wrap=el('H-lang-filter-btns');
+    if(!wrap)return;
+    /* 複数言語がない場合は非表示 */
+    var filterWrap=el('H-lang-filter-wrap');
+    if(usedLangs.length<=2){
+      /* 英語のみなら自動でenに設定してフィルター非表示 */
+      if(usedLangs.length===2&&usedLangs[1]!=='all'){G.cfg.homeLangFilter=usedLangs[1];}
+      else{G.cfg.homeLangFilter='all';}
+      if(filterWrap)filterWrap.style.display='none';
+      return;
+    }
+    if(filterWrap)filterWrap.style.display='flex';
+    var cur=G.cfg.homeLangFilter||'all';
+    var html='';
+    usedLangs.forEach(function(l){
+      var lbl=l==='all'?'🌐 全て':(LANGS[l]?LANGS[l].flag+' '+(l==='en'?'英語':l==='de'?'ドイツ語':l==='fr'?'フランス語':l==='es'?'スペイン語':l==='it'?'イタリア語':l):l);
+      var sel=cur===l;
+      html+='<button onclick="setHomeLangFilter(\''+l+'\')" style="padding:5px 11px;border-radius:20px;border:'+(sel?'2px solid var(--ac)':'1px solid rgba(255,255,255,.15)')+';background:'+(sel?'rgba(124,92,252,.2)':'var(--sf2)')+';color:'+(sel?'var(--tx)':'var(--tx2)')+';font-size:12px;font-weight:'+(sel?'700':'500')+';cursor:pointer;font-family:inherit;white-space:nowrap">'+lbl+'</button>';
+    });
+    wrap.innerHTML=html;
+  })();
+
   /* 今日の復習カウント：G.ebbingに登録された期限切れ単語のみ（未習は含まない） */
-  var ebDueCount=getEbbingOverdue().length;
+  var homeLangFilter=G.cfg.homeLangFilter||'all';
+  var ebDueCount=getEbbingOverdue().filter(function(w){return homeLangFilter==='all'||(w.lang||'en')===homeLangFilter;}).length;
   el('H-due').textContent=ebDueCount;
   /* デバッグ：G.ebbingの状態をコンソールに出力 */
   var _ebKeys=G.ebbing?Object.keys(G.ebbing).length:0;
@@ -1215,6 +1250,11 @@ function homeRefresh(){
   var ebBadge=el('H-eb-badge');
   if(ebBadge){ebBadge.style.display='none';}
   homeListsRender();
+}
+function setHomeLangFilter(lang){
+  G.cfg.homeLangFilter=lang;
+  save();
+  homeRefresh();
 }
 function homeListsRender(){
   var c=el('H-lists');
@@ -4516,14 +4556,20 @@ function showListSelectModal(mode){
 }
 
 function quizStart(mode,lid){
+  /* ホーム画面で選択中の言語フィルターを取得 */
+  var homeLangFilter=G.cfg.homeLangFilter||'all';
+  function langMatch(w){
+    if(homeLangFilter==='all')return true;
+    return (w.lang||'en')===homeLangFilter;
+  }
   var pool=[];
   if(mode==='due'){
     /* 今日の復習：間違えた・わからないを選んだ単語（G.ebbing登録済み）のみ */
-    pool=getEbbingOverdue();
+    pool=getEbbingOverdue().filter(langMatch);
     if(!pool.length){toast('復習サイクルの単語がありません');return;}
   }
-  else if(mode==='all')pool=G.words.slice();
-  else if(mode==='weak'){pool=getWeak();if(!pool.length){toast('間違えた単語がありません');return;}}
+  else if(mode==='all')pool=G.words.filter(langMatch);
+  else if(mode==='weak'){pool=getWeak().filter(langMatch);if(!pool.length){toast('間違えた単語がありません');return;}}
   else if(mode==='list')pool=G.words.filter(function(w){return w.lid===lid;});
   if(pool.length<2){toast('クイズには最低2単語必要です');return;}
 
