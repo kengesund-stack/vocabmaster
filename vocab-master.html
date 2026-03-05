@@ -1077,10 +1077,10 @@ function ebbingAdvance(wordId) {
 }
 
 function getEbbingDue() {
-  /* 今日以前の復習予定単語を返す。上限を超えた分は翌日に明示的に繰り越す */
+  /* 今日以前の復習予定単語を全件返す（nextDateは絶対に書き換えない） */
   if (!G.cfg.ebbing || !G.ebbing) return [];
   var now = new Date();
-  var max = G.cfg.ebbingMax || 5;
+  var max = G.cfg.ebbingMax || 20;
 
   /* 期限切れをすべて収集し、期限が古い順にソート */
   var overdue = [];
@@ -1091,20 +1091,8 @@ function getEbbingDue() {
   });
   overdue.sort(function(a, b) { return new Date(a.nextDate) - new Date(b.nextDate); });
 
-  /* 上限内：今日出題する分 */
+  /* 上限件数だけ選ぶ（nextDateは変更しない） */
   var selected = overdue.slice(0, max);
-
-  /* 上限超過分：nextDate を翌日0時に更新して繰り越す */
-  var overflow = overdue.slice(max);
-  if (overflow.length > 0) {
-    var tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    overflow.forEach(function(rec) {
-      rec.nextDate = tomorrow.toISOString();
-    });
-    save();
-  }
 
   /* 単語オブジェクトに変換して返す */
   var result = [];
