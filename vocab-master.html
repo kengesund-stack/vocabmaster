@@ -2595,18 +2595,18 @@ function listFilterRebuild(){
 function wordStatus(w){
   /* ステータスを返す: new/ok/ng/unknown
    * 正解への昇格条件：
-   *   一度も不正解なし → 1回でも正解すれば即「正解」
-   *   不正解歴あり    → 忘却曲線の全インターバル（1/3/7/14/30日）を
-   *                      正解で完走しG.ebbingから削除された時点で正解に昇格
+   *   不正解歴なし → 1回でも正解すれば即「正解」→ 次回から出題しない
+   *   不正解歴あり → G.ebbingに登録中=復習中(ng)、G.ebbingにない=完走で「正解」
    */
   if(!w.s||w.s.k===undefined)return 'new';
-  if((w.s.l||0)>0&&(w.s.k||0)<2)return 'ng';
   var hadMiss=(w.s.l||0)>0;
-  var ebbingDone=hadMiss&&!(G.ebbing&&G.ebbing[w.id]); /* 忘却曲線完走済み */
-  /* 不正解歴なし → 1回正解すれば即「正解」（間隔条件なし） */
-  if(!hadMiss&&w.s.k>=1)return 'ok';
-  /* 不正解歴あり → 忘却曲線完走で「正解」 */
-  if(ebbingDone&&w.s.k>=1)return 'ok';
+  /* 不正解歴なし → 1回正解で即「正解」 */
+  if(!hadMiss&&(w.s.k||0)>=1)return 'ok';
+  /* 不正解歴あり・G.ebbingに登録中 → 復習中 */
+  if(hadMiss&&G.ebbing&&G.ebbing[w.id])return 'ng';
+  /* 不正解歴あり・G.ebbingにない → 完走済みで「正解」 */
+  if(hadMiss&&!(G.ebbing&&G.ebbing[w.id])&&(w.s.k||0)>=1)return 'ok';
+  /* まだ正解なし */
   if(!w.s.d)return 'new';
   return 'unknown';
 }
@@ -2691,17 +2691,19 @@ function listMenu(lid){
   function makePool(fromStart){
     var cur=fromStart?0:(lst.cursor||0);
     if(cur>=total)cur=0;
-    /* cursor以降の全単語を対象にシャッフルしてsize件取る */
-    var remaining=ws.slice(cur);
+    /* 既習（正解済み）を除外した未習・復習中の単語のみ対象 */
+    var notDone=ws.filter(function(w){return wordStatus(w)!=='ok';});
+    /* notDoneが少なすぎる場合はwsそのままを使う */
+    var src=notDone.length>=2?notDone:ws;
+    /* cursor以降をシャッフルしてsize件取る */
+    var srcCur=Math.min(cur, src.length);
+    var remaining=src.slice(srcCur);
     var pool=G.cfg.random ? shuffle(remaining).slice(0,size) : remaining.slice(0,size);
-    if(pool.length<2&&total>=2){
-      /* 残りが少なすぎる場合は先頭から */
-      cur=0;
-      var all=G.cfg.random ? shuffle(ws.slice()) : ws.slice();
+    if(pool.length<2&&src.length>=2){
+      var all=G.cfg.random ? shuffle(src.slice()) : src.slice();
       pool=all.slice(0,size);
     }
-    /* nextCursorは「取り出した件数分」だけ進める（登録順での位置） */
-    var nextCursor=Math.min(cur+size, total);
+    var nextCursor=Math.min(srcCur+size, src.length);
     return {pool:pool, nextCursor:nextCursor};
   }
 
