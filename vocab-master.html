@@ -2729,6 +2729,7 @@ function listMenu(lid){
       if(new Date(rec.nextDate)>now)return; /* 期限未到来はスキップ */
       var w=G.words.find(function(x){return x.id===rec.wordId;});
       if(!w||pids.indexOf(w.id)>=0)return; /* 既にプールにある場合もスキップ */
+      if(w.lid!==lid)return; /* このリスト以外の単語はスキップ */
       ebWords.push(w);
     });
     /* 期限が古い順（緊急度が高い順）にソート */
