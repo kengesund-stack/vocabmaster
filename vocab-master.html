@@ -3507,7 +3507,7 @@ function generateReport(period, lids){
     (l.miss||[]).forEach(function(w){
       /* 単語集フィルタが有効な場合、missのlidも確認 */
       if(!filterAll && w.lid && lids.indexOf(w.lid)<0) return;
-      if(!missMap[w.id])missMap[w.id]={word:w.word,meaning:w.meaning,lang:w.lang,count:0,firstMiss:logDate,lastMiss:logDate};
+      if(!missMap[w.id])missMap[w.id]={id:w.id,word:w.word,meaning:w.meaning,lang:w.lang,count:0,firstMiss:logDate,lastMiss:logDate};
       else{
         missMap[w.id].lastMiss=logDate;
         if(!missMap[w.id].firstMiss)missMap[w.id].firstMiss=logDate;
