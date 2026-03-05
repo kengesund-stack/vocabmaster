@@ -2718,13 +2718,24 @@ function listMenu(lid){
      G.ebbingの有無に関わらず s.l>0（不正解歴あり）の単語を使う */
   function lmInjectEbbing(pool){
     var eids={};
+    if(!G.cfg.ebbing||!G.ebbing)return eids;
     var pids=pool.map(function(w){return w.id;});
-    /* s.l>0 の単語をプール外から収集（不正解数が多い順） */
-    var missWords=G.words.filter(function(w){
-      return w.lid===lid && (w.s&&(w.s.l||0)>0) && pids.indexOf(w.id)<0;
-    }).sort(function(a,b){return (b.s.l||0)-(a.s.l||0);});
+    var now=new Date();
+    /* G.ebbingの期限切れ単語のみ注入（当日正解済み＝nextDateが未来のものは除外） */
+    var ebWords=[];
+    Object.values(G.ebbing).forEach(function(rec){
+      if(new Date(rec.nextDate)>now)return; /* 期限未到来はスキップ */
+      var w=G.words.find(function(x){return x.id===rec.wordId;});
+      if(!w||pids.indexOf(w.id)>=0)return; /* 既にプールにある場合もスキップ */
+      ebWords.push(w);
+    });
+    /* 期限が古い順（緊急度が高い順）にソート */
+    ebWords.sort(function(a,b){
+      var ra=G.ebbing[a.id],rb=G.ebbing[b.id];
+      return new Date(ra.nextDate)-new Date(rb.nextDate);
+    });
     var ebSz=G.cfg.ebbingMax||5;
-    var slc=(G.cfg.random?shuffle(missWords):missWords).slice(0,ebSz);
+    var slc=ebWords.slice(0,ebSz);
     slc.forEach(function(w){pool.push(w);eids[w.id]=true;});
     if(slc.length>0)setTimeout(function(){toast('🧠 復習語 '+slc.length+'語 を追加しました');},350);
     return eids;
