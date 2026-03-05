@@ -1194,6 +1194,21 @@ function homeRefresh(){
   /* 今日の復習カウント：G.ebbingに登録された期限切れ単語のみ（未習は含まない） */
   var ebDueCount=getEbbingOverdue().length;
   el('H-due').textContent=ebDueCount;
+  /* デバッグ：G.ebbingの状態をコンソールに出力 */
+  var _ebKeys=G.ebbing?Object.keys(G.ebbing).length:0;
+  var _ebEnabled=G.cfg.ebbing;
+  var _now=new Date();
+  var _overdue=G.ebbing?Object.values(G.ebbing).filter(function(r){return new Date(r.nextDate)<=_now;}).length:0;
+  var _future=G.ebbing?Object.values(G.ebbing).filter(function(r){return new Date(r.nextDate)>_now;}).length:0;
+  console.log('[EBBING-STATUS] cfg.ebbing='+_ebEnabled+' total='+_ebKeys+' overdue='+_overdue+' future='+_future);
+  if(_ebKeys>0){
+    var _sample=Object.values(G.ebbing).slice(0,3).map(function(r){return r.word+':'+r.nextDate.slice(0,10)+'(idx'+r.nextIdx+')'});
+    console.log('[EBBING-SAMPLE]',_sample.join(', '));
+  }
+  /* ホーム画面に直接表示 */
+  var _dbgEl=document.getElementById('_ebbing_debug');
+  if(!_dbgEl){_dbgEl=document.createElement('div');_dbgEl.id='_ebbing_debug';_dbgEl.style.cssText='font-size:11px;color:#aaa;padding:4px 16px;background:#111;';document.querySelector('.home-wrap')||document.body;var _hw=el('H-due').closest('a')||el('H-due').parentElement.parentElement;_hw.parentElement.insertBefore(_dbgEl,_hw.nextSibling);}
+  _dbgEl.textContent='🔍 G.ebbing: '+'有効='+_ebEnabled+' 登録='+_ebKeys+'件 期限切れ='+_overdue+'件 将来='+_future+'件';
   /* 忘却曲線バッジは不要になったので非表示 */
   var ebBadge=el('H-eb-badge');
   if(ebBadge){ebBadge.style.display='none';}
