@@ -319,6 +319,24 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal-bg"><div class="modal-sh"><div class="modal-hd"></div><div id="modal-ct"></div></div></div>
 
+<!-- 削除確認ダイアログ -->
+<div id="del-dialog-overlay" style="display:none;position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:24px;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);">
+  <div id="del-dialog-box" style="background:var(--sf);border-radius:22px;width:100%;max-width:320px;padding:0;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.7);transform:scale(.92);transition:transform .18s cubic-bezier(.34,1.56,.64,1);">
+    <!-- アイコン帯 -->
+    <div id="del-dialog-stripe" style="background:linear-gradient(135deg,#ff4c6a,#c0392b);padding:22px 0 16px;text-align:center;">
+      <div id="del-dialog-icon" style="font-size:36px;line-height:1;">🗑️</div>
+    </div>
+    <!-- テキスト -->
+    <div style="padding:20px 22px 22px;">
+      <div id="del-dialog-title" style="font-size:17px;font-weight:700;text-align:center;margin-bottom:10px;color:var(--tx);"></div>
+      <div id="del-dialog-msg" style="font-size:13px;color:var(--tx2);text-align:center;line-height:1.7;white-space:pre-wrap;margin-bottom:20px;"></div>
+      <!-- ボタン -->
+      <button id="del-dialog-ok" style="width:100%;padding:14px;background:linear-gradient(135deg,#ff4c6a,#c0392b);border:none;border-radius:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.02em;margin-bottom:9px;-webkit-appearance:none;"></button>
+      <button id="del-dialog-cancel" style="width:100%;padding:13px;background:var(--sf2);border:1.5px solid rgba(255,255,255,.1);border-radius:13px;color:var(--tx2);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;-webkit-appearance:none;">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <!-- 使用説明モーダル -->
 <div id="help-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:150;align-items:flex-end">
   <div id="help-modal-inner" style="background:var(--sf);border-radius:20px 20px 0 0;width:100%;max-height:90vh;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding:18px 18px calc(env(safe-area-inset-bottom,0px) + 24px)">
@@ -1173,6 +1191,50 @@ function el(id){return document.getElementById(id);}
 function esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 var _tt=null;
 function toast(msg){var t=el('toast');t.textContent=msg;t.classList.add('on');if(_tt)clearTimeout(_tt);_tt=setTimeout(function(){t.classList.remove('on');},2800);}
+
+/* ─── カスタム削除確認ダイアログ ───────────────────────────────
+   showDelDialog({ icon, title, msg, okLabel, onOk })
+   ・icon    : 絵文字（省略時 🗑️）
+   ・title   : タイトル
+   ・msg     : 本文（改行 \n 可）
+   ・okLabel : 削除ボタンのラベル（省略時「削除する」）
+   ・onOk    : 同意時に呼ぶコールバック
+   ─────────────────────────────────────────────────────────── */
+function showDelDialog(opts){
+  var ov  = el('del-dialog-overlay');
+  var box = el('del-dialog-box');
+  el('del-dialog-icon').textContent  = opts.icon  || '🗑️';
+  el('del-dialog-title').textContent = opts.title || '削除の確認';
+  el('del-dialog-msg').textContent   = opts.msg   || 'この操作は取り消せません。';
+  el('del-dialog-ok').textContent    = (opts.icon||'🗑️') + '\u2002' + (opts.okLabel || '削除する');
+
+  /* 表示・アニメーション */
+  ov.style.display = 'flex';
+  setTimeout(function(){ box.style.transform = 'scale(1)'; }, 10);
+
+  function close(){
+    box.style.transform = 'scale(.92)';
+    setTimeout(function(){ ov.style.display = 'none'; }, 160);
+  }
+
+  /* 毎回リスナーをリセット（cloneNode で旧リスナーを除去） */
+  var okBtn  = el('del-dialog-ok');
+  var canBtn = el('del-dialog-cancel');
+  var newOk  = okBtn.cloneNode(true);
+  var newCan = canBtn.cloneNode(true);
+  okBtn.parentNode.replaceChild(newOk,  okBtn);
+  canBtn.parentNode.replaceChild(newCan, canBtn);
+
+  newOk.textContent = (opts.icon||'🗑️') + '\u2002' + (opts.okLabel || '削除する');
+  newCan.textContent = 'キャンセル';
+
+  newOk.addEventListener('click',  function(){ close(); if(opts.onOk) opts.onOk(); });
+  newCan.addEventListener('click', close);
+
+  /* オーバーレイ外タップでも閉じる */
+  function overlayClick(e){ if(e.target === ov){ close(); ov.removeEventListener('click', overlayClick); } }
+  ov.addEventListener('click', overlayClick);
+}
 function loading(msg){el('ld-tx').textContent=msg||'処理中...';el('ld').classList.add('on');}
 function loaded(){el('ld').classList.remove('on');}
 function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
@@ -1782,10 +1844,17 @@ function deleteList(lid){
   var lst=G.lists.find(function(l){return l.id===lid;});
   if(!lst)return;
   var cnt=G.words.filter(function(w){return w.lid===lid;}).length;
-  if(!confirm('「'+lst.name+'」（'+cnt+'単語）を削除しますか？\nこの操作は取り消せません。'))return;
-  G.lists=G.lists.filter(function(l){return l.id!==lid;});
-  G.words=G.words.filter(function(w){return w.lid!==lid;});
-  save();homeRefresh();toast('🗑️ 削除しました');
+  showDelDialog({
+    icon:'📚',
+    title:'リストを削除',
+    msg:'「'+lst.name+'」（'+cnt+'語）を削除しますか？\nこの操作は取り消せません。',
+    okLabel:'削除する',
+    onOk:function(){
+      G.lists=G.lists.filter(function(l){return l.id!==lid;});
+      G.words=G.words.filter(function(w){return w.lid!==lid;});
+      save();homeRefresh();toast('🗑️ 削除しました');
+    }
+  });
 }
 
 /* ADD */
@@ -2863,9 +2932,16 @@ function wordDetail(wid){
     editWord(wid);
   });
   el('DEL-btn').addEventListener('click',function(){
-    if(!confirm('「'+w.word+'」を削除しますか？'))return;
-    G.words=G.words.filter(function(x){return x.id!==wid;});
-    save();el('modal-bg').classList.remove('on');listRender();toast('削除しました');
+    showDelDialog({
+      icon:'📝',
+      title:'単語を削除',
+      msg:'「'+w.word+'」を削除しますか？\nこの操作は取り消せません。',
+      okLabel:'削除する',
+      onOk:function(){
+        G.words=G.words.filter(function(x){return x.id!==wid;});
+        save();el('modal-bg').classList.remove('on');listRender();toast('削除しました');
+      }
+    });
   });
 }
 function mkCard(l,v){return'<div style="background:var(--sf2);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--tx2);margin-bottom:3px">'+l+'</div><div style="font-size:14px;font-weight:600">'+v+'</div></div>';}
@@ -2989,17 +3065,25 @@ function editFolder(fid){
     var totalSub=subFolders.length;
     var msg='フォルダ「'+folder.name+'」を削除しますか？\n（フォルダ内の'+listsInFolder.length+'件のリストは未分類に移動します）';
     if(totalSub>0) msg+='\n※ サブフォルダ '+totalSub+'件 もすべて削除されます';
-    if(!confirm(msg))return;
-    /* 再帰的にサブフォルダを削除し、リストのfidを解除 */
-    function removeFolder(rfid){
-      G.lists.forEach(function(l){if(l.fid===rfid)l.fid=null;});
-      var subs=G.folders.filter(function(f){return f.parentId===rfid;});
-      subs.forEach(function(sf){removeFolder(sf.id);});
-      G.folders=G.folders.filter(function(f){return f.id!==rfid;});
-    }
-    removeFolder(fid);
-    save();el('modal-bg').classList.remove('on');
-    homeRefresh();toast('🗑️ フォルダを削除しました');
+    msg+='\n\nこの操作は取り消せません。';
+    showDelDialog({
+      icon:'📁',
+      title:'フォルダを削除',
+      msg:msg,
+      okLabel:'削除する',
+      onOk:function(){
+        /* 再帰的にサブフォルダを削除し、リストのfidを解除 */
+        function removeFolder(rfid){
+          G.lists.forEach(function(l){if(l.fid===rfid)l.fid=null;});
+          var subs=G.folders.filter(function(f){return f.parentId===rfid;});
+          subs.forEach(function(sf){removeFolder(sf.id);});
+          G.folders=G.folders.filter(function(f){return f.id!==rfid;});
+        }
+        removeFolder(fid);
+        save();el('modal-bg').classList.remove('on');
+        homeRefresh();toast('🗑️ フォルダを削除しました');
+      }
+    });
   });
 }
 
@@ -3080,9 +3164,17 @@ function checkDuplicates(){
   el('DUP-del').addEventListener('click',function(){
     var checked=Array.from(el('DUP-list').querySelectorAll('.dup-chk:checked')).map(function(c){return c.getAttribute('data-wid');});
     if(!checked.length){toast('削除する単語を選択してください');return;}
-    G.words=G.words.filter(function(w){return checked.indexOf(w.id)<0;});
-    save();el('modal-bg').classList.remove('on');
-    homeRefresh();listRender();toast('🗑️ '+checked.length+'件削除しました');
+    showDelDialog({
+      icon:'🗑️',
+      title:'重複単語を削除',
+      msg:'チェックした '+checked.length+' 件の単語を削除しますか？\nこの操作は取り消せません。',
+      okLabel:'削除する',
+      onOk:function(){
+        G.words=G.words.filter(function(w){return checked.indexOf(w.id)<0;});
+        save();el('modal-bg').classList.remove('on');
+        homeRefresh();listRender();toast('🗑️ '+checked.length+'件削除しました');
+      }
+    });
   });
   el('DUP-cancel').addEventListener('click',function(){el('modal-bg').classList.remove('on');});
 }
@@ -3109,9 +3201,16 @@ function selWordToggle(wid){
 function selDeleteAll(){
   var ids=Object.keys(selSet);
   if(!ids.length){toast('単語を選択してください');return;}
-  if(!confirm(ids.length+'件の単語を削除しますか？'))return;
-  G.words=G.words.filter(function(w){return!selSet[w.id];});
-  selSet={};save();homeRefresh();listRender();updateSelCount();toast('🗑️ '+ids.length+'件削除しました');
+  showDelDialog({
+    icon:'🗑️',
+    title:'まとめて削除',
+    msg:ids.length+'件の単語を削除しますか？\nこの操作は取り消せません。',
+    okLabel:ids.length+'件すべて削除する',
+    onOk:function(){
+      G.words=G.words.filter(function(w){return!selSet[w.id];});
+      selSet={};save();homeRefresh();listRender();updateSelCount();toast('🗑️ '+ids.length+'件削除しました');
+    }
+  });
 }
 function selMoveAll(){
   var ids=Object.keys(selSet);
@@ -5278,7 +5377,13 @@ function bind(){
   });
 
   el('B-reset').addEventListener('click',function(){
-    if(confirm('すべてのデータを削除しますか？\nこの操作は取り消せません。')){G=mkDB();save();toast('データを削除しました');homeRefresh();}
+    showDelDialog({
+      icon:'⚠️',
+      title:'全データを削除',
+      msg:'すべての単語・リスト・学習履歴を\n完全に削除します。\n\nこの操作は絶対に取り消せません。\n本当によろしいですか？',
+      okLabel:'すべて削除する',
+      onOk:function(){G=mkDB();save();toast('データを削除しました');homeRefresh();}
+    });
   });
   /* ── エビングハウス忘却曲線設定 ── */
   if(el('TG-ebbing'))el('TG-ebbing').addEventListener('click',function(){
