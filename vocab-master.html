@@ -603,6 +603,16 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         <button class="opt-btn" data-type="both" id="TY-both" style="flex:1;padding:8px">✨<br>単語＋熟語</button>
       </div>
 
+      <div class="lbl">意味の言語</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:6px" id="MLANG-btns">
+        <button class="opt-btn on" data-mlang="ja"  id="ML-ja"   style="padding:8px;font-size:11px">🇯🇵<br>日本語</button>
+        <button class="opt-btn"    data-mlang="tl"  id="ML-tl"   style="padding:8px;font-size:11px">🌐<br>対象言語</button>
+        <button class="opt-btn"    data-mlang="both" id="ML-both" style="padding:8px;font-size:11px">🔀<br>両方</button>
+      </div>
+      <div id="MLANG-hint" style="font-size:10px;color:var(--tx2);margin-bottom:12px;line-height:1.6;padding:7px 10px;background:var(--sf);border-radius:9px">
+        意味を日本語で登録します
+      </div>
+
       <!-- カメラ撮影エリア -->
       <div class="lbl">📷 写真から抽出（カメラ・画像）</div>
       <div id="CAM-area">
@@ -1858,7 +1868,7 @@ function deleteList(lid){
 }
 
 /* ADD */
-var addMode='paste', prevWords=[], selLang='en', selLevel='all', selType='words';
+var addMode='paste', prevWords=[], selLang='en', selLevel='all', selType='words', selMeanLang='ja';
 
 function segSwitch(mode){
   addMode=mode;
@@ -2132,11 +2142,12 @@ function fileAiExtract(text, fname){
   var articleRule={en:'',de:'名詞には必ず定冠詞を付けてください（例: der Mann, die Frau, das Kind）。動詞は不定詞形、形容詞は原形で記載してください。',fr:'名詞には必ず定冠詞を付けてください（例: le livre, la maison）。動詞は不定詞形、形容詞は男性単数形で記載してください。',es:'名詞には必ず定冠詞を付けてください（例: el libro, la casa）。動詞は不定詞形、形容詞は男性単数形で記載してください。',it:'名詞には必ず定冠詞を付けてください（例: il libro, la casa）。動詞は不定詞形、形容詞は男性単数形で記載してください。'};
   var articleInstr=articleRule[selLang]||'';
   function makePrompt(chunk){
-    return '以下の'+ln+'テキストから、「'+def.cond+'」に該当する'+typeCond[fileSelType]+'をできるだけ多く抽出し、それぞれ日本語訳をつけてください。\n'+
+    var meanPart=buildMeaningPromptPart(ln, selMeanLang);
+    return '以下の'+ln+'テキストから、「'+def.cond+'」に該当する'+typeCond[fileSelType]+'をできるだけ多く抽出し、'+meanPart+'\n'+
       (articleInstr?articleInstr+'\n':'')+
       '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
       '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
-      '{"words":[{"word":"primate","meaning":"霊長類"},{"word":"be put upon","meaning":"利用される"}]}\n\n'+
+      '{"words":[{"word":"(単語)","meaning":"(意味)"}]}\n\n'+
       'テキスト:\n'+chunk;
   }
   var chunks=splitChunks(text, 80000);
@@ -2319,6 +2330,35 @@ function setType(type){
   document.querySelectorAll('.opt-btn[data-type]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-type')===type);});
 }
 
+/* 意味の言語セレクター */
+var MLANG_HINTS={
+  ja: '意味を日本語で登録します',
+  tl: '対象言語（英語なら英語、ドイツ語ならドイツ語）で意味・定義を登録します',
+  both: '日本語の意味と対象言語の定義を「／」でつなげて両方登録します'
+};
+function setMeanLang(ml){
+  selMeanLang=ml;
+  document.querySelectorAll('#MLANG-btns .opt-btn[data-mlang]').forEach(function(b){
+    b.classList.toggle('on', b.getAttribute('data-mlang')===ml);
+  });
+  var h=el('MLANG-hint');
+  if(h) h.textContent=MLANG_HINTS[ml]||'';
+}
+
+/* 意味プロンプトを選択に応じて組み立てる共通ヘルパー */
+function buildMeaningPromptPart(ln, mlang){
+  if(mlang==='ja'){
+    return 'それぞれ日本語訳をつけてください。\n'+
+      'JSON例: {"words":[{"word":"abandon","meaning":"捨てる、放棄する"}]}';
+  } else if(mlang==='tl'){
+    return 'それぞれ'+ln+'での意味・定義を簡潔に付けてください（日本語は使わないでください）。\n'+
+      'JSON例: {"words":[{"word":"abandon","meaning":"to leave someone or something permanently"}]}';
+  } else { /* both */
+    return '意味フィールドに「'+ln+'での定義 ／ 日本語訳」の形式で両方を記載してください。\n'+
+      'JSON例: {"words":[{"word":"abandon","meaning":"to leave permanently ／ 捨てる、放棄する"}]}';
+  }
+}
+
 function aiExtract(){
   var txt=el('IN-ai-text').value.trim();
   if(!txt||txt.length<20){toast('もう少し長いテキストを入力してください');return;}
@@ -2461,12 +2501,13 @@ function aiExtractAPI(txt){
   if(ni&&!ni.value)ni.value=(LANGS[selLang]?LANGS[selLang].name:'')+'_'+(levelLabel[selLevel]||'')+(typeLabel[selType]||'')+'AI抽出';
 
   function makePrompt(chunk){
+    var meanPart=buildMeaningPromptPart(ln, selMeanLang);
     return '以下の'+ln+'テキストから、'+
-      '「'+def.cond+'」に該当する'+typeCond[selType]+'をできるだけ多く抽出し、それぞれ日本語訳をつけてください。\n'+
+      '「'+def.cond+'」に該当する'+typeCond[selType]+'をできるだけ多く抽出し、'+meanPart+'\n'+
       (articleInstr?articleInstr+'\n':'')+
       '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
       '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
-      '{"words":[{"word":"primate","meaning":"霊長類"},{"word":"be put upon","meaning":"利用される、こき使われる"}]}\n\n'+
+      '{"words":[{"word":"(単語)","meaning":"(意味)"}]}\n\n'+
       'テキスト:\n'+chunk;
   }
 
@@ -2524,12 +2565,12 @@ function camAiExtract(dataUrl){
   var articleInstr=articleRule[selLang]||'';
 
   var prompt=
-    'この画像に写っている'+ln+'のテキストから、「'+def.cond+'」に該当する'+typeCond[selType]+'をできるだけ多く抽出し、それぞれ日本語訳をつけてください。\n'+
+    'この画像に写っている'+ln+'のテキストから、「'+def.cond+'」に該当する'+typeCond[selType]+'をできるだけ多く抽出し、'+buildMeaningPromptPart(ln, selMeanLang)+'\n'+
     (articleInstr?articleInstr+'\n':'')+
     '必ずすべての項目にmeaningを記入してください。訳がわからない場合でも推測して記入してください。\n'+
     '画像にテキストが見つからない場合は {"words":[]} を返してください。\n'+
     '以下のJSON形式のみで返してください（前後に説明文や```は不要）:\n'+
-    '{"words":[{"word":"primate","meaning":"霊長類"},{"word":"be put upon","meaning":"利用される"}]}';
+    '{"words":[{"word":"(単語)","meaning":"(意味)"}]}';
 
   loading('📷 画像を解析中...');
 
@@ -2590,10 +2631,21 @@ function translateInChunks(words, lang, callback){
 
     loading('翻訳中... ('+Math.min(idx+chunkSize,total)+'/'+total+'語)');
     var wordList=noMeaning.map(function(w){return w.word;}).join(' / ');
+    var meanInstr;
+    if(selMeanLang==='tl'){
+      meanInstr='各単語・熟語の'+ln+'での意味・定義を簡潔に付けてください（日本語は使わないでください）。\n'+
+        'JSONのみで返してください（```不要）: {"translations":{"abandon":"to leave someone or something permanently"}}';
+    } else if(selMeanLang==='both'){
+      meanInstr='各単語・熟語に「'+ln+'での定義 ／ 日本語訳」の形式で意味を付けてください。\n'+
+        'JSONのみで返してください（```不要）: {"translations":{"abandon":"to leave permanently ／ 捨てる"}}';
+    } else {
+      meanInstr='各単語・熟語に日本語訳をつけてください。\n'+
+        'JSONのみで返してください（```不要）: {"translations":{"abandon":"捨てる","be put upon":"こき使われる"}}';
+    }
     var prompt=
-      '以下の'+ln+'の単語・熟語すべてに日本語訳をつけてください。\n'+
-      '必ずすべての項目を含めてください。訳がわからない場合でも推測して記入してください。\n'+
-      'JSONのみで返してください（```不要）: {"translations":{"abandon":"捨てる","be put upon":"こき使われる"}}\n\n'+
+      '以下の'+ln+'の単語・熟語すべてに意味を付けてください。\n'+
+      meanInstr+'\n'+
+      '必ずすべての項目を含めてください。\n\n'+
       '単語リスト: '+wordList;
 
     apiCall({
@@ -5060,6 +5112,13 @@ function bind(){
   document.querySelectorAll('.opt-btn[data-level]').forEach(function(b){
     b.addEventListener('click',function(){setLevel(this.getAttribute('data-level'));});
   });
+
+  /* 意味の言語ボタン */
+  document.querySelectorAll('#MLANG-btns .opt-btn[data-mlang]').forEach(function(b){
+    b.addEventListener('click',function(){setMeanLang(this.getAttribute('data-mlang'));});
+  });
+  /* 初期ヒント表示 */
+  (function(){var h=el('MLANG-hint');if(h)h.textContent=MLANG_HINTS[selMeanLang]||'';})();
 
   /* 言語選択ボタン */
   document.querySelectorAll('.lang-sel-btn').forEach(function(b){
