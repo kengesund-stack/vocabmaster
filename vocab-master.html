@@ -4611,11 +4611,12 @@ function qRender(){
   var sameLang=G.words.filter(function(w){
     return w.id!==q.id&&(w.lang||'en')===(q.lang||'en')&&isPhrase(w.word)===qIsPhrase;
   });
-  /* 同種類が3件未満なら言語・タイプを緩和 */
+  /* 同種類が3件未満なら熟語/単語タイプの区別を緩和（言語は維持） */
   if(sameLang.length<3){
     sameLang=G.words.filter(function(w){return w.id!==q.id&&(w.lang||'en')===(q.lang||'en');});
   }
-  var others=sameLang.length>=3?sameLang:G.words.filter(function(w){return w.id!==q.id;});
+  /* 同言語が3件未満でも言語フィルターを維持する（他言語は混入させない） */
+  var others=sameLang.length>=3?sameLang:G.words.filter(function(w){return w.id!==q.id&&(w.lang||'en')===(q.lang||'en');});
   /* ダミー選択肢：訳語が正解・他の選択肢と重複しないよう除外してから3件取る */
   var usedMeanings={};
   usedMeanings[ca]=true; /* 正解の訳語を使用済みに登録 */
