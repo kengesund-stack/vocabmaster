@@ -2912,7 +2912,7 @@ function listMenu(lid){
   });
   /* リストクイズ共通：間違い単語を復習語として注入
      G.ebbingの有無に関わらず s.l>0（不正解歴あり）の単語を使う */
-  function lmInjectEbbing(pool){
+  function lmInjectEbbing(pool, filterFn){
     var eids={};
     if(!G.cfg.ebbing||!G.ebbing)return eids;
     var pids=pool.map(function(w){return w.id;});
@@ -2924,6 +2924,7 @@ function listMenu(lid){
       var w=G.words.find(function(x){return x.id===rec.wordId;});
       if(!w||pids.indexOf(w.id)>=0)return; /* 既にプールにある場合もスキップ */
       if(w.lid!==lid)return; /* このリスト以外の単語はスキップ */
+      if(filterFn&&!filterFn(w))return; /* 単語のみ・熟語のみフィルターを適用 */
       ebWords.push(w);
     });
     /* 期限が古い順（緊急度が高い順）にソート */
@@ -2987,8 +2988,8 @@ function listMenu(lid){
     el('modal-bg').classList.remove('on');
     var r=makePool(false, filterFn);
     if(r.pool.length<2){toast(label+'が2件未満のためクイズできません');return;}
-    /* 通常クイズと同じルール：既習カウント・間違い→復習サイクル追加 */
-    var eids=lmInjectEbbing(r.pool);
+    /* filterFnを渡して復習注入も同種類のみに限定 */
+    var eids=lmInjectEbbing(r.pool, filterFn);
     Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',
        testMode:false,quizMode:'study',sessionStart:Date.now(),
        consec:{},mastered:0,masteredIds:{},ebbingIds:eids};
