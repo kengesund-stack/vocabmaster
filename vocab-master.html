@@ -1033,6 +1033,7 @@ if(G.cfg.listPlayMode===undefined) G.cfg.listPlayMode='foreign';
 if(G.cfg.listPlaySec===undefined) G.cfg.listPlaySec=2;
 if(G.cfg.listPlayRepeat===undefined) G.cfg.listPlayRepeat=false;
 if(!G.cfg.dictUrls) G.cfg.dictUrls={en:'https://ejje.weblio.jp/content/{word}',de:'',fr:'',es:'',it:''};
+if(!G.cfg.dictUrls.en) G.cfg.dictUrls.en='https://ejje.weblio.jp/content/{word}';
 function save(){
   sSet(G);
   /* embedded-dataも常に最新に更新しておく（ファイル保存なしでも再読込時にデータが残る） */
