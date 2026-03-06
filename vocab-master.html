@@ -3627,16 +3627,20 @@ function sqNext(){
     u.rate=0.85;
     u.onstart=function(){duckStart();};
     u.onend=function(){
-      duckEnd();SQ.busy=false;
+      duckEnd();
       if(SQ.keepAlive){clearInterval(SQ.keepAlive);SQ.keepAlive=null;}
+      SQ.busy=false;
+      /* cb()を先に呼ぶ。cb内でsqSpeakが呼ばれキューに積まれる場合はそちらが続く */
       item.cb();
-      setTimeout(sqNext,60);
+      /* cb後にキューが空の場合のみ次へ進む（cb内でsqSpeakした場合はsqSpeak側でsqNextが呼ばれる） */
+      if(!SQ.busy&&SQ.queue.length){sqNext();}
     };
-    u.onerror=function(e){
-      duckEnd();SQ.busy=false;
+    u.onerror=function(){
+      duckEnd();
       if(SQ.keepAlive){clearInterval(SQ.keepAlive);SQ.keepAlive=null;}
+      SQ.busy=false;
       item.cb();
-      setTimeout(sqNext,60);
+      if(!SQ.busy&&SQ.queue.length){sqNext();}
     };
     window.speechSynthesis.speak(u);
     /* iOSでバックグラウンドに入るとSpeechSynthesisが一時停止するのを防ぐ */
