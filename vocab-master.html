@@ -379,7 +379,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
       <div id="H-lang-filter-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
     </div>
     <button class="due-btn" id="B-quiz-due">
-      <div class="due-txt"><h3>今日の復習</h3><p>忘却曲線に基づく最適タイミング</p><p style="font-size:10px;opacity:.75;margin-top:2px">🧠 不正解単語は全インターバル完走で正解に昇格</p></div>
+      <div class="due-txt"><h3>復習単語</h3><p>間違い・わからない単語を復習</p><p style="font-size:10px;opacity:.75;margin-top:2px">🧠 不正解単語は全インターバル完走で正解に昇格</p></div>
       <div class="due-n" id="H-due">0</div>
     </button>
     <div class="act-grid">
@@ -1299,11 +1299,14 @@ function homeRefresh(){
     wrap.innerHTML=html;
   })();
 
-  /* 今日の復習カウント：G.ebbingに登録された期限切れ単語のみ（未習は含まない） */
+  /* 復習カウント：間違い・わからないの記録がある単語のみ（リスト表示と同基準） */
   var homeLangFilter=G.cfg.homeLangFilter||'all';
-  var ebDueCount=getEbbingOverdue().filter(function(w){return homeLangFilter==='all'||(w.lang||'en')===homeLangFilter;}).length;
-  el('H-due').textContent=ebDueCount;
-  /* デバッグ：G.ebbingの状態をコンソールに出力 */
+  var missCount=G.words.filter(function(w){
+    if(homeLangFilter!=='all'&&(w.lang||'en')!==homeLangFilter)return false;
+    return w.s&&(w.s.l||0)>0;
+  }).length;
+  el('H-due').textContent=missCount;
+  /* デバッグ表示も同基準に統一 */
   var _ebKeys=G.ebbing?Object.keys(G.ebbing).length:0;
   var _ebEnabled=G.cfg.ebbing;
   var _now=new Date();
