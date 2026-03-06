@@ -2973,48 +2973,27 @@ function lpPlayAt(idx){
   LP.idx=idx;
   var token=++LP.token;
   if(LP.timer){clearTimeout(LP.timer);LP.timer=null;}
-  /* 前の読み上げはキャンセル（新しい単語開始） */
-  sqClear();
 
   var w=LP.words[idx];
   lpScrollTo(idx);
   lpUpdateUI();
 
   var mode=G.cfg.listPlayMode||'foreign';
-  var doForeign=(mode==='foreign'||mode==='both');
-  var doJa=(mode==='ja'||mode==='both');
   var sec=(G.cfg.listPlaySec||2)*1000;
 
-  function afterAll(){
+  /* 読み上げるアイテムを事前に配列で組み立てる */
+  var items=[];
+  if(mode==='foreign'||mode==='both') items.push({text:w.word, lang:w.lang||'en'});
+  if(mode==='ja'||mode==='both') items.push({text:w.meaning||'', lang:'ja'});
+
+  /* 全部終わったら待機→次へ */
+  sqEnqueue(items, function(){
     if(!LP.playing||LP.token!==token)return;
     LP.timer=setTimeout(function(){
       if(!LP.playing||LP.token!==token)return;
       lpPlayAt(idx+1);
     },sec);
-  }
-
-  if(doForeign&&doJa){
-    /* 外国語 → コールバック内で日本語 → afterAll（sqClearしない） */
-    sqSpeak(w.word, w.lang||'en', function(){
-      if(!LP.playing||LP.token!==token)return;
-      sqSpeak(w.meaning||'', 'ja', function(){
-        if(!LP.playing||LP.token!==token)return;
-        afterAll();
-      });
-    });
-  } else if(doForeign){
-    sqSpeak(w.word, w.lang||'en', function(){
-      if(!LP.playing||LP.token!==token)return;
-      afterAll();
-    });
-  } else if(doJa){
-    sqSpeak(w.meaning||'', 'ja', function(){
-      if(!LP.playing||LP.token!==token)return;
-      afterAll();
-    });
-  } else {
-    afterAll();
-  }
+  });
 }
 
 function lpStart(startIdx){
@@ -3598,61 +3577,61 @@ function speak(text, lang){
 var FL={words:[],i:0,playing:false,timer:null,quizPool:null,quizMode:null,quizLid:null,token:0};
 
 /* ---- 読み上げキュー（iOS対応） ---- */
-var SQ={queue:[],busy:false,keepAlive:null};
+var SQ={queue:[],busy:false,keepAlive:null,onFinish:null};
 function sqClear(){
-  SQ.queue=[];SQ.busy=false;
+  SQ.queue=[];SQ.busy=false;SQ.onFinish=null;
   if(SQ.keepAlive){clearInterval(SQ.keepAlive);SQ.keepAlive=null;}
   try{window.speechSynthesis.cancel();}catch(e){}
 }
+/* テキスト群をまとめてキューに積む。全部終わったらonFinishを1回だけ呼ぶ */
+function sqEnqueue(items, onFinish){
+  /* items = [{text, lang}, ...] */
+  sqClear();
+  SQ.onFinish=onFinish||null;
+  items.forEach(function(it){
+    if(it.text&&it.text.trim()) SQ.queue.push(it);
+  });
+  if(!SQ.queue.length){if(SQ.onFinish){var f=SQ.onFinish;SQ.onFinish=null;f();}return;}
+  sqNext();
+}
+/* 後方互換：単体テキスト用 */
 function sqSpeak(text,lang,cb){
-  cb=cb||function(){};
-  if(!text||!text.trim()){setTimeout(cb,50);return;} /* 空文字はスキップ */
-  SQ.queue.push({text:text,lang:lang,cb:cb});
-  if(!SQ.busy)sqNext();
+  sqEnqueue([{text:text,lang:lang}], cb);
 }
 function sqNext(){
   if(!SQ.queue.length){
     SQ.busy=false;
     if(SQ.keepAlive){clearInterval(SQ.keepAlive);SQ.keepAlive=null;}
+    if(SQ.onFinish){var f=SQ.onFinish;SQ.onFinish=null;f();}
     return;
   }
   SQ.busy=true;
   var item=SQ.queue.shift();
-  if(!window.speechSynthesis){item.cb();SQ.busy=false;sqNext();return;}
-  /* iOSバックグラウンド対策：読み上げ前にキャンセルしてから少し待つ */
+  if(!window.speechSynthesis){SQ.busy=false;sqNext();return;}
   try{window.speechSynthesis.cancel();}catch(e){}
   setTimeout(function(){
     var u=new SpeechSynthesisUtterance(item.text);
-    u.lang=LANG_VOICE[item.lang||'en']||item.lang||'en-US';
+    u.lang=LANG_VOICE[item.lang]||item.lang||'en-US';
     u.rate=0.85;
+    var fired=false;
+    function done(){
+      if(fired)return; fired=true;
+      duckEnd();
+      if(SQ.keepAlive){clearInterval(SQ.keepAlive);SQ.keepAlive=null;}
+      SQ.busy=false;
+      setTimeout(sqNext,80);
+    }
     u.onstart=function(){duckStart();};
-    u.onend=function(){
-      duckEnd();
-      if(SQ.keepAlive){clearInterval(SQ.keepAlive);SQ.keepAlive=null;}
-      SQ.busy=false;
-      /* cb()を先に呼ぶ。cb内でsqSpeakが呼ばれキューに積まれる場合はそちらが続く */
-      item.cb();
-      /* cb後にキューが空の場合のみ次へ進む（cb内でsqSpeakした場合はsqSpeak側でsqNextが呼ばれる） */
-      if(!SQ.busy&&SQ.queue.length){sqNext();}
-    };
-    u.onerror=function(){
-      duckEnd();
-      if(SQ.keepAlive){clearInterval(SQ.keepAlive);SQ.keepAlive=null;}
-      SQ.busy=false;
-      item.cb();
-      if(!SQ.busy&&SQ.queue.length){sqNext();}
-    };
+    u.onend=done;
+    u.onerror=done;
     window.speechSynthesis.speak(u);
-    /* iOSでバックグラウンドに入るとSpeechSynthesisが一時停止するのを防ぐ */
     SQ.keepAlive=setInterval(function(){
-      if(!SQ.busy)return;
-      if(window.speechSynthesis.paused){window.speechSynthesis.resume();}
+      if(window.speechSynthesis.paused)window.speechSynthesis.resume();
     },250);
   },100);
 }
-
 function speakWithCb(text,lang,cb){sqSpeak(text,lang,cb);}
-function speakJa(text){sqSpeak(text,'ja',function(){});}
+function speakJa(text){sqEnqueue([{text:text,lang:'ja'}],null);}
 
 function flRender(){
   var token=++FL.token;
