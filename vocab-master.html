@@ -2836,26 +2836,45 @@ function listMenu(lid){
   if(cursor>=total)cursor=0; /* 全完了していたらリセット済み扱い */
   var size=Math.min(parseInt(G.cfg.size)||20, total);
   var nextEnd=Math.min(cursor+size, total);
-  var pct=total>0?Math.min(100,Math.round(cursor/total*100)):0;
-  var progressInfo=total>0?'進捗 '+pct+'% ('+cursor+'/'+total+'単語完了)':'';
 
-  /* 単語のみ・熟語のみの件数を事前算出 */
+  /* 進捗：実際に一度でも学習した単語数（ok + ng + unknown）を使う */
+  var nStudied=ws.filter(function(w){return wordStatus(w)!=='new';}).length;
+  var nOkModal=ws.filter(function(w){return wordStatus(w)==='ok';}).length;
+  var pct=total>0?Math.min(100,Math.round(nStudied/total*100)):0;
+  var progressInfo=total>0?'進捗 '+pct+'% ('+nStudied+'/'+total+'語学習済み · 正解昇格 '+nOkModal+'語)':'';
+
+  /* 単語のみ・熟語のみの件数を事前算出（未習を除いた学習済み件数も表示） */
   var wordsOnly=ws.filter(function(w){return !isPhrase(w.word);});
   var phrasesOnly=ws.filter(function(w){return isPhrase(w.word);});
   var wCnt=wordsOnly.length, pCnt=phrasesOnly.length;
+  var wStudied=wordsOnly.filter(function(w){return wordStatus(w)!=='new';}).length;
+  var pStudied=phrasesOnly.filter(function(w){return wordStatus(w)!=='new';}).length;
 
   el('modal-ct').innerHTML=
     '<div class="modal-tl">'+(l?l.flag+' ':'')+esc(lst.name)+'</div>'+
     '<div style="font-size:12px;color:var(--tx2);margin-bottom:8px">'+ws.length+'単語'+(missWords.length?' · <span style="color:var(--rd)">間違い'+missWords.length+'件</span>':'')+'</div>'+
-    (total>0?'<div style="margin-bottom:14px"><div style="height:5px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:'+pct+'%;background:'+(pct>=100?'var(--gn)':pct>=60?'var(--ac3)':'var(--ac)')+';border-radius:3px;transition:width .3s"></div></div><div style="font-size:11px;color:var(--tx2)">'+progressInfo+(cursor<total?' · 次回: '+cursor+'〜'+nextEnd+'番目':' · 全単語完了！')+'</div></div>':'')+
+    (total>0?'<div style="margin-bottom:14px">'+
+      /* 進捗バー（ok=緑, ng=赤, unknown=黄, new=グレー） */
+      (function(){
+        var t=total;
+        var wOk=ws.filter(function(w){return wordStatus(w)==='ok';}).length;
+        var wNg=ws.filter(function(w){return wordStatus(w)==='ng';}).length;
+        var wUn=ws.filter(function(w){return wordStatus(w)==='unknown';}).length;
+        function seg(n,clr){if(!n||!t)return '';return '<div style="height:100%;width:'+Math.round(n/t*100)+'%;background:'+clr+';float:left"></div>';}
+        return '<div style="height:5px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;margin-bottom:5px">'+
+          seg(wOk,'var(--gn)')+seg(wNg,'var(--rd)')+seg(wUn,'var(--gd)')+
+        '</div>';
+      })()+
+      '<div style="font-size:11px;color:var(--tx2)">'+progressInfo+'</div>'+
+    '</div>':'')+
     '<button class="btn-primary" id="LM-flash" style="margin-bottom:8px">📖 予習してからクイズ</button>'+
     '<button class="btn-sec" id="LM-quiz" style="margin-top:0;margin-bottom:8px">⚡ すぐクイズ（続きから）</button>'+
     '<button class="btn-sec" id="LM-quiz-reset" style="margin-top:0;margin-bottom:8px">🔁 最初からクイズ</button>'+
     '<button class="btn-sec" id="LM-due" style="margin-top:0;margin-bottom:8px'+((function(){var _n=new Date();return G.ebbing?Object.values(G.ebbing).filter(function(r){var w=G.words.find(function(x){return x.id===r.wordId;});return w&&w.lid===lid&&new Date(r.nextDate)<=_n;}).length:0;})()>0?'':';opacity:.4;pointer-events:none')+'">🧠 復習サイクル単語（'+(function(){var _n=new Date();return G.ebbing?Object.values(G.ebbing).filter(function(r){var w=G.words.find(function(x){return x.id===r.wordId;});return w&&w.lid===lid&&new Date(r.nextDate)<=_n;}).length:0;})()+'件）</button>'+
-    /* ── 単語のみ・熟語のみクイズ ── */
+    /* ── 単語のみ・熟語のみクイズ（学習済み件数も表示） ── */
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:0;margin-bottom:8px">'+
-      '<button class="btn-sec" id="LM-words-only"'+(wCnt<2?' style="opacity:.4;pointer-events:none"':'')+'>📝 単語のみ（'+wCnt+'）</button>'+
-      '<button class="btn-sec" id="LM-phrases-only"'+(pCnt<2?' style="opacity:.4;pointer-events:none"':'')+'>💬 熟語のみ（'+pCnt+'）</button>'+
+      '<button class="btn-sec" id="LM-words-only"'+(wCnt<2?' style="opacity:.4;pointer-events:none"':'')+'>📝 単語（'+wStudied+'/'+wCnt+'）</button>'+
+      '<button class="btn-sec" id="LM-phrases-only"'+(pCnt<2?' style="opacity:.4;pointer-events:none"':'')+'>💬 熟語（'+pStudied+'/'+pCnt+'）</button>'+
     '</div>'+
     '<button class="btn-sec" id="LM-list" style="margin-top:0;margin-bottom:8px">📚 単語一覧を見る</button>'+
     '<button class="btn-sec" id="LM-edit" style="margin-top:0">✏️ リストを編集</button>';
