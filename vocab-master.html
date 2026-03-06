@@ -972,9 +972,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     </div>
     <div class="set-sec">辞書リンク設定</div>
     <div class="set-group">
-      <div style="padding:10px 16px 4px;font-size:11px;color:var(--tx2);line-height:1.6">
-        各言語の辞書サイトURLを入力してください。<code style="background:rgba(255,255,255,.1);border-radius:4px;padding:1px 5px">{word}</code> が検索語に置き換わります。<br>空欄の言語は辞書ボタンが表示されません。
-      </div>
+      <div style="padding:10px 16px 6px;font-size:11px;color:var(--tx2);line-height:1.7">各言語の辞書URLを入力してください。<code style="background:rgba(255,255,255,.1);border-radius:3px;padding:1px 4px">{word}</code> が検索語に置き換わります。空欄の言語は辞書ボタンが非表示になります。</div>
       <div id="DICT-URL-ROWS"></div>
     </div>
     <div class="set-sec">データ</div>
@@ -1024,17 +1022,30 @@ var LANGS={
   es:{name:'スペイン語',flag:'🇪🇸',cls:'lang-es'},
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
+function getDictUrl(word,lang){
+  var urls=(typeof G!=='undefined'&&G.cfg&&G.cfg.dictUrls)||{};
+  var tpl=urls[lang||'en']||'';
+  if(!tpl)return null;
+  return tpl.replace(/\{word\}/g,encodeURIComponent(word));
+}
+function dictLinkHtml(word,lang,style,extra){
+  var url=getDictUrl(word,lang);
+  if(!url)return '';
+  var l=LANGS[lang||'en'];
+  var lbl=l?l.flag+' 辞書':'辞書';
+  return '<a href="'+url+'" target="_blank" rel="noopener"'+(extra?' '+extra:'')+' style="'+style+'">🔍 '+lbl+'</a>';
+}
 
 function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5,homeLangFilter:'en',listPlayMode:'foreign',listPlaySec:2,listPlayRepeat:false,dictUrls:{en:'https://ejje.weblio.jp/content/{word}',de:'',fr:'',es:'',it:''}},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 if(!G.folders) G.folders=[];
 /* 既存ユーザーに新設定のデフォルトを付与 */
 if(!G.cfg) G.cfg=mkDB().cfg;
-if(!G.cfg.dictUrls) G.cfg.dictUrls={en:'https://ejje.weblio.jp/content/{word}',de:'',fr:'',es:'',it:''};
 if(G.cfg.homeLangFilter===undefined) G.cfg.homeLangFilter='en';
 if(G.cfg.listPlayMode===undefined) G.cfg.listPlayMode='foreign';
 if(G.cfg.listPlaySec===undefined) G.cfg.listPlaySec=2;
 if(G.cfg.listPlayRepeat===undefined) G.cfg.listPlayRepeat=false;
+if(!G.cfg.dictUrls) G.cfg.dictUrls={en:'https://ejje.weblio.jp/content/{word}',de:'',fr:'',es:'',it:''};
 function save(){
   sSet(G);
   /* embedded-dataも常に最新に更新しておく（ファイル保存なしでも再読込時にデータが残る） */
@@ -2878,7 +2889,7 @@ function listRender(){
       '<div class="wi-ja">'+(w.meaning?esc(w.meaning):'訳なし')+'</div></div>'+
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">'+
         '<div class="wi-lvl l'+v+'">'+lb[v]+'</div>'+
-        (function(){var _du=getDictUrl(w.word,w.lang||'en');return _du?'<a href="'+_du+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="font-size:10px;color:#5ab4ff;text-decoration:none;background:rgba(0,120,220,.12);border:1px solid rgba(0,120,220,.25);padding:2px 7px;border-radius:8px;white-space:nowrap;font-weight:600">🔍 辞書</a>':'';})()+
+        dictLinkHtml(w.word,w.lang||'en','font-size:10px;color:#5ab4ff;text-decoration:none;background:rgba(0,120,220,.12);border:1px solid rgba(0,120,220,.25);padding:2px 7px;border-radius:8px;white-space:nowrap;font-weight:600','onclick="event.stopPropagation()"')+
       '</div></button>';
   });
   c.innerHTML=h;
@@ -3233,7 +3244,7 @@ function wordDetail(wid){
   el('modal-ct').innerHTML=
     '<div class="modal-tl">'+(l?l.flag+' ':'')+esc(w.word)+'</div>'+
     '<div style="font-size:20px;color:var(--ac3);margin-bottom:10px">'+esc(w.meaning||'訳なし')+'</div>'+
-    (function(){var _du=getDictUrl(w.word,w.lang||'en');return _du?'<a href="'+_du+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#5ab4ff;text-decoration:none;background:rgba(0,120,220,.15);border:1px solid rgba(0,120,220,.35);padding:6px 18px;border-radius:20px;font-weight:600;margin-bottom:14px">🔍 辞書で調べる</a>':'';})()+
+    dictLinkHtml(w.word,w.lang||'en','display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#5ab4ff;text-decoration:none;background:rgba(0,120,220,.15);border:1px solid rgba(0,120,220,.35);padding:6px 18px;border-radius:20px;font-weight:600;margin-bottom:14px')+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px">'+
     mkCard('SRSレベル',lbn[v])+mkCard('次回復習',dStr)+
     mkCard('連続正解',(w.s&&w.s.k||0))+mkCard('間違い回数','<span style="color:var(--rd)">'+(w.s&&w.s.l||0)+'</span>')+
@@ -3260,18 +3271,8 @@ function wordDetail(wid){
   });
 }
 function mkCard(l,v){return'<div style="background:var(--sf2);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--tx2);margin-bottom:3px">'+l+'</div><div style="font-size:14px;font-weight:600">'+v+'</div></div>';}
-function getDictUrl(word, lang){
-  var urls=G.cfg.dictUrls||{};
-  var tpl=urls[lang||'en']||'';
-  if(!tpl)return null;
-  return tpl.replace(/\{word\}/g, encodeURIComponent(word));
-}
-function weblioBtn(word, lang){
-  var url=getDictUrl(word, lang);
-  if(!url)return '';
-  var l=LANGS[lang||'en'];
-  var label=l?l.flag+' '+l.name+'辞書':'辞書';
-  return '<a href="'+url+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:rgba(0,120,220,.15);border:1px solid rgba(0,120,220,.35);color:#5ab4ff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:20px;text-decoration:none;font-family:inherit">🔍 '+label+'で調べる</a>';
+function weblioBtn(word,lang){
+  return dictLinkHtml(word,lang,'display:inline-flex;align-items:center;gap:5px;background:rgba(0,120,220,.15);border:1px solid rgba(0,120,220,.35);color:#5ab4ff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:20px;text-decoration:none;font-family:inherit');
 }
 /* ========== EDIT FUNCTIONS ========== */
 
@@ -5089,12 +5090,17 @@ function qRender(){
   el('QZ-badge').textContent=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
   var displayWord=rev?(q.meaning||q.word):q.word;
   el('QZ-word').textContent=displayWord;
-  /* 辞書リンク：設定されている言語のみ表示 */
+  /* 辞書リンク：設定されているURLがあれば表示 */
   var _wlLink=el('QZ-weblio-link');
   if(_wlLink){
-    var _du=getDictUrl(q.word, q.lang||'en');
-    if(_du){_wlLink.href=_du;_wlLink.style.display='inline-block';}
-    else{_wlLink.style.display='none';}
+    var _du=getDictUrl(q.word,q.lang||'en');
+    if(_du){
+      _wlLink.href=_du;
+      _wlLink.textContent='🔍 '+(LANGS[q.lang||'en']?LANGS[q.lang||'en'].name:'外国語')+'辞書';
+      _wlLink.style.display='inline-block';
+    } else {
+      _wlLink.style.display='none';
+    }
   }
   Q.done=false;
 
@@ -5389,29 +5395,25 @@ function settingsLoad(){
   ['foreign','both','ja'].forEach(function(m){el('LP-MODE-'+m).classList.toggle('on',lpm===m);});
   if(el('IN-listplay-sec'))el('IN-listplay-sec').value=G.cfg.listPlaySec||2;
   if(el('TG-listplay-repeat'))el('TG-listplay-repeat').classList.toggle('on',!!G.cfg.listPlayRepeat);
-  /* 辞書URL設定行を動的生成 */
+  /* 辞書URL設定 */
   var dictCt=el('DICT-URL-ROWS');
   if(dictCt){
     if(!G.cfg.dictUrls)G.cfg.dictUrls={};
-    var langOrder=[['en','🇬🇧 英語'],['de','🇩🇪 ドイツ語'],['fr','🇫🇷 フランス語'],['es','🇪🇸 スペイン語'],['it','🇮🇹 イタリア語']];
-    dictCt.innerHTML=langOrder.map(function(lv){
+    var langList=[['en','🇬🇧 英語'],['de','🇩🇪 ドイツ語'],['fr','🇫🇷 フランス語'],['es','🇪🇸 スペイン語'],['it','🇮🇹 イタリア語']];
+    dictCt.innerHTML=langList.map(function(lv){
       var lc=lv[0],ln=lv[1];
-      return '<div style="padding:10px 16px;border-top:1px solid rgba(255,255,255,.05)">'+
-        '<div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:6px">'+ln+'</div>'+
-        '<input type="url" id="DICT-URL-'+lc+'" placeholder="https://example.com/search?q={word}" value="'+escHtml((G.cfg.dictUrls[lc]||''))+'" '+
+      return '<div style="padding:9px 16px;border-top:1px solid rgba(255,255,255,.05)">'+
+        '<div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:5px">'+ln+'</div>'+
+        '<input id="DICT-URL-'+lc+'" type="url" placeholder="https://example.com/search?q={word}" '+
+        'value="'+escHtml(G.cfg.dictUrls[lc]||'')+'" '+
         'style="width:100%;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:12px;padding:7px 10px;outline:none;box-sizing:border-box;-webkit-user-select:text;user-select:text">'+
       '</div>';
     }).join('');
-    langOrder.forEach(function(lv){
-      var lc=lv[0];
-      var inp=el('DICT-URL-'+lc);
-      if(inp){
-        inp.addEventListener('input',function(){
-          if(!G.cfg.dictUrls)G.cfg.dictUrls={};
-          G.cfg.dictUrls[lc]=this.value.trim();
-          save();
-        });
-      }
+    langList.forEach(function(lv){
+      var inp=el('DICT-URL-'+lv[0]);
+      if(inp)inp.addEventListener('input',function(){
+        G.cfg.dictUrls[lv[0]]=this.value.trim();save();
+      });
     });
   }
   updateKeyStatus();
