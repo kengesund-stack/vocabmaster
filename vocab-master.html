@@ -3233,7 +3233,7 @@ function wordDetail(wid){
   el('modal-ct').innerHTML=
     '<div class="modal-tl">'+(l?l.flag+' ':'')+esc(w.word)+'</div>'+
     '<div style="font-size:20px;color:var(--ac3);margin-bottom:10px">'+esc(w.meaning||'訳なし')+'</div>'+
-    (function(){var _du=getDictUrl(w.word,w.lang||'en');return _du?'<a href="'+_du+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#5ab4ff;text-decoration:none;background:rgba(0,120,220,.15);border:1px solid rgba(0,120,220,.35);padding:6px 18px;border-radius:20px;font-weight:600;margin-bottom:14px">🔍 辞書で調べる</a>':'';})()+'
+    (function(){var _du=getDictUrl(w.word,w.lang||'en');return _du?'<a href="'+_du+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#5ab4ff;text-decoration:none;background:rgba(0,120,220,.15);border:1px solid rgba(0,120,220,.35);padding:6px 18px;border-radius:20px;font-weight:600;margin-bottom:14px">🔍 辞書で調べる</a>':'';})()+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px">'+
     mkCard('SRSレベル',lbn[v])+mkCard('次回復習',dStr)+
     mkCard('連続正解',(w.s&&w.s.k||0))+mkCard('間違い回数','<span style="color:var(--rd)">'+(w.s&&w.s.l||0)+'</span>')+
