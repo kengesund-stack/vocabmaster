@@ -788,7 +788,10 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
       <div id="QZ-eb-badge" style="display:none;font-size:11px;font-weight:700;padding:3px 14px;border-radius:20px;background:linear-gradient(90deg,rgba(124,92,252,.3),rgba(92,248,252,.18));border:1px solid rgba(124,92,252,.55);color:var(--ac);letter-spacing:.05em;margin-bottom:4px;align-self:center">🧠 復習サイクル</div>
       <div class="qz-badge" id="QZ-badge">日本語を選べ</div>
       <div class="qz-word" id="QZ-word">word</div>
-      <button id="B-speak" style="margin-top:10px;background:rgba(124,92,252,.15);border:none;border-radius:20px;padding:6px 16px;color:var(--ac);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:none">🔊 発音</button>
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button id="B-speak" style="background:rgba(124,92,252,.15);border:none;border-radius:20px;padding:6px 16px;color:var(--ac);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:none">🔊 発音</button>
+        <a id="QZ-weblio-link" href="#" target="_blank" rel="noopener" style="display:none;background:rgba(0,120,220,.15);border:1px solid rgba(0,120,220,.35);color:#5ab4ff;font-size:13px;font-weight:600;padding:6px 16px;border-radius:20px;text-decoration:none">🔍 Weblio</a>
+      </div>
     </div>
     <div class="choices" id="QZ-choices"></div>
   </div>
@@ -5069,15 +5072,11 @@ function qRender(){
   el('QZ-badge').textContent=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
   var displayWord=rev?(q.meaning||q.word):q.word;
   el('QZ-word').textContent=displayWord;
-  /* Weblioリンク：外国語が表示されているときだけ表示 */
-  var _wlWrap=el('QZ-weblio-wrap'), _wlLink=el('QZ-weblio-link');
-  if(_wlWrap&&_wlLink){
-    if(!rev){
-      _wlLink.href='https://ejje.weblio.jp/content/'+encodeURIComponent(q.word);
-      _wlWrap.style.display='block';
-    } else {
-      _wlWrap.style.display='none';
-    }
+  /* Weblioリンク：常に外国語単語へのリンクを表示 */
+  var _wlLink=el('QZ-weblio-link');
+  if(_wlLink){
+    _wlLink.href='https://ejje.weblio.jp/content/'+encodeURIComponent(q.word);
+    _wlLink.style.display='inline-block';
   }
   Q.done=false;
 
