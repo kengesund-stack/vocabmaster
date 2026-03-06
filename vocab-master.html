@@ -1408,7 +1408,7 @@ function homeListsRender(){
     var subFolders=G.folders.filter(function(f){return f.parentId===folder.id;}).sort(function(a,b){return (a.order||0)-(b.order||0);});
     var totalWords=folderLists.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id;}).length;},0);
     var dueWords=folderLists.reduce(function(s,l){return s+G.words.filter(function(w){return w.lid===l.id&&w.s&&(w.s.l||0)>0;}).length;},0);
-    /* サブフォルダ内の集計も加える */
+    /* サブフォルダ内の集計のみを加える（直属リストは上で既に計算済み） */
     function countInSubfolders(fid){
       var sf=G.folders.filter(function(f){return f.parentId===fid;});
       var sl=G.lists.filter(function(l){return l.fid===fid;});
@@ -1417,8 +1417,8 @@ function homeListsRender(){
       sf.forEach(function(f){var r=countInSubfolders(f.id);tw+=r.tw;dw+=r.dw;});
       return{tw:tw,dw:dw};
     }
-    var sub=countInSubfolders(folder.id);
-    totalWords+=sub.tw; dueWords+=sub.dw;
+    /* サブフォルダのみ再帰集計（folder.id自身の直属リストは含めない） */
+    subFolders.forEach(function(sf){var r=countInSubfolders(sf.id);totalWords+=r.tw;dueWords+=r.dw;});
     var isOpen=!folder.collapsed;
     var indent=depth>0?'class="subfolder-indent"':'';
     var fic=depth>0?'📂':'📁';
