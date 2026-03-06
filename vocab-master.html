@@ -668,6 +668,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     <button class="btn btn-back" id="B-list-back">←</button>
     <div class="hdr-title">単語一覧</div>
     <div style="display:flex;align-items:center;gap:4px">
+      <button class="btn" id="B-list-play" title="自動再生" style="font-size:18px;padding:4px 7px">▶</button>
       <button class="btn" id="B-dup-check" title="重複チェック" style="font-size:18px;padding:4px 6px">⊜</button>
       <button class="btn" id="B-sel-mode" title="選択モード" style="font-size:17px;padding:4px 6px;color:var(--tx2)">☑</button>
       <select class="sel" id="SEL-list"><option value="all">すべて</option></select>
@@ -683,6 +684,19 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
   </div>
   <div class="srch-wrap">
     <input class="srch" id="IN-search" type="search" placeholder="単語を検索...">
+  </div>
+  <!-- 自動再生プレイヤーバー -->
+  <div id="LIST-player" style="display:none;background:linear-gradient(135deg,rgba(124,92,252,.22),rgba(92,248,252,.12));border-bottom:1px solid rgba(124,92,252,.3);padding:8px 14px;flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:10px">
+      <button id="LP-prev" style="background:none;border:none;color:var(--ac);font-size:20px;cursor:pointer;padding:2px 6px;-webkit-appearance:none">⏮</button>
+      <button id="LP-playpause" style="background:var(--ac);border:none;color:#fff;font-size:16px;cursor:pointer;padding:5px 14px;border-radius:20px;font-weight:700;-webkit-appearance:none">⏸ 停止</button>
+      <button id="LP-next" style="background:none;border:none;color:var(--ac);font-size:20px;cursor:pointer;padding:2px 6px;-webkit-appearance:none">⏭</button>
+      <div style="flex:1;min-width:0">
+        <div id="LP-word" style="font-size:13px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+        <div id="LP-meaning" style="font-size:11px;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+      </div>
+      <div id="LP-cnt" style="font-size:11px;color:var(--tx2);flex-shrink:0"></div>
+    </div>
   </div>
   <div class="filter-bar" id="LANG-filter">
     <button class="flt-btn on" data-lang="all">すべて</button>
@@ -878,6 +892,29 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
         💡 上限を超えた分は翌日に自動繰り越しされます。期限が古い単語から優先して出題されます。繰り越しが続いても、全インターバル完走で「正解 🟢」に昇格します。
       </div>
     </div>
+    <div class="set-sec">単語一覧 自動再生</div>
+    <div class="set-group">
+      <div class="set-row" style="cursor:default">
+        <span class="set-lbl">🔊 読み上げ内容</span>
+        <div style="display:flex;gap:6px">
+          <button class="opt-btn" id="LP-MODE-foreign" style="padding:5px 10px;font-size:12px">外国語のみ</button>
+          <button class="opt-btn" id="LP-MODE-both" style="padding:5px 10px;font-size:12px">両方</button>
+          <button class="opt-btn" id="LP-MODE-ja" style="padding:5px 10px;font-size:12px">日本語のみ</button>
+        </div>
+      </div>
+      <div class="set-row" style="cursor:default">
+        <span class="set-lbl">⏱️ 次の単語まで待機</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="number" id="IN-listplay-sec" min="0.5" max="15" step="0.5" value="2"
+            style="width:58px;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:14px;font-weight:600;padding:5px 8px;text-align:center;outline:none;-webkit-appearance:none;-webkit-user-select:text;user-select:text;">
+          <span style="font-size:13px;color:var(--tx2)">秒</span>
+        </div>
+      </div>
+      <div class="set-row" id="ROW-listplay-repeat">
+        <span class="set-lbl">🔁 最後まで再生後にループ</span>
+        <button class="toggle" id="TG-listplay-repeat"></button>
+      </div>
+    </div>
     <div class="set-sec">予習設定</div>
     <div class="set-group">
       <div class="set-row" id="ROW-flashauto">
@@ -964,12 +1001,15 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5,homeLangFilter:'en'},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5,homeLangFilter:'en',listPlayMode:'foreign',listPlaySec:2,listPlayRepeat:false},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 if(!G.folders) G.folders=[];
 /* 既存ユーザーに新設定のデフォルトを付与 */
 if(!G.cfg) G.cfg=mkDB().cfg;
 if(G.cfg.homeLangFilter===undefined) G.cfg.homeLangFilter='en';
+if(G.cfg.listPlayMode===undefined) G.cfg.listPlayMode='foreign';
+if(G.cfg.listPlaySec===undefined) G.cfg.listPlaySec=2;
+if(G.cfg.listPlayRepeat===undefined) G.cfg.listPlayRepeat=false;
 function save(){
   sSet(G);
   /* embedded-dataも常に最新に更新しておく（ファイル保存なしでも再読込時にデータが残る） */
@@ -1187,6 +1227,8 @@ var TABMAP={'s-home':'T-home','s-add':'T-add','s-list':'T-list','s-settings':'T-
 function go(id){
   /* 選択モードをリセット */
   if(selModeOn&&id!=='s-list'){selModeOn=false;selSet={};var tb=document.getElementById('SEL-toolbar');if(tb)tb.style.display='none';var sb=document.getElementById('B-sel-mode');if(sb)sb.style.color='var(--tx2)';}
+  /* 単語一覧を離れたら自動再生を停止 */
+  if(id!=='s-list'&&typeof LP!=='undefined'&&LP.playing)lpStop();
   SCREENS.forEach(function(s){el(s).classList.remove('on');});
   el(id).classList.add('on');
   ['T-home','T-add','T-list','T-settings'].forEach(function(t){el(t).classList.remove('on');});
@@ -2812,6 +2854,8 @@ function listRender(){
       '<div class="wi-lvl l'+v+'">'+lb[v]+'</div></button>';
   });
   c.innerHTML=h;
+  /* 自動再生中はリストが再描画されても再生リストを最新に更新 */
+  if(LP.playing){LP.words=lpGetWords();lpScrollTo(LP.idx);lpUpdateUI();}
   c.querySelectorAll('.word-item').forEach(function(b){
     b.addEventListener('click',function(e){
       var wid=this.getAttribute('data-wid');
@@ -2822,6 +2866,142 @@ function listRender(){
   c.querySelectorAll('.word-sel-chk').forEach(function(chk){
     chk.addEventListener('click',function(e){e.stopPropagation();selWordToggle(this.getAttribute('data-wid'));var btn=this.closest('.word-item');if(btn){btn.style.background=selSet[this.getAttribute('data-wid')]?'rgba(124,92,252,.18)':'';btn.style.borderColor=selSet[this.getAttribute('data-wid')]?'var(--ac)':'';}});
   });
+}
+
+/* ══════════════════════════════════════════════
+   単語一覧 自動再生エンジン
+   ══════════════════════════════════════════════ */
+var LP={
+  words:[],    /* 現在の再生リスト（listRenderと同じ順） */
+  idx:0,       /* 再生中のインデックス */
+  playing:false,
+  token:0,     /* キャンセル用トークン */
+  timer:null
+};
+
+/* 現在表示中の単語リストをlistRenderと同じ条件で取得 */
+function lpGetWords(){
+  var flt=(el('SEL-list')||{}).value||'all';
+  var srch=((el('IN-search')||{}).value||'').toLowerCase();
+  var statusFlt=((el('SEL-status')||{}).value)||'all';
+  var sortMode=((el('SEL-sort')||{}).value)||'default';
+  var words=flt==='all'?G.words.slice():G.words.filter(function(w){return w.lid===flt;});
+  if(listLangFilter!=='all')words=words.filter(function(w){return(w.lang||'en')===listLangFilter;});
+  if(srch)words=words.filter(function(w){return w.word.toLowerCase().indexOf(srch)>=0||(w.meaning||'').toLowerCase().indexOf(srch)>=0;});
+  if(statusFlt!=='all')words=words.filter(function(w){return wordStatus(w)===statusFlt;});
+  if(sortMode==='alpha')words=words.slice().sort(function(a,b){return a.word.localeCompare(b.word);});
+  else if(sortMode==='level_asc')words=words.slice().sort(function(a,b){return lvl(a)-lvl(b);});
+  else if(sortMode==='level_desc')words=words.slice().sort(function(a,b){return lvl(b)-lvl(a);});
+  else if(sortMode==='miss')words=words.slice().sort(function(a,b){return((b.s&&b.s.l)||0)-((a.s&&a.s.l)||0);});
+  return words;
+}
+
+/* 指定インデックスのカードをスクロールしてハイライト */
+function lpScrollTo(idx){
+  var c=el('L-words');
+  if(!c)return;
+  var items=c.querySelectorAll('.word-item');
+  items.forEach(function(it){it.style.outline='';it.style.background='';});
+  var target=items[idx];
+  if(target){
+    target.style.outline='2px solid var(--ac)';
+    target.style.background='rgba(124,92,252,.15)';
+    target.scrollIntoView({behavior:'smooth',block:'center'});
+  }
+}
+
+/* ミニプレイヤーUI更新 */
+function lpUpdateUI(){
+  var bar=el('LIST-player');
+  var w=LP.words[LP.idx];
+  if(!bar)return;
+  if(!LP.playing&&!w){bar.style.display='none';return;}
+  bar.style.display='block';
+  el('LP-word').textContent=w?w.word:'';
+  el('LP-meaning').textContent=w?(w.meaning||''):'';
+  el('LP-cnt').textContent=(LP.idx+1)+'/'+LP.words.length;
+  el('LP-playpause').textContent=LP.playing?'⏸ 停止':'▶ 再生';
+  var btn=el('B-list-play');
+  if(btn)btn.textContent=LP.playing?'⏹':'▶';
+}
+
+function lpStop(){
+  LP.playing=false;
+  LP.token++;
+  if(LP.timer){clearTimeout(LP.timer);LP.timer=null;}
+  sqClear();
+  /* ハイライト解除 */
+  var c=el('L-words');
+  if(c)c.querySelectorAll('.word-item').forEach(function(it){it.style.outline='';it.style.background='';});
+  var bar=el('LIST-player');
+  if(bar)bar.style.display='none';
+  var btn=el('B-list-play');
+  if(btn)btn.textContent='▶';
+}
+
+function lpPlayAt(idx){
+  if(idx<0||idx>=LP.words.length){
+    /* 終端 */
+    if(G.cfg.listPlayRepeat){lpPlayAt(0);}
+    else{lpStop();toast('🔊 再生完了');}
+    return;
+  }
+  LP.idx=idx;
+  var token=++LP.token;
+  if(LP.timer){clearTimeout(LP.timer);LP.timer=null;}
+
+  var w=LP.words[idx];
+  lpScrollTo(idx);
+  lpUpdateUI();
+
+  var mode=G.cfg.listPlayMode||'foreign';
+  var doForeign=(mode==='foreign'||mode==='both');
+  var doJa=(mode==='ja'||mode==='both');
+  var sec=(G.cfg.listPlaySec||2)*1000;
+
+  /* 読み上げ → 待機 → 次へ */
+  function afterAll(){
+    if(!LP.playing||LP.token!==token)return;
+    LP.timer=setTimeout(function(){
+      if(!LP.playing||LP.token!==token)return;
+      lpPlayAt(idx+1);
+    },sec);
+  }
+
+  sqClear();
+  if(doForeign&&doJa){
+    sqSpeak(w.word, w.lang||'en', function(){
+      if(!LP.playing||LP.token!==token)return;
+      sqSpeak(w.meaning||'', 'ja', afterAll);
+    });
+  } else if(doForeign){
+    sqSpeak(w.word, w.lang||'en', afterAll);
+  } else if(doJa){
+    sqSpeak(w.meaning||'', 'ja', afterAll);
+  } else {
+    afterAll();
+  }
+}
+
+function lpStart(startIdx){
+  LP.words=lpGetWords();
+  if(!LP.words.length){toast('再生する単語がありません');return;}
+  LP.idx=startIdx||0;
+  LP.playing=true;
+  lpUpdateUI();
+  lpPlayAt(LP.idx);
+}
+
+function lpToggle(){
+  if(LP.playing){lpStop();}
+  else{
+    /* 再生リストを最新状態で取得して最初から or 続きから */
+    var newWords=lpGetWords();
+    var resume=LP.words.length>0&&LP.idx<newWords.length&&!LP.playing;
+    LP.words=newWords;
+    LP.playing=true;
+    lpPlayAt(LP.idx);
+  }
 }
 
 function listMenu(lid){
@@ -5129,6 +5309,11 @@ function settingsLoad(){
   [0,1,2,3].forEach(function(n){el('RQ-'+n).classList.toggle('on',rq===n);});
   if(el('TG-ebbing'))el('TG-ebbing').classList.toggle('on', G.cfg.ebbing!==false);
   if(el('IN-ebbing-max'))el('IN-ebbing-max').value = G.cfg.ebbingMax || 5;
+  /* リスト自動再生設定 */
+  var lpm=G.cfg.listPlayMode||'foreign';
+  ['foreign','both','ja'].forEach(function(m){el('LP-MODE-'+m).classList.toggle('on',lpm===m);});
+  if(el('IN-listplay-sec'))el('IN-listplay-sec').value=G.cfg.listPlaySec||2;
+  if(el('TG-listplay-repeat'))el('TG-listplay-repeat').classList.toggle('on',!!G.cfg.listPlayRepeat);
   updateKeyStatus();
 }
 
@@ -5262,6 +5447,20 @@ function bind(){
   });
   el('B-dup-check').addEventListener('click',function(){checkDuplicates();});
   el('B-sel-mode').addEventListener('click',function(){toggleSelMode();});
+
+  /* ── 単語一覧 自動再生 ── */
+  el('B-list-play').addEventListener('click',function(){
+    if(LP.playing){lpStop();}else{LP.idx=0;lpStart(0);}
+  });
+  el('LP-playpause').addEventListener('click',function(){
+    if(LP.playing){lpStop();}else{LP.playing=true;lpPlayAt(LP.idx);}
+  });
+  el('LP-prev').addEventListener('click',function(){
+    lpPlayAt(Math.max(0,LP.idx-1));
+  });
+  el('LP-next').addEventListener('click',function(){
+    lpPlayAt(LP.idx+1);
+  });
   el('SEL-all-btn').addEventListener('click',function(){
     var flt=el('SEL-list').value;
     var words=flt==='all'?G.words.slice():G.words.filter(function(w){return w.lid===flt;});
@@ -5334,6 +5533,21 @@ function bind(){
   DUCK_VOL=(G.cfg.duckVol!=null?G.cfg.duckVol:15)/100;
   el('TG-flashauto').addEventListener('click',function(){G.cfg.flashAuto=!this.classList.contains('on');this.classList.toggle('on',G.cfg.flashAuto);save();});
   el('ROW-flashauto').addEventListener('click',function(e){if(e.target!==el('TG-flashauto'))el('TG-flashauto').click();});
+  /* リスト自動再生設定 */
+  ['foreign','both','ja'].forEach(function(m){
+    el('LP-MODE-'+m).addEventListener('click',function(){
+      G.cfg.listPlayMode=m;
+      ['foreign','both','ja'].forEach(function(x){el('LP-MODE-'+x).classList.toggle('on',x===m);});
+      save();
+    });
+  });
+  el('IN-listplay-sec').addEventListener('input',function(){
+    var v=parseFloat(this.value);if(v>=0.5&&v<=15){G.cfg.listPlaySec=v;save();}
+  });
+  el('TG-listplay-repeat').addEventListener('click',function(){
+    G.cfg.listPlayRepeat=!this.classList.contains('on');this.classList.toggle('on',G.cfg.listPlayRepeat);save();
+  });
+  el('ROW-listplay-repeat').addEventListener('click',function(e){if(e.target!==el('TG-listplay-repeat'))el('TG-listplay-repeat').click();});
   el('TG-autoQuiz').addEventListener('click',function(){G.cfg.autoQuiz=!this.classList.contains('on');this.classList.toggle('on',G.cfg.autoQuiz);save();});
   el('ROW-autoQuiz').addEventListener('click',function(e){if(e.target!==el('TG-autoQuiz'))el('TG-autoQuiz').click();});
   [0,1,2,3].forEach(function(n){
