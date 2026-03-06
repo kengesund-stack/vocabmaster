@@ -793,7 +793,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
     <div class="choices" id="QZ-choices"></div>
   </div>
   <div class="fb" id="FB">
-    <div><div class="fb-tx" id="FB-tx"></div><div class="fb-dt" id="FB-dt"></div></div>
+    <div><div class="fb-tx" id="FB-tx"></div><div class="fb-dt" id="FB-dt"></div><div id="FB-weblio" style="margin-top:7px"></div></div>
     <button class="fb-next" id="B-next">次へ →</button>
   </div>
 </div>
@@ -2865,7 +2865,10 @@ function listRender(){
       chk+
       '<div class="wi-inf"><div class="wi-en">'+(l?'<span style="font-size:11px;margin-right:4px">'+l.flag+'</span>':'')+esc(w.word)+statusMark(w)+'</div>'+
       '<div class="wi-ja">'+(w.meaning?esc(w.meaning):'訳なし')+'</div></div>'+
-      '<div class="wi-lvl l'+v+'">'+lb[v]+'</div></button>';
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">'+
+        '<div class="wi-lvl l'+v+'">'+lb[v]+'</div>'+
+        '<a href="https://ejje.weblio.jp/content/'+encodeURIComponent(w.word)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="font-size:10px;color:var(--ac);text-decoration:none;background:rgba(124,92,252,.12);padding:2px 7px;border-radius:8px;white-space:nowrap;font-weight:600">Weblio</a>'+
+      '</div></button>';
   });
   c.innerHTML=h;
   /* 自動再生中はリストが再描画されても再生リストを最新に更新 */
@@ -3218,7 +3221,8 @@ function wordDetail(wid){
   var l=LANGS[w.lang||'en'];
   el('modal-ct').innerHTML=
     '<div class="modal-tl">'+(l?l.flag+' ':'')+esc(w.word)+'</div>'+
-    '<div style="font-size:20px;color:var(--ac3);margin-bottom:13px">'+esc(w.meaning||'訳なし')+'</div>'+
+    '<div style="font-size:20px;color:var(--ac3);margin-bottom:10px">'+esc(w.meaning||'訳なし')+'</div>'+
+    '<a href="https://ejje.weblio.jp/content/'+encodeURIComponent(w.word)+'" target="_blank" rel="noopener" style="display:inline-block;font-size:13px;color:var(--ac);text-decoration:none;background:rgba(124,92,252,.13);border:1px solid rgba(124,92,252,.3);padding:5px 18px;border-radius:14px;font-weight:600;margin-bottom:14px">🔍 Weblioで調べる</a>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px">'+
     mkCard('SRSレベル',lbn[v])+mkCard('次回復習',dStr)+
     mkCard('連続正解',(w.s&&w.s.k||0))+mkCard('間違い回数','<span style="color:var(--rd)">'+(w.s&&w.s.l||0)+'</span>')+
@@ -3245,6 +3249,10 @@ function wordDetail(wid){
   });
 }
 function mkCard(l,v){return'<div style="background:var(--sf2);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--tx2);margin-bottom:3px">'+l+'</div><div style="font-size:14px;font-weight:600">'+v+'</div></div>';}
+function weblioBtn(word){
+  var url='https://ejje.weblio.jp/content/'+encodeURIComponent(word);
+  return '<a href="'+url+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:rgba(0,120,220,.15);border:1px solid rgba(0,120,220,.35);color:#5ab4ff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:20px;text-decoration:none;font-family:inherit">🔍 Weblio で調べる</a>';
+}
 /* ========== EDIT FUNCTIONS ========== */
 
 /* ── リスト編集モーダル ── */
@@ -5061,6 +5069,16 @@ function qRender(){
   el('QZ-badge').textContent=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
   var displayWord=rev?(q.meaning||q.word):q.word;
   el('QZ-word').textContent=displayWord;
+  /* Weblioリンク：外国語が表示されているときだけ表示 */
+  var _wlWrap=el('QZ-weblio-wrap'), _wlLink=el('QZ-weblio-link');
+  if(_wlWrap&&_wlLink){
+    if(!rev){
+      _wlLink.href='https://ejje.weblio.jp/content/'+encodeURIComponent(q.word);
+      _wlWrap.style.display='block';
+    } else {
+      _wlWrap.style.display='none';
+    }
+  }
   Q.done=false;
 
   /* 発音ボタン — 外国語が表示されているときだけ表示 */
@@ -5147,6 +5165,7 @@ function qDontKnow(){
   Q.lastWasWrong=true;
   el('FB-tx').innerHTML='<span style="color:var(--ac3)">❓ 分からない</span> → <span style="color:var(--gn)">'+esc(Q.ca)+'</span>';
   el('FB-dt').textContent=Q.testMode?'':'1日後に再復習';
+  var _fbwl=el('FB-weblio');if(_fbwl)_fbwl.innerHTML=weblioBtn(q.word);
   el('FB').classList.add('on');
 }
 
@@ -5189,6 +5208,7 @@ function qSelect(i){
         ?'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca)+'<span style="color:var(--tx2);font-size:11px"> （再出題なし）</span>'
         :'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca));
   el('FB-dt').textContent=Q.testMode?'':(ok?'次回: '+(q.s&&q.s.i||1)+'日後':'1日後に再復習');
+  var _fbwl2=el('FB-weblio');if(_fbwl2)_fbwl2.innerHTML=weblioBtn(q.word);
   el('FB').classList.add('on');
   /* 自動進行 — 正解時のみ（不正解は手動で確認させる） */
   if(ok&&G.cfg.autonext){
