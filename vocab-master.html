@@ -980,6 +980,34 @@ schön,美しい"></textarea>
       <div style="padding:10px 16px 6px;font-size:11px;color:var(--tx2);line-height:1.7">各言語の辞書URLを入力。<code style="background:rgba(255,255,255,.1);border-radius:3px;padding:1px 4px">{word}</code> が検索語に置換されます。空欄の言語は辞書ボタン非表示。</div>
       <div id="DICT-URL-ROWS"></div>
     </div>
+    <div class="set-sec">GitHub 自動保存</div>
+    <div class="set-group">
+      <div style="padding:10px 16px 4px;font-size:11px;color:var(--tx2);line-height:1.7">単語を追加・削除すると自動でGitHubに保存されます。</div>
+      <div class="set-row" style="cursor:default;flex-direction:column;align-items:stretch;gap:6px;padding:10px 16px">
+        <div style="font-size:12px;color:var(--tx2);font-weight:600">Personal Access Token</div>
+        <input id="GH-TOKEN" type="password" placeholder="ghp_xxxxxxxxxxxx" style="width:100%;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:12px;padding:8px 10px;outline:none;box-sizing:border-box;-webkit-user-select:text;user-select:text">
+      </div>
+      <div class="set-row" style="cursor:default;flex-direction:column;align-items:stretch;gap:6px;padding:0 16px 10px">
+        <div style="font-size:12px;color:var(--tx2);font-weight:600">リポジトリ <span style="font-weight:400">（例: kengesund-stack/kengesund-stack.github.io）</span></div>
+        <input id="GH-REPO" type="text" placeholder="username/repository" style="width:100%;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:12px;padding:8px 10px;outline:none;box-sizing:border-box;-webkit-user-select:text;user-select:text">
+      </div>
+      <div class="set-row" style="cursor:default;flex-direction:column;align-items:stretch;gap:6px;padding:0 16px 10px">
+        <div style="font-size:12px;color:var(--tx2);font-weight:600">ファイルパス <span style="font-weight:400">（例: vocab-master.html）</span></div>
+        <input id="GH-PATH" type="text" placeholder="vocab-master.html" style="width:100%;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:12px;padding:8px 10px;outline:none;box-sizing:border-box;-webkit-user-select:text;user-select:text">
+      </div>
+      <div class="set-row" style="cursor:default;padding:0 16px 10px;gap:10px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <div class="toggle" id="TG-gh-auto" onclick="ghToggleAuto()"></div>
+          <span>変更のたびに自動push</span>
+        </label>
+      </div>
+      <div class="set-row" style="cursor:default;padding:0 16px 12px">
+        <button id="B-gh-push" onclick="ghPushNow()" style="width:100%;background:linear-gradient(135deg,#24292e,#404448);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-size:13px;font-weight:700;padding:10px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px">
+          <span id="B-gh-push-lbl">🐙 今すぐGitHubにpush</span>
+        </button>
+      </div>
+      <div id="GH-STATUS" style="padding:0 16px 10px;font-size:11px;color:var(--tx2);display:none"></div>
+    </div>
     <div class="set-sec">データ</div>
     <div class="set-group">
       <div class="set-row" style="cursor:default;padding:10px 16px">
@@ -1088,11 +1116,87 @@ if(!G.cfg.dictUrls) G.cfg.dictUrls={en:'https://ejje.weblio.jp/content/{word}',d
 if(!G.cfg.dictUrls.en) G.cfg.dictUrls.en='https://ejje.weblio.jp/content/{word}';
 if(!G.cfg.dictUrls.de) G.cfg.dictUrls.de='https://www.duden.de/rechtschreibung/{word}';
 if(!G.cfg.dictUrls.fr) G.cfg.dictUrls.fr='https://fjjf.weblio.jp/content/{word}';
+/* ── GitHub自動push ── */
+var _ghTimer=null;
+function ghSaveInputs(){
+  if(!G.cfg.github)G.cfg.github={};
+  var t=el('GH-TOKEN'),r=el('GH-REPO'),p=el('GH-PATH');
+  if(t)G.cfg.github.token=t.value.trim();
+  if(r)G.cfg.github.repo=r.value.trim();
+  if(p)G.cfg.github.path=p.value.trim()||'vocab-master.html';
+}
+function ghToggleAuto(){
+  if(!G.cfg.github)G.cfg.github={};
+  ghSaveInputs();
+  G.cfg.github.auto=!G.cfg.github.auto;
+  if(el('TG-gh-auto'))el('TG-gh-auto').classList.toggle('on',G.cfg.github.auto);
+  sSet(G);
+  toast(G.cfg.github.auto?'🐙 自動push: ON':'🐙 自動push: OFF');
+}
+function ghBuildHtml(){
+  G._savedAt=Date.now();sSet(G);
+  var data=JSON.stringify(G);
+  var cur=document.documentElement.outerHTML;
+  var marker='embedded-data" type="application/json">';
+  var si=cur.indexOf(marker);if(si<0)return null;
+  si+=marker.length;
+  var ei=cur.indexOf('</',si);
+  return cur.slice(0,si)+data+cur.slice(ei);
+}
+function ghSetStatus(msg,color){
+  var s=el('GH-STATUS');if(!s)return;
+  s.style.display='block';s.style.color=color||'var(--tx2)';s.textContent=msg;
+}
+async function ghPushNow(){
+  ghSaveInputs();
+  var cfg=G.cfg.github||{};
+  if(!cfg.token){toast('❌ Tokenを入力してください');return;}
+  if(!cfg.repo){toast('❌ リポジトリを入力してください');return;}
+  var btn=el('B-gh-push-lbl');
+  if(btn)btn.textContent='🔄 push中...';
+  el('B-gh-push').disabled=true;
+  ghSetStatus('GitHubに接続中...','var(--tx2)');
+  try{
+    var path=cfg.path||'vocab-master.html';
+    var res=await fetch('https://api.github.com/repos/'+cfg.repo+'/contents/'+path+'?ref='+(cfg.branch||'main'),{
+      headers:{'Authorization':'token '+cfg.token,'Accept':'application/vnd.github.v3+json'}
+    });
+    var sha=null;
+    if(res.ok){var j=await res.json();sha=j.sha;}
+    else if(res.status!==404){throw new Error('HTTP '+res.status);}
+    var html=ghBuildHtml();if(!html)throw new Error('HTML生成失敗');
+    var b64=btoa(unescape(encodeURIComponent(html)));
+    var body={message:'VocabMaster auto-save '+new Date().toISOString(),content:b64,branch:cfg.branch||'main'};
+    if(sha)body.sha=sha;
+    var res2=await fetch('https://api.github.com/repos/'+cfg.repo+'/contents/'+path,{
+      method:'PUT',
+      headers:{'Authorization':'token '+cfg.token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    if(!res2.ok){var e=await res2.json();throw new Error(e.message||'push失敗');}
+    var b=el('UNSAVED-BANNER');if(b)b.style.display='none';
+    ghSetStatus('✅ 保存完了 '+new Date().toLocaleTimeString(),'#4cff91');
+    toast('🐙 GitHubに保存しました');
+  }catch(err){
+    ghSetStatus('❌ '+err.message,'var(--rd)');
+    toast('❌ push失敗: '+err.message);
+  }finally{
+    if(btn)btn.textContent='🐙 今すぐGitHubにpush';
+    el('B-gh-push').disabled=false;
+  }
+}
+function ghSchedulePush(){
+  var cfg=G.cfg&&G.cfg.github;
+  if(!cfg||!cfg.auto||!cfg.token||!cfg.repo)return;
+  if(_ghTimer)clearTimeout(_ghTimer);
+  _ghTimer=setTimeout(function(){ghPushNow();},30000);
+}
 function save(){
   sSet(G);
   /* 未保存バナーを表示 */
   var b=document.getElementById('UNSAVED-BANNER');
   if(b)b.style.display='flex';
+  ghSchedulePush();
 }
 
 /* ── ファイル保存（HTMLにデータ埋め込み） ── */
@@ -5438,6 +5542,12 @@ function settingsLoad(){
     });
   }
   updateKeyStatus();
+  /* GitHub設定 */
+  var ghCfg=G.cfg.github||{};
+  if(el('GH-TOKEN'))el('GH-TOKEN').value=ghCfg.token||'';
+  if(el('GH-REPO'))el('GH-REPO').value=ghCfg.repo||'';
+  if(el('GH-PATH'))el('GH-PATH').value=ghCfg.path||'vocab-master.html';
+  if(el('TG-gh-auto'))el('TG-gh-auto').classList.toggle('on',!!ghCfg.auto);
 }
 
 /* BIND */
@@ -5614,6 +5724,10 @@ function bind(){
 
   el('B-set-back').addEventListener('click',function(){go('s-home');});
   el('B-save-file').addEventListener('click',function(){saveAsFile();});
+  ['GH-TOKEN','GH-REPO','GH-PATH'].forEach(function(id){
+    var inp=el(id);
+    if(inp)inp.addEventListener('change',function(){ghSaveInputs();sSet(G);});
+  });
   el('B-save-key').addEventListener('click',function(){
     var key=(el('IN-apikey').value||'').trim();
     if(!key){toast('❌ APIキーを入力してください');return;}
