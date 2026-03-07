@@ -1023,7 +1023,7 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5,homeLangFilter:'en',listPlayMode:'foreign',listPlaySec:2,listPlayRepeat:false,dictUrls:{en:'https://fjjf.weblio.jp/content/{word}',de:'https://www.duden.de/suchen/dudenonline/{word}',fr:'',es:'',it:''}},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5,homeLangFilter:'en',listPlayMode:'foreign',listPlaySec:2,listPlayRepeat:false,dictUrls:{en:'https://ejje.weblio.jp/content/{word}',de:'https://www.duden.de/rechtschreibung/{word}',fr:'https://fjjf.weblio.jp/content/{word}',es:'',it:''}},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 if(!G.folders) G.folders=[];
 /* 既存ユーザーに新設定のデフォルトを付与 */
@@ -1032,9 +1032,10 @@ if(G.cfg.homeLangFilter===undefined) G.cfg.homeLangFilter='en';
 if(G.cfg.listPlayMode===undefined) G.cfg.listPlayMode='foreign';
 if(G.cfg.listPlaySec===undefined) G.cfg.listPlaySec=2;
 if(G.cfg.listPlayRepeat===undefined) G.cfg.listPlayRepeat=false;
-if(!G.cfg.dictUrls) G.cfg.dictUrls={en:'https://fjjf.weblio.jp/content/{word}',de:'https://www.duden.de/suchen/dudenonline/{word}',fr:'',es:'',it:''};
-if(!G.cfg.dictUrls.en) G.cfg.dictUrls.en='https://fjjf.weblio.jp/content/{word}';
-if(!G.cfg.dictUrls.de) G.cfg.dictUrls.de='https://www.duden.de/suchen/dudenonline/{word}';
+if(!G.cfg.dictUrls) G.cfg.dictUrls={en:'https://ejje.weblio.jp/content/{word}',de:'https://www.duden.de/rechtschreibung/{word}',fr:'https://fjjf.weblio.jp/content/{word}',es:'',it:''};
+if(!G.cfg.dictUrls.en) G.cfg.dictUrls.en='https://ejje.weblio.jp/content/{word}';
+if(!G.cfg.dictUrls.de) G.cfg.dictUrls.de='https://www.duden.de/rechtschreibung/{word}';
+if(!G.cfg.dictUrls.fr) G.cfg.dictUrls.fr='https://fjjf.weblio.jp/content/{word}';
 function save(){
   sSet(G);
   /* embedded-dataも常に最新に更新しておく（ファイル保存なしでも再読込時にデータが残る） */
@@ -5369,7 +5370,7 @@ function settingsLoad(){
   var _dc=el('DICT-URL-ROWS');
   if(_dc){
     var _langs=[['en','🇬🇧 英語'],['de','🇩🇪 ドイツ語'],['fr','🇫🇷 フランス語'],['es','🇪🇸 スペイン語'],['it','🇮🇹 イタリア語']];
-    if(!G.cfg.dictUrls)G.cfg.dictUrls={en:'https://fjjf.weblio.jp/content/{word}',de:'https://www.duden.de/suchen/dudenonline/{word}',fr:'',es:'',it:''};
+    if(!G.cfg.dictUrls)G.cfg.dictUrls={en:'https://ejje.weblio.jp/content/{word}',de:'https://www.duden.de/rechtschreibung/{word}',fr:'https://fjjf.weblio.jp/content/{word}',es:'',it:''};
     _dc.innerHTML=_langs.map(function(lv){
       return '<div style="padding:8px 16px;border-top:1px solid rgba(255,255,255,.05)">'+
         '<div style="font-size:11px;font-weight:600;color:var(--tx2);margin-bottom:4px">'+lv[1]+'</div>'+
