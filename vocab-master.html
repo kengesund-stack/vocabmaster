@@ -1001,9 +1001,9 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 <script>
 var MEM=null, DBKEY='vm3';
 function sGet(){
-  /* まずlocalStorageを確認（削除・編集などの操作が反映されている） */
+  /* localStorageを優先 — 削除・追加などの操作はlocalStorageに保存される */
   try{var ls=localStorage.getItem(DBKEY);if(ls){var lv=JSON.parse(ls);if(lv)return lv;}}catch(e){}
-  /* localStorageにない場合のみembedded-data（ファイルインポート時の初回読み込み）を使用 */
+  /* localStorageが空の場合のみembedded-dataを読む（新しいファイルを初めて開いたとき） */
   try{var ed=document.getElementById('embedded-data');if(ed&&ed.textContent&&ed.textContent!=='null'){var v=JSON.parse(ed.textContent);if(v)return v;}}catch(e){}
   return MEM;
 }
@@ -1026,26 +1026,22 @@ var LANGS={
 
 function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5,homeLangFilter:'en',listPlayMode:'foreign',listPlaySec:2,listPlayRepeat:false,dictUrls:{en:'https://ejje.weblio.jp/content/{word}',de:'https://www.duden.de/rechtschreibung/{word}',fr:'https://fjjf.weblio.jp/content/{word}',es:'',it:''}},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
-/* embedded-dataにデータがあり、かつlocalStorageより新しい場合はインポート */
+/* ファイルを新しく開いたとき：embedded-dataとlocalStorageが食い違う場合を処理 */
 (function(){
   try{
     var ed=document.getElementById('embedded-data');
     if(!ed||!ed.textContent||ed.textContent==='null')return;
     var edData=JSON.parse(ed.textContent);
-    if(!edData)return;
+    if(!edData||!edData.words)return;
     var lsRaw=localStorage.getItem(DBKEY);
     if(!lsRaw){
-      /* localStorageが空 → embedded-dataをそのまま使う（既にsGetで取得済み） */
+      /* localStorageが空 = 初回起動。embedded-dataをlocalStorageに保存して以降はlocalStorageを使う */
+      sSet(edData);
+      G=edData;
       return;
     }
-    var lsData=JSON.parse(lsRaw);
-    /* _savedAtタイムスタンプで比較：ファイルの方が新しければインポート */
-    var edTime=edData._savedAt||0;
-    var lsTime=lsData._savedAt||0;
-    if(edTime > lsTime){
-      G=edData;
-      sSet(G);
-    }
+    /* localStorageに既存データがある場合 = embedded-dataは無視してlocalStorageを使い続ける */
+    /* （削除・追加などの変更はlocalStorageに保存済みのため） */
   }catch(e){}
 })();
 if(!G.folders) G.folders=[];
@@ -1060,12 +1056,8 @@ if(!G.cfg.dictUrls.en) G.cfg.dictUrls.en='https://ejje.weblio.jp/content/{word}'
 if(!G.cfg.dictUrls.de) G.cfg.dictUrls.de='https://www.duden.de/rechtschreibung/{word}';
 if(!G.cfg.dictUrls.fr) G.cfg.dictUrls.fr='https://fjjf.weblio.jp/content/{word}';
 function save(){
+  /* localStorageのみに保存。embedded-dataはsaveAsFile()でファイル保存時のみ更新する */
   sSet(G);
-  /* embedded-dataも常に最新に更新しておく（ファイル保存なしでも再読込時にデータが残る） */
-  try{
-    var ed=document.getElementById('embedded-data');
-    if(ed) ed.textContent=JSON.stringify(G);
-  }catch(e){}
 }
 
 /* ── ファイル保存（HTMLにデータ埋め込み） ── */
