@@ -1001,10 +1001,11 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 <script>
 var MEM=null, DBKEY='vm3';
 function sGet(){
-  /* まずHTMLに埋め込まれたデータを確認 */
+  /* まずlocalStorageを確認（削除・編集などの操作が反映されている） */
+  try{var ls=localStorage.getItem(DBKEY);if(ls){var lv=JSON.parse(ls);if(lv)return lv;}}catch(e){}
+  /* localStorageにない場合のみembedded-data（ファイルインポート時の初回読み込み）を使用 */
   try{var ed=document.getElementById('embedded-data');if(ed&&ed.textContent&&ed.textContent!=='null'){var v=JSON.parse(ed.textContent);if(v)return v;}}catch(e){}
-  /* 次にlocalStorageを確認 */
-  try{var v=localStorage.getItem(DBKEY);return v?JSON.parse(v):null;}catch(e){return MEM;}
+  return MEM;
 }
 function sSet(v){
   try{localStorage.setItem(DBKEY,JSON.stringify(v));}catch(e){}
@@ -1025,6 +1026,28 @@ var LANGS={
 
 function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5,homeLangFilter:'en',listPlayMode:'foreign',listPlaySec:2,listPlayRepeat:false,dictUrls:{en:'https://ejje.weblio.jp/content/{word}',de:'https://www.duden.de/rechtschreibung/{word}',fr:'https://fjjf.weblio.jp/content/{word}',es:'',it:''}},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
+/* embedded-dataにデータがあり、かつlocalStorageより新しい場合はインポート */
+(function(){
+  try{
+    var ed=document.getElementById('embedded-data');
+    if(!ed||!ed.textContent||ed.textContent==='null')return;
+    var edData=JSON.parse(ed.textContent);
+    if(!edData)return;
+    var lsRaw=localStorage.getItem(DBKEY);
+    if(!lsRaw){
+      /* localStorageが空 → embedded-dataをそのまま使う（既にsGetで取得済み） */
+      return;
+    }
+    var lsData=JSON.parse(lsRaw);
+    /* _savedAtタイムスタンプで比較：ファイルの方が新しければインポート */
+    var edTime=edData._savedAt||0;
+    var lsTime=lsData._savedAt||0;
+    if(edTime > lsTime){
+      G=edData;
+      sSet(G);
+    }
+  }catch(e){}
+})();
 if(!G.folders) G.folders=[];
 /* 既存ユーザーに新設定のデフォルトを付与 */
 if(!G.cfg) G.cfg=mkDB().cfg;
@@ -1047,6 +1070,8 @@ function save(){
 
 /* ── ファイル保存（HTMLにデータ埋め込み） ── */
 function saveAsFile(){
+  G._savedAt=Date.now(); /* ファイル保存時刻を記録 */
+  sSet(G);
   var data=JSON.stringify(G);
   var current=document.documentElement.outerHTML;
   var marker='embedded-data" type="application/json">';
