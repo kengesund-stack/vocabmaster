@@ -985,7 +985,7 @@ schön,美しい"></textarea>
       <div style="padding:10px 16px 4px;font-size:11px;color:var(--tx2);line-height:1.7">単語を追加・削除すると自動でGitHubに保存されます。</div>
       <div class="set-row" style="cursor:default;flex-direction:column;align-items:stretch;gap:6px;padding:10px 16px">
         <div style="font-size:12px;color:var(--tx2);font-weight:600">Personal Access Token</div>
-        <input id="GH-TOKEN" type="password" placeholder="ghp_xxxxxxxxxxxx" style="width:100%;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:12px;padding:8px 10px;outline:none;box-sizing:border-box;-webkit-user-select:text;user-select:text">
+        <input id="GH-TOKEN" type="password" placeholder="トークンを貼り付け" style="width:100%;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);font-family:inherit;font-size:12px;padding:8px 10px;outline:none;box-sizing:border-box;-webkit-user-select:text;user-select:text">
       </div>
       <div class="set-row" style="cursor:default;flex-direction:column;align-items:stretch;gap:6px;padding:0 16px 10px">
         <div style="font-size:12px;color:var(--tx2);font-weight:600">リポジトリ <span style="font-weight:400">（例: kengesund-stack/kengesund-stack.github.io）</span></div>
@@ -1134,8 +1134,12 @@ function ghToggleAuto(){
   toast(G.cfg.github.auto?'🐙 自動push: ON':'🐙 自動push: OFF');
 }
 function ghBuildHtml(){
-  G._savedAt=Date.now();sSet(G);
-  var data=JSON.stringify(G);
+  /* push用：APIキーをデータから除去してHTMLを生成 */
+  var pushData=JSON.parse(JSON.stringify(G));
+  pushData._savedAt=Date.now();
+  pushData.cfg.key=''; /* APIキーを除去 */
+  if(pushData.cfg.github)pushData.cfg.github.token=''; /* Tokenも除去 */
+  var data=JSON.stringify(pushData);
   var cur=document.documentElement.outerHTML;
   var marker='embedded-data" type="application/json">';
   var si=cur.indexOf(marker);if(si<0)return null;
