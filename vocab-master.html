@@ -1000,21 +1000,59 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 
 <script>
 var MEM=null, DBKEY='vm3';
+
+/* ── IndexedDB ストレージ（iOS file://でも永続化） ── */
+var IDB=null;
+(function(){
+  try{
+    var req=indexedDB.open('vocabmaster',1);
+    req.onupgradeneeded=function(e){e.target.result.createObjectStore('kv');};
+    req.onsuccess=function(e){
+      IDB=e.target.result;
+      /* 起動後にIndexedDBからデータを読み込んでGを更新 */
+      try{
+        var tx=IDB.transaction('kv','readonly');
+        var r=tx.objectStore('kv').get(DBKEY);
+        r.onsuccess=function(){
+          if(!r.result)return;
+          var idbData=r.result;
+          var idbTime=idbData._savedAt||0;
+          var curTime=G&&G._savedAt||0;
+          /* IndexedDBの方が新しければ（タブを閉じた後でも）上書き */
+          if(idbTime>curTime){
+            G=idbData;
+            /* embedded-dataも更新 */
+            try{var ed=document.getElementById('embedded-data');if(ed)ed.textContent=JSON.stringify(G);}catch(e){}
+            /* 画面を再描画 */
+            if(typeof homeRefresh==='function')homeRefresh();
+          }
+        };
+      }catch(e){}
+    };
+    req.onerror=function(){IDB=null;};
+  }catch(e){IDB=null;}
+})();
+
+function idbSet(v){
+  if(!IDB)return;
+  try{
+    var tx=IDB.transaction('kv','readwrite');
+    tx.objectStore('kv').put(v,DBKEY);
+  }catch(e){}
+}
+
 function sGet(){
-  var lsData=null, edData=null;
-  try{var ls=localStorage.getItem(DBKEY);if(ls){var lv=JSON.parse(ls);if(lv&&lv.words)lsData=lv;}}catch(e){}
-  try{var ed=document.getElementById('embedded-data');if(ed&&ed.textContent&&ed.textContent!=='null'){var ev=JSON.parse(ed.textContent);if(ev&&ev.words)edData=ev;}}catch(e){}
-  /* 両方ある場合は_savedAtタイムスタンプが新しい方を使う */
-  if(lsData&&edData){
-    return ((lsData._savedAt||0)>=(edData._savedAt||0))?lsData:edData;
-  }
-  return lsData||edData||MEM;
+  /* localStorageを試みる */
+  try{var ls=localStorage.getItem(DBKEY);if(ls){var lv=JSON.parse(ls);if(lv&&lv.words)return lv;}}catch(e){}
+  /* embedded-dataにフォールバック */
+  try{var ed=document.getElementById('embedded-data');if(ed&&ed.textContent&&ed.textContent!=='null'){var v=JSON.parse(ed.textContent);if(v&&v.words)return v;}}catch(e){}
+  return MEM;
 }
 function sSet(v){
   v._savedAt=Date.now();
-  /* localStorageとembedded-data DOMの両方に保存（どちらかが使えない環境でも動くように） */
   try{localStorage.setItem(DBKEY,JSON.stringify(v));}catch(e){}
   try{var ed=document.getElementById('embedded-data');if(ed)ed.textContent=JSON.stringify(v);}catch(e){}
+  idbSet(v); /* IndexedDBにも保存 */
   MEM=v;
 }
 
