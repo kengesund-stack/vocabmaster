@@ -2858,16 +2858,88 @@ function saveList(){
     lst={id:uid(),name:listName,ic:LANGS[selLang]?LANGS[selLang].flag:'📗',clr:langClr[selLang]||clrs[G.lists.length%clrs.length],lang:selLang,cr:new Date().toISOString()};
     G.lists.push(lst);
   }
+  var newWordObjs=[];
   var added=0;
   prevWords.forEach(function(pw){
     var ex=G.words.some(function(w){return w.word===pw.word&&w.lid===lst.id;});
-    if(!ex){G.words.push({id:uid(),word:pw.word,meaning:pw.meaning||'',lid:lst.id,lang:selLang,s:{i:1,e:EASE0,d:null,k:0,l:0},cr:new Date().toISOString(),lr:null});added++;}
+    if(!ex){
+      var wobj={id:uid(),word:pw.word,meaning:pw.meaning||'',def:pw.def||'',lid:lst.id,lang:selLang,s:{i:1,e:EASE0,d:null,k:0,l:0},cr:new Date().toISOString(),lr:null};
+      G.words.push(wobj);
+      newWordObjs.push(wobj);
+      added++;
+    }
   });
   save();prvHide();
   if(ni)ni.value='';
   var ta=el(addMode==='paste'?'IN-paste-text':addMode==='ai'?'IN-ai-text':'IN-paste-text');if(ta)ta.value='';
   toast('✅ '+added+'単語を「'+listName+'」に追加しました');
+  /* APIキーがあれば英語定義を非同期で生成してバックグラウンドで保存 */
+  if(G.cfg.key&&newWordObjs.length){
+    var needDef=newWordObjs.filter(function(w){return !w.def;});
+    if(needDef.length) generateDefs(needDef, function(){save();});
+  }
   setTimeout(function(){go('s-home');},500);
+}
+
+/* 英語定義を一括生成してwordオブジェクトのdefフィールドに保存する */
+function generateDefs(words, cb){
+  if(!G.cfg.key||!words||!words.length){if(cb)cb();return;}
+  var langName2=function(lang){
+    var n={en:'English',de:'German',fr:'French',es:'Spanish',it:'Italian'};
+    return n[lang]||'English';
+  };
+  var BATCH=20;
+  var batches=[];
+  for(var i=0;i<words.length;i+=BATCH) batches.push(words.slice(i,i+BATCH));
+
+  function runBatch(idx){
+    if(idx>=batches.length){if(cb)cb();return;}
+    var batch=batches[idx];
+    var sampleLang=langName2(batch[0].lang||'en');
+    var items=batch.map(function(w){return '"'+w.id+'":'+JSON.stringify(w.word);}).join(',');
+    var prompt='For each word/phrase below, write a concise definition in '+sampleLang+
+      ' (1 sentence, max 12 words, no translations, no word repetition in the definition). '+
+      'Return ONLY valid JSON: {"id":"definition",...}\n\n{'+items+'}';
+    var body={model:'claude-haiku-4-5-20251001',max_tokens:1200,
+      messages:[{role:'user',content:prompt}]};
+    var xhr=new XMLHttpRequest();
+    xhr.open('POST','https://api.anthropic.com/v1/messages',true);
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.setRequestHeader('x-api-key',G.cfg.key);
+    xhr.setRequestHeader('anthropic-version','2023-06-01');
+    xhr.setRequestHeader('anthropic-dangerous-direct-browser-access','true');
+    xhr.onload=function(){
+      try{
+        var d=JSON.parse(xhr.responseText);
+        if(xhr.status===200&&d.content&&d.content[0]){
+          var raw=d.content[0].text||'';
+          raw=raw.replace(/```json|```/g,'').trim();
+          var obj=JSON.parse(raw);
+          Object.keys(obj).forEach(function(wid){
+            var w=G.words.find(function(x){return x.id===wid;});
+            if(w) w.def=obj[wid];
+          });
+        }
+      }catch(e){}
+      runBatch(idx+1);
+    };
+    xhr.onerror=function(){runBatch(idx+1);};
+    xhr.send(JSON.stringify(body));
+  }
+  runBatch(0);
+}
+
+/* 既存リストに英語定義を一括補完する */
+function bulkGenerateDefs(lid, onDone){
+  if(!G.cfg.key){toast('🔑 APIキーが必要です（設定 → APIキー）');return;}
+  var words=G.words.filter(function(w){return w.lid===lid&&!w.def;});
+  if(!words.length){toast('✅ すべての単語に定義があります');return;}
+  toast('🔄 英語定義を生成中... ('+words.length+'語)');
+  generateDefs(words, function(){
+    save();
+    toast('✅ '+words.length+'語の英語定義を生成しました');
+    if(onDone) onDone();
+  });
 }
 
 /* WORD LIST */
@@ -2931,7 +3003,9 @@ function listRender(){
     h+='<button class="word-item" data-wid="'+esc(w.id)+'" style="'+(selModeOn&&selSet[w.id]?'background:rgba(124,92,252,.18);border-color:var(--ac);':'')+'">'+
       chk+
       '<div class="wi-inf"><div class="wi-en">'+(l?'<span style="font-size:11px;margin-right:4px">'+l.flag+'</span>':'')+esc(w.word)+statusMark(w)+'</div>'+
-      '<div class="wi-ja">'+(w.meaning?esc(w.meaning):'訳なし')+'</div></div>'+
+      '<div class="wi-ja">'+(w.meaning?esc(w.meaning):'訳なし')+'</div>'+
+      (w.def?'<div style="font-size:10px;color:var(--tx2);margin-top:2px;line-height:1.4">📖 '+esc(w.def)+'</div>':'')+
+      '</div>'+
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">'+
         '<div class="wi-lvl l'+v+'">'+lb[v]+'</div>'+
         dictLink(w.word,w.lang||'en','font-size:10px;color:#5ab4ff;text-decoration:none;background:rgba(0,120,220,.12);border:1px solid rgba(0,120,220,.25);padding:2px 7px;border-radius:8px;white-space:nowrap;font-weight:600','onclick="event.stopPropagation()"')+
@@ -3146,6 +3220,7 @@ function listMenu(lid){
     '</div>'+
     '<button class="btn-sec" id="LM-list" style="margin-top:0;margin-bottom:8px">📚 単語一覧を見る</button>'+
     '<button class="btn-sec" id="LM-eneq" style="margin-top:0;margin-bottom:8px'+(G.cfg.key?'':';opacity:.4')+'">'+(G.cfg.key?'🔤':'🔤🔑')+' 英英クイズ（AI定義）</button>'+
+    '<button class="btn-sec" id="LM-gen-defs" style="margin-top:0;margin-bottom:8px'+(G.cfg.key?'':';opacity:.4')+'">'+(function(){var nd=G.words.filter(function(w){return w.lid===lid&&!w.def;}).length;return (G.cfg.key?'📖':'📖🔑')+' 英語定義を補完'+(nd?' (未定義:'+nd+'語)':'（完了済み）');})()+'</button>'+
     '<button class="btn-sec" id="LM-edit" style="margin-top:0">✏️ リストを編集</button>';
   el('modal-bg').classList.add('on');
 
@@ -3292,6 +3367,10 @@ function listMenu(lid){
     qparams._pendingCursor={lid:lid, next:r.nextCursor};
     startEneqQuiz(r.pool, qparams);
   });
+  el('LM-gen-defs').addEventListener('click',function(){
+    el('modal-bg').classList.remove('on');
+    bulkGenerateDefs(lid, function(){listRender();});
+  });
   el('LM-edit').addEventListener('click',function(){
     el('modal-bg').classList.remove('on');
     editList(lid);
@@ -3306,7 +3385,8 @@ function wordDetail(wid){
   var l=LANGS[w.lang||'en'];
   el('modal-ct').innerHTML=
     '<div class="modal-tl">'+(l?l.flag+' ':'')+esc(w.word)+'</div>'+
-    '<div style="font-size:20px;color:var(--ac3);margin-bottom:10px">'+esc(w.meaning||'訳なし')+'</div>'+
+    '<div style="font-size:20px;color:var(--ac3);margin-bottom:6px">'+esc(w.meaning||'訳なし')+'</div>'+
+    (w.def?'<div style="font-size:13px;color:var(--tx2);margin-bottom:10px;line-height:1.5;background:var(--sf2);border-radius:9px;padding:8px 12px;border-left:3px solid var(--ac)">📖 '+esc(w.def)+'</div>':'')+
     dictLink(w.word,w.lang||'en','display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#5ab4ff;text-decoration:none;background:rgba(0,120,220,.15);border:1px solid rgba(0,120,220,.35);padding:6px 18px;border-radius:20px;font-weight:600;margin-bottom:14px')+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px">'+
     mkCard('SRSレベル',lbn[v])+mkCard('次回復習',dStr)+
@@ -3498,6 +3578,8 @@ function editWord(wid){
     '<input class="inp" id="EW-word" type="text" value="'+escHtml(w.word)+'" style="margin-bottom:12px">'+
     '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">意味（日本語）</div>'+
     '<input class="inp" id="EW-meaning" type="text" value="'+escHtml(w.meaning||'')+'" style="margin-bottom:12px">'+
+    '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">英語定義 <span style="font-size:10px;opacity:.6">（英英クイズで使用）</span></div>'+
+    '<input class="inp" id="EW-def" type="text" value="'+escHtml(w.def||'')+'" placeholder="例: to leave someone or something permanently" style="margin-bottom:12px">'+
     '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">言語</div>'+
     '<select class="inp" id="EW-lang" style="margin-bottom:12px">'+langOpts+'</select>'+
     '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">所属リスト</div>'+
@@ -3511,6 +3593,7 @@ function editWord(wid){
     var meaning=(el('EW-meaning').value||'').trim();
     if(!word){toast('単語を入力してください');return;}
     w.word=word; w.meaning=meaning;
+    w.def=(el('EW-def').value||'').trim();
     w.lang=el('EW-lang').value;
     w.lid=el('EW-list').value;
     save();el('modal-bg').classList.remove('on');
@@ -5124,9 +5207,16 @@ function quizStart(mode,lid){
   }
 
   if(mainWs.length<2){toast('クイズには最低2単語必要です');return;}
-  Q={words:mainWs,q:mainWs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now(),
+  var _qp={words:mainWs,q:mainWs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now(),
      consec:{},mastered:0,masteredIds:{},ebbingIds:ebbingIds};
-  go('s-quiz');qRender();
+  /* 英英モードがONかつAPIキーがある場合はeneqPrefetchしてから開始 */
+  if(G.cfg.eneq&&G.cfg.key){
+    _qp.eneqMode=true;
+    startEneqQuiz(mainWs, _qp);
+  } else {
+    Q=_qp;
+    go('s-quiz');qRender();
+  }
 }
 
 function isPhrase(word){
@@ -5143,6 +5233,10 @@ var ENEQ_CACHE = {}; /* {word_id: "definition text"} — セッション内キ�
 /* 単語配列の英英定義をAIで一括生成してキャッシュに保存。cb()で完了通知 */
 function eneqPrefetch(words, cb){
   if(!G.cfg.key){if(cb)cb();return;}
+  /* defフィールドがある単語はキャッシュに直接投入してAPIスキップ */
+  words.forEach(function(w){
+    if(w.def&&!ENEQ_CACHE[w.id]) ENEQ_CACHE[w.id]=w.def;
+  });
   /* キャッシュ済みを除外 */
   var need=words.filter(function(w){return !ENEQ_CACHE[w.id];});
   if(!need.length){if(cb)cb();return;}
@@ -5198,11 +5292,19 @@ function eneqPrefetch(words, cb){
 function startEneqQuiz(words, quizParams){
   var overlay=document.createElement('div');
   overlay.style.cssText='position:fixed;inset:0;background:rgba(10,10,15,.88);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px';
-  overlay.innerHTML='<div class="spin"></div><div style="font-size:13px;color:var(--tx2)">🔤 英英定義を生成中...</div>';
+  overlay.innerHTML='<div class="spin"></div><div style="font-size:13px;color:var(--tx2)">🔤 英語定義を準備中...</div>';
   document.body.appendChild(overlay);
-  eneqPrefetch(words,function(){
+  /* ダミー選択肢も全て英語定義にするため、出題単語と同言語の全単語をprefetchする */
+  var quizLangs={};
+  words.forEach(function(w){quizLangs[w.lang||'en']=true;});
+  var allSameLang=G.words.filter(function(w){return quizLangs[w.lang||'en'];});
+  /* 出題単語 + ダミー候補（同言語全単語）をまとめてprefetch */
+  var allToFetch=words.slice();
+  allSameLang.forEach(function(w){
+    if(!allToFetch.some(function(x){return x.id===w.id;}))allToFetch.push(w);
+  });
+  eneqPrefetch(allToFetch,function(){
     document.body.removeChild(overlay);
-    /* キャッシュに入らなかった単語は日本語訳で代用（フォールバック） */
     Q=quizParams;
     go('s-quiz');qRender();
   });
