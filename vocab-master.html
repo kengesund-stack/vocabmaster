@@ -2936,6 +2936,11 @@ function listRender(){
     b.addEventListener('click',function(e){
       var wid=this.getAttribute('data-wid');
       if(selModeOn){selWordToggle(wid);this.style.background=selSet[wid]?'rgba(124,92,252,.18)':'';this.style.borderColor=selSet[wid]?'var(--ac)':'';}
+      else if(LP.playing){
+        /* 再生中はタップした単語にジャンプ */
+        var idx=LP.words.findIndex(function(w){return w.id===wid;});
+        if(idx>=0){lpStop();lpPlayAt(idx);}
+      }
       else{wordDetail(wid);}
     });
   });
