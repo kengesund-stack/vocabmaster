@@ -920,7 +920,7 @@ schön,美しい"></textarea>
         </div>
       </div>
       <div style="padding:6px 14px 10px;font-size:11px;color:var(--tx2);line-height:1.6;border-top:1px solid rgba(255,255,255,.05)">
-        💡 上限を超えた分は翌日に自動繰り越しされます。期限が古い単語から優先して出題されます。繰り越しが続いても、全インターバル完走で「正解 🟢」に昇格します。
+        💡 通常クイズへの1セッションあたりの追加上限数です。期限切れが優先・古い順で追加されます。「今日の復習」クイズは上限なく全期限切れ単語を対象にします。
       </div>
     </div>
     <div class="set-sec">単語一覧 自動再生</div>
@@ -1192,49 +1192,7 @@ function ebbingSchedule(wordId) {
   return G.ebbing[wordId] || null;
 }
 
-function ebbingMarkMiss(wordId, word, meaning, lang) {
-  /* 間違えた単語に復習スケジュールを追加（設定ON/OFFに関わらず登録） */
-  if (!G.ebbing) G.ebbing = {};
-  var now = new Date();
-  var existing = G.ebbing[wordId];
-  var nextIdx = 0;
-  if (existing) {
-    /* 既にスケジュール済みの場合: 現在のインデックスを維持 or リセット */
-    nextIdx = existing.nextIdx || 0;
-  }
-  /* 次の復習日をインターバルから計算 */
-  var nextDate = new Date(now);
-  nextDate.setDate(nextDate.getDate() + EBBING_INTERVALS[nextIdx]);
-  G.ebbing[wordId] = {
-    wordId: wordId,
-    word: word,
-    meaning: meaning,
-    lang: lang,
-    nextIdx: nextIdx,
-    nextDate: nextDate.toISOString(),
-    createdAt: existing ? existing.createdAt : now.toISOString()
-  };
-  save();
-}
-
-function ebbingMarkMissReset(wordId, word, meaning, lang) {
-  /* 不正解時：ステージを0にリセットして再登録 */
-  if (!G.ebbing) G.ebbing = {};
-  var now = new Date();
-  var existing = G.ebbing[wordId];
-  var nextDate = new Date(now);
-  nextDate.setDate(nextDate.getDate() + EBBING_INTERVALS[0]); /* 常に1日後から再スタート */
-  G.ebbing[wordId] = {
-    wordId: wordId,
-    word: word,
-    meaning: meaning,
-    lang: lang,
-    nextIdx: 0,
-    nextDate: nextDate.toISOString(),
-    createdAt: existing ? existing.createdAt : now.toISOString()
-  };
-  save();
-}
+/* ebbingMarkMiss / ebbingMarkMissReset は answer() 内に統合済みのため削除 */
 
 function ebbingAdvance(wordId) {
   /* 正解後: 次のインターバルへ進む。最終ステージ以降は30日後を繰り返す（削除しない） */
@@ -1252,7 +1210,6 @@ function getEbbingDue() {
   /* 今日以前の復習予定単語を全件返す（nextDateは絶対に書き換えない） */
   if (!G.cfg.ebbing || !G.ebbing) return [];
   var now = new Date();
-  var max = G.cfg.ebbingMax || 20;
 
   /* 期限切れをすべて収集し、期限が古い順にソート */
   var overdue = [];
@@ -1263,12 +1220,9 @@ function getEbbingDue() {
   });
   overdue.sort(function(a, b) { return new Date(a.nextDate) - new Date(b.nextDate); });
 
-  /* 上限件数だけ選ぶ（nextDateは変更しない） */
-  var selected = overdue.slice(0, max);
-
-  /* 単語オブジェクトに変換して返す */
+  /* 単語オブジェクトに変換して返す（上限なし・全件） */
   var result = [];
-  selected.forEach(function(rec) {
+  overdue.forEach(function(rec) {
     var w = G.words.find(function(x) { return x.id === rec.wordId; });
     if (w) result.push(w);
   });
@@ -2897,8 +2851,10 @@ function generateDefs(words, cb){
     var batch=batches[idx];
     var sampleLang=langName2(batch[0].lang||'en');
     var items=batch.map(function(w){return '"'+w.id+'":'+JSON.stringify(w.word);}).join(',');
-    var prompt='For each word/phrase below, write a concise definition in '+sampleLang+
-      ' (1 sentence, max 12 words, no translations, no word repetition in the definition). '+
+    var prompt='You are a monolingual dictionary. For each '+sampleLang+' word/phrase below, '+
+      'write a concise '+sampleLang+' definition (1 sentence, max 12 words). '+
+      'Rules: write only in '+sampleLang+', never translate, define the word using other '+sampleLang+' words, '+
+      'do not repeat the word itself in the definition. '+
       'Return ONLY valid JSON: {"id":"definition",...}\n\n{'+items+'}';
     var body={model:'claude-haiku-4-5-20251001',max_tokens:1200,
       messages:[{role:'user',content:prompt}]};
@@ -5193,13 +5149,23 @@ function quizStart(mode,lid){
   if(mode==='due'){
     /* dueモード：全単語がebbing由来 */
     mainWs.forEach(function(w){ebbingIds[w.id]=true;});
-  } else {
-    /* 通常クイズ：s.l>0（不正解歴あり）の単語をプール外から別枠追加
-       G.ebbingの有無・ebbing設定ON/OFFに関わらず動作する */
+  } else if(G.cfg.ebbing!==false){
+    /* 通常クイズ：設定がONのときのみ、s.l>0（不正解歴あり）の単語をプール外から別枠追加 */
     var mainIds=mainWs.map(function(w){return w.id;});
+    /* G.ebbingに登録済み＆期限切れの単語を優先。なければ不正解歴あり全体から補充 */
+    var now_eb=new Date();
     var missExtra=G.words.filter(function(w){
-      return (w.s&&(w.s.l||0)>0) && mainIds.indexOf(w.id)<0;
-    }).sort(function(a,b){return (b.s.l||0)-(a.s.l||0);});
+      if((w.s&&(w.s.l||0)===0)||mainIds.indexOf(w.id)>=0)return false;
+      var rec=G.ebbing&&G.ebbing[w.id];
+      /* G.ebbingに登録済みで期限切れのものを優先対象とする */
+      return rec?new Date(rec.nextDate)<=now_eb:(w.s&&(w.s.l||0)>0);
+    }).sort(function(a,b){
+      /* 期限が古い順（期限切れ優先）、なければ不正解回数順 */
+      var ra=G.ebbing&&G.ebbing[a.id],rb=G.ebbing&&G.ebbing[b.id];
+      if(ra&&rb)return new Date(ra.nextDate)-new Date(rb.nextDate);
+      if(ra)return -1; if(rb)return 1;
+      return (b.s.l||0)-(a.s.l||0);
+    });
     var ebSize=G.cfg.ebbingMax||5;
     var ebSlice=(G.cfg.random?shuffle(missExtra):missExtra).slice(0,ebSize);
     ebSlice.forEach(function(w){mainWs.push(w);ebbingIds[w.id]=true;});
@@ -5256,7 +5222,10 @@ function eneqPrefetch(words, cb){
     /* 言語ごとにグループ化してプロンプト効率化 */
     var items=batch.map(function(w){return '"'+w.id+'":'+JSON.stringify(w.word);}).join(',');
     var sampleLang=langName2(batch[0].lang||'en');
-    var prompt='For each word/phrase below, write a concise definition in '+sampleLang+' (1 sentence, max 12 words, no translations). '+
+    var prompt='You are a monolingual dictionary. For each '+sampleLang+' word/phrase below, '+
+      'write a concise '+sampleLang+' definition (1 sentence, max 12 words). '+
+      'Rules: write only in '+sampleLang+', never translate, define the word using other '+sampleLang+' words, '+
+      'do not repeat the word itself in the definition. '+
       'Return ONLY valid JSON: {"id":"definition",...}\n\n{'+items+'}';
     var body={
       model:'claude-haiku-4-5-20251001',
@@ -6405,8 +6374,9 @@ window.onload=function(){
       if(pool.length<2){toast('クイズには最低2単語必要です（'+pool.length+'単語）');return;}
       var size=parseInt(G.cfg.size)||20;
       var qs=(G.cfg.random?shuffle(pool):pool).slice(0,size);
+      /* ebbingIds はクイズに含まれる単語のみに絞る（全G.ebbingではなく） */
       var ebbingIds2={};
-      Object.keys(G.ebbing||{}).forEach(function(wid){ebbingIds2[wid]=true;});
+      qs.forEach(function(w){if(G.ebbing&&G.ebbing[w.id])ebbingIds2[w.id]=true;});
       Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'due',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{},ebbingIds:ebbingIds2};
       go('s-quiz');qRender();
     };
