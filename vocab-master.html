@@ -1160,11 +1160,18 @@ function answer(w,ok){
           var _d0=new Date(_now); _d0.setDate(_d0.getDate()+IVALS[0]);
           G.ebbing[w.id]={wordId:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',nextIdx:0,nextDate:_d0.toISOString(),createdAt:_now.toISOString()};
         }
-        /* idx+1へ進める。最終(4)を超えたら4のまま30日後をセット */
+        /* idx+1へ進める。全インターバル完走(idx>=4)したらエントリ削除して正解昇格 */
         var _r=G.ebbing[w.id];
-        var _ni=Math.min((_r.nextIdx||0)+1, IVALS.length-1);
-        var _dn=new Date(_now); _dn.setDate(_dn.getDate()+IVALS[_ni]);
-        _r.nextIdx=_ni; _r.nextDate=_dn.toISOString();
+        var _ni=(_r.nextIdx||0)+1;
+        if(_ni>=IVALS.length){
+          /* 全5ステージ完走 → G.ebbingから削除（正解昇格） */
+          delete G.ebbing[w.id];
+          /* s.lをリセット：不正解歴をクリアして「正解 🟢」ステータスに昇格 */
+          s.l=0;
+        } else {
+          var _dn=new Date(_now); _dn.setDate(_dn.getDate()+IVALS[_ni]);
+          _r.nextIdx=_ni; _r.nextDate=_dn.toISOString();
+        }
         save();
       }
     }
@@ -1194,15 +1201,23 @@ function ebbingSchedule(wordId) {
 
 /* ebbingMarkMiss / ebbingMarkMissReset は answer() 内に統合済みのため削除 */
 
+/* ebbingAdvance は answer() 内に統合済みのためレガシー（未使用）。
+   実際の進行処理は answer() の正解ブランチで直接行われる。 */
 function ebbingAdvance(wordId) {
-  /* 正解後: 次のインターバルへ進む。最終ステージ以降は30日後を繰り返す（削除しない） */
+  /* 正解後: 次のインターバルへ進む。全ステージ完走でエントリ削除・s.lリセット */
   if (!G.ebbing || !G.ebbing[wordId]) return;
   var rec = G.ebbing[wordId];
-  var nextIdx = Math.min((rec.nextIdx || 0) + 1, EBBING_INTERVALS.length - 1);
-  var nextDate = new Date();
-  nextDate.setDate(nextDate.getDate() + EBBING_INTERVALS[nextIdx]);
-  rec.nextIdx = nextIdx;
-  rec.nextDate = nextDate.toISOString();
+  var nextIdx = (rec.nextIdx || 0) + 1;
+  if (nextIdx >= EBBING_INTERVALS.length) {
+    var w = G.words.find(function(x){return x.id===wordId;});
+    delete G.ebbing[wordId];
+    if (w && w.s) w.s.l = 0;
+  } else {
+    var nextDate = new Date();
+    nextDate.setDate(nextDate.getDate() + EBBING_INTERVALS[nextIdx]);
+    rec.nextIdx = nextIdx;
+    rec.nextDate = nextDate.toISOString();
+  }
   save();
 }
 
