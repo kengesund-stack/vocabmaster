@@ -394,7 +394,6 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
       <button class="act-card" id="B-quiz-weak"><span class="act-ic">🎯</span><div class="act-title">苦手単語</div><div class="act-sub">間違えた単語を特訓</div></button>
       <button class="act-card" id="B-study-list" style="border:1.5px solid rgba(124,92,252,.4)"><span class="act-ic">📖</span><div class="act-title">予習→クイズ</div><div class="act-sub">リストを選んで予習から</div></button>
       <button class="act-card" id="B-test-list" style="border:1.5px solid rgba(252,92,125,.4)"><span class="act-ic">📝</span><div class="act-title">テスト形式</div><div class="act-sub">予習なし・採点のみ</div></button>
-      <button class="act-card" id="B-eneq-list" style="border:1.5px solid rgba(92,248,252,.4)"><span class="act-ic">🔤</span><div class="act-title">英英クイズ <span class="ai-tag">AI</span></div><div class="act-sub">外国語→外国語で定義</div></button>
     </div>
     <div class="sec-hdr">
       <div class="sec-title">単語リスト</div>
@@ -867,13 +866,6 @@ schön,美しい"></textarea>
       <div class="set-row" id="ROW-rev">
         <span class="set-lbl">🔄 逆クイズ（日→外国語）混在</span>
         <button class="toggle" id="TG-rev"></button>
-      </div>
-      <div class="set-row" id="ROW-eneq">
-        <span class="set-lbl">🔤 英英クイズモード <span class="ai-tag">AI</span></span>
-        <button class="toggle" id="TG-eneq"></button>
-      </div>
-      <div class="set-row" style="cursor:default" id="ROW-eneq-hint">
-        <span style="font-size:11px;color:var(--tx2);line-height:1.5">外国語→外国語による説明でクイズします（例：英語→英語の定義文）。AIが説明文を自動生成するためAPIキーが必要です。</span>
       </div>
       <div class="set-row" id="ROW-speak">
         <span class="set-lbl">🔊 クイズ時に自動読み上げ</span>
@@ -3190,7 +3182,6 @@ function listMenu(lid){
       '<button class="btn-sec" id="LM-phrases-only"'+(pCnt<2?' style="opacity:.4;pointer-events:none"':'')+'>💬 熟語（'+pStudied+'/'+pCnt+'）</button>'+
     '</div>'+
     '<button class="btn-sec" id="LM-list" style="margin-top:0;margin-bottom:8px">📚 単語一覧を見る</button>'+
-    '<button class="btn-sec" id="LM-eneq" style="margin-top:0;margin-bottom:8px'+(G.cfg.key?'':';opacity:.4')+'">'+(G.cfg.key?'🔤':'🔤🔑')+' 英英クイズ（AI定義）</button>'+
     '<button class="btn-sec" id="LM-gen-defs" style="margin-top:0;margin-bottom:8px'+(G.cfg.key?'':';opacity:.4')+'">'+(function(){var nd=G.words.filter(function(w){return w.lid===lid&&!w.def;}).length;return (G.cfg.key?'📖':'📖🔑')+' 英語定義を補完'+(nd?' (未定義:'+nd+'語)':'（完了済み）');})()+'</button>'+
     '<button class="btn-sec" id="LM-edit" style="margin-top:0">✏️ リストを編集</button>';
   el('modal-bg').classList.add('on');
@@ -3325,18 +3316,6 @@ function listMenu(lid){
     listFilterRebuild();
     sel.value=lid;
     listRender();
-  });
-  el('LM-eneq').addEventListener('click',function(){
-    el('modal-bg').classList.remove('on');
-    if(!G.cfg.key){toast('🔑 英英クイズにはAPIキーが必要です（設定 → APIキー）');return;}
-    var r=makePool(false);
-    if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
-    var eids=lmInjectEbbing(r.pool);
-    var qparams={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',
-      testMode:false,quizMode:'study',sessionStart:Date.now(),
-      consec:{},mastered:0,masteredIds:{},ebbingIds:eids,eneqMode:true};
-    qparams._pendingCursor={lid:lid, next:r.nextCursor};
-    startEneqQuiz(r.pool, qparams);
   });
   el('LM-gen-defs').addEventListener('click',function(){
     el('modal-bg').classList.remove('on');
@@ -3549,7 +3528,7 @@ function editWord(wid){
     '<input class="inp" id="EW-word" type="text" value="'+escHtml(w.word)+'" style="margin-bottom:12px">'+
     '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">意味（日本語）</div>'+
     '<input class="inp" id="EW-meaning" type="text" value="'+escHtml(w.meaning||'')+'" style="margin-bottom:12px">'+
-    '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">英語定義 <span style="font-size:10px;opacity:.6">（英英クイズで使用）</span></div>'+
+    '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">英語定義</div>'+
     '<input class="inp" id="EW-def" type="text" value="'+escHtml(w.def||'')+'" placeholder="例: to leave someone or something permanently" style="margin-bottom:12px">'+
     '<div class="lbl" style="font-size:11px;color:var(--tx2);margin-bottom:6px">言語</div>'+
     '<select class="inp" id="EW-lang" style="margin-bottom:12px">'+langOpts+'</select>'+
@@ -5071,14 +5050,12 @@ function buildCombinedReportHTML(title, now, sessions, totalQ, ok, ng, acc, tota
 
 function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-/* リスト選択モーダル（予習→クイズ / テスト形式 / 英英クイズ） */
+/* リスト選択モーダル（予習→クイズ / テスト形式） */
 function showListSelectModal(mode){
   if(!G.lists.length){toast('単語リストがありません');return;}
   var isStudy=(mode==='study');
-  var isEneq=(mode==='eneq');
-  var title=isStudy?'📖 予習→クイズ：リストを選択':isEneq?'🔤 英英クイズ：リストを選択':'📝 テスト形式：リストを選択';
-  var sub=isStudy?'予習（フラッシュカード）の後に同じ単語でクイズ':isEneq?'AIが外国語の定義文を生成して4択クイズ（APIキー必要）':'予習なし・SRS更新なし・採点のみ';
-  if(isEneq&&!G.cfg.key){toast('🔑 英英クイズにはAPIキーが必要です（設定 → APIキー）');return;}
+  var title=isStudy?'📖 予習→クイズ：リストを選択':'📝 テスト形式：リストを選択';
+  var sub=isStudy?'予習（フラッシュカード）の後に同じ単語でクイズ':'予習なし・SRS更新なし・採点のみ';
   var html='<div class="modal-tl">'+title+'</div>';
   html+='<div style="font-size:11px;color:var(--tx2);margin-bottom:12px">'+sub+'</div>';
   G.lists.forEach(function(lst){
@@ -5122,13 +5099,6 @@ function showListSelectModal(mode){
       if(isStudy){
         Q._pendingCursor={lid:lid, next:nextCursor};
         flashStart((G.cfg.random ? shuffle(pool.slice()) : pool.slice()),'list',lid);
-      } else if(isEneq){
-        var epool=G.cfg.random ? shuffle(pool.slice()) : pool.slice();
-        var qparams={words:epool,q:epool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',
-          testMode:false,quizMode:'study',sessionStart:Date.now(),
-          consec:{},mastered:0,masteredIds:{},ebbingIds:{},eneqMode:true};
-        qparams._pendingCursor={lid:lid, next:nextCursor};
-        startEneqQuiz(epool, qparams);
       } else {
         var tpool=G.cfg.random ? shuffle(pool.slice()) : pool.slice();
         Q={words:tpool,q:tpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:true,quizMode:'test',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{}};
@@ -5190,108 +5160,13 @@ function quizStart(mode,lid){
   if(mainWs.length<2){toast('クイズには最低2単語必要です');return;}
   var _qp={words:mainWs,q:mainWs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now(),
      consec:{},mastered:0,masteredIds:{},ebbingIds:ebbingIds};
-  /* 英英モードがONかつAPIキーがある場合はeneqPrefetchしてから開始 */
-  if(G.cfg.eneq&&G.cfg.key){
-    _qp.eneqMode=true;
-    startEneqQuiz(mainWs, _qp);
-  } else {
-    Q=_qp;
-    go('s-quiz');qRender();
-  }
+  Q=_qp;
+  go('s-quiz');qRender();
 }
 
 function isPhrase(word){
   /* スペースを含む場合は熟語とみなす */
   return word && word.trim().indexOf(' ')>=0;
-}
-
-/* ============================================================
-   英英クイズ（外国語→外国語の説明文クイズ）
-   AIが各単語に英語定義文を生成してキャッシュ、クイズ画面で使用
-   ============================================================ */
-var ENEQ_CACHE = {}; /* {word_id: "definition text"} — セッション内キャッシュ */
-
-/* 単語配列の英英定義をAIで一括生成してキャッシュに保存。cb()で完了通知 */
-function eneqPrefetch(words, cb){
-  if(!G.cfg.key){if(cb)cb();return;}
-  /* defフィールドがある単語はキャッシュに直接投入してAPIスキップ */
-  words.forEach(function(w){
-    if(w.def&&!ENEQ_CACHE[w.id]) ENEQ_CACHE[w.id]=w.def;
-  });
-  /* キャッシュ済みを除外 */
-  var need=words.filter(function(w){return !ENEQ_CACHE[w.id];});
-  if(!need.length){if(cb)cb();return;}
-
-  /* バッチ：最大20語ずつ */
-  var BATCH=20;
-  var done=0, batches=[];
-  for(var i=0;i<need.length;i+=BATCH) batches.push(need.slice(i,i+BATCH));
-
-  function runBatch(idx){
-    if(idx>=batches.length){if(cb)cb();return;}
-    var batch=batches[idx];
-    var langName2=function(lang){
-      var n={en:'English',de:'German',fr:'French',es:'Spanish',it:'Italian'};
-      return n[lang]||'the target language';
-    };
-    /* 言語ごとにグループ化してプロンプト効率化 */
-    var items=batch.map(function(w){return '"'+w.id+'":'+JSON.stringify(w.word);}).join(',');
-    var sampleLang=langName2(batch[0].lang||'en');
-    var prompt='You are a monolingual dictionary. For each '+sampleLang+' word/phrase below, '+
-      'write a concise '+sampleLang+' definition (1 sentence, max 12 words). '+
-      'Rules: write only in '+sampleLang+', never translate, define the word using other '+sampleLang+' words, '+
-      'do not repeat the word itself in the definition. '+
-      'Return ONLY valid JSON: {"id":"definition",...}\n\n{'+items+'}';
-    var body={
-      model:'claude-haiku-4-5-20251001',
-      max_tokens:800,
-      messages:[{role:'user',content:prompt}]
-    };
-    var xhr=new XMLHttpRequest();
-    xhr.open('POST','https://api.anthropic.com/v1/messages',true);
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.setRequestHeader('x-api-key',G.cfg.key);
-    xhr.setRequestHeader('anthropic-version','2023-06-01');
-    xhr.setRequestHeader('anthropic-dangerous-direct-browser-access','true');
-    xhr.onload=function(){
-      try{
-        var d=JSON.parse(xhr.responseText);
-        if(xhr.status===200&&d.content&&d.content[0]){
-          var raw=d.content[0].text||'';
-          raw=raw.replace(/```json|```/g,'').trim();
-          var obj=JSON.parse(raw);
-          Object.keys(obj).forEach(function(wid){ENEQ_CACHE[wid]=obj[wid];});
-        }
-      }catch(e){}
-      done++;
-      runBatch(idx+1);
-    };
-    xhr.onerror=function(){done++;runBatch(idx+1);};
-    xhr.send(JSON.stringify(body));
-  }
-  runBatch(0);
-}
-
-/* 英英モード用クイズ開始ラッパー：prefetch後にクイズを開始 */
-function startEneqQuiz(words, quizParams){
-  var overlay=document.createElement('div');
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(10,10,15,.88);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px';
-  overlay.innerHTML='<div class="spin"></div><div style="font-size:13px;color:var(--tx2)">🔤 英語定義を準備中...</div>';
-  document.body.appendChild(overlay);
-  /* ダミー選択肢も全て英語定義にするため、出題単語と同言語の全単語をprefetchする */
-  var quizLangs={};
-  words.forEach(function(w){quizLangs[w.lang||'en']=true;});
-  var allSameLang=G.words.filter(function(w){return quizLangs[w.lang||'en'];});
-  /* 出題単語 + ダミー候補（同言語全単語）をまとめてprefetch */
-  var allToFetch=words.slice();
-  allSameLang.forEach(function(w){
-    if(!allToFetch.some(function(x){return x.id===w.id;}))allToFetch.push(w);
-  });
-  eneqPrefetch(allToFetch,function(){
-    document.body.removeChild(overlay);
-    Q=quizParams;
-    go('s-quiz');qRender();
-  });
 }
 
 function qRender(){
@@ -5322,20 +5197,12 @@ function qRender(){
   var _ebB=el('QZ-eb-badge');
   if(_ebB){var _isEb=!!(Q.ebbingIds&&Q.ebbingIds[q.id]);_ebB.style.display=_isEb?'flex':'none';}
 
-  /* ── 英英モード判定 ── */
-  var isEneq=!!(G.cfg.eneq&&Q.eneqMode);
-  var rev=!isEneq&&G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
+  var rev=G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
   var l=LANGS[q.lang||'en'];
 
-  if(isEneq){
-    /* 英英クイズ：外国語の単語を表示して、外国語定義文を選ぶ */
-    el('QZ-badge').innerHTML='🔤 <span style="font-size:11px">'+(l?l.name:'外国語')+' 定義を選べ</span>';
-    el('QZ-word').textContent=q.word;
-  } else {
-    el('QZ-badge').textContent=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
-    var displayWord=rev?(q.meaning||q.word):q.word;
-    el('QZ-word').textContent=displayWord;
-  }
+  el('QZ-badge').textContent=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
+  var displayWord=rev?(q.meaning||q.word):q.word;
+  el('QZ-word').textContent=displayWord;
   Q.done=false;
 
   /* 辞書リンク */
@@ -5344,7 +5211,7 @@ function qRender(){
 
   /* 発音ボタン — 外国語が表示されているときだけ表示 */
   var spk=el('B-speak');
-  var isForLang=isEneq||!rev;
+  var isForLang=!rev;
   if(isForLang&&window.speechSynthesis){
     spk.style.display='inline-block';
     spk.onclick=function(){speak(q.word, q.lang||'en');};
@@ -5355,14 +5222,7 @@ function qRender(){
     if(window.speechSynthesis)window.speechSynthesis.cancel();
   }
 
-  /* 正解テキスト */
-  var ca;
-  if(isEneq){
-    /* 英英モード：キャッシュされた定義文を正解とする（なければ日本語訳フォールバック） */
-    ca=ENEQ_CACHE[q.id]||(q.meaning||q.word);
-  } else {
-    ca=rev?q.word:(q.meaning||'（訳なし）');
-  }
+  var ca=rev?q.word:(q.meaning||'（訳なし）');
 
   /* 熟語/単語を区別してダミー選択肢を選ぶ */
   var qIsPhrase=isPhrase(q.word);
@@ -5382,13 +5242,7 @@ function qRender(){
   var shuffled=shuffle(others);
   for(var _di=0;_di<shuffled.length&&dist.length<3;_di++){
     var _dw=shuffled[_di];
-    var _dm;
-    if(isEneq){
-      /* 英英モード：他の単語のキャッシュ定義文をダミーとして使用（なければ単語自体） */
-      _dm=ENEQ_CACHE[_dw.id]||(_dw.meaning||_dw.word);
-    } else {
-      _dm=rev?_dw.word:(_dw.meaning||_dw.word);
-    }
+    var _dm=rev?_dw.word:(_dw.meaning||_dw.word);
     /* 完全一致・先頭部分一致（カンマ区切りの最初の訳語）でも重複とみなす */
     var _dmNorm=_dm.split(/[,、]/)[0].trim();
     var _caNorm=ca.split(/[,、]/)[0].trim();
@@ -5438,7 +5292,7 @@ function qDontKnow(){
   Q.consec[q.id]=0;
   /* 習得カウントは増やさない */
   Q.lastWasWrong=true;
-  el('FB-tx').innerHTML='<span style="color:var(--ac3)">❓ 分からない</span> → <span style="color:var(--gn)">'+esc(Q.ca)+'</span>'+(Q.eneqMode&&q.meaning?'<div style="font-size:11px;color:var(--tx2);margin-top:4px">📝 意味: '+esc(q.meaning)+'</div>':'');
+  el('FB-tx').innerHTML='<span style="color:var(--ac3)">❓ 分からない</span> → <span style="color:var(--gn)">'+esc(Q.ca)+'</span>';
   el('FB-dt').textContent=Q.testMode?'':'1日後に再復習';
   var _fbw=el('FB-weblio');if(_fbw){var q=Q.q[Q.i];var _t=(G.cfg.dictUrls&&G.cfg.dictUrls[q.lang||'en'])||'';_fbw.innerHTML=_t?'<a href="'+_t.replace(/\{word\}/g,encodeURIComponent(q.word))+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:rgba(0,120,220,.15);border:1px solid rgba(0,120,220,.35);color:#5ab4ff;font-size:12px;font-weight:600;padding:5px 12px;border-radius:16px;text-decoration:none">🔍 辞書で調べる</a>':'';}
     el('FB').classList.add('on');
@@ -5475,15 +5329,13 @@ function qSelect(i){
   }
 
   var needMore=requeueMax>0&&hadMiss&&!justMastered&&ok;
-  /* 英英モードでは不正解時に「正解定義 ／ 日本語訳」を表示 */
-  var _eneqJa=Q.eneqMode&&!ok?(q.meaning?'<div style="font-size:11px;color:var(--tx2);margin-top:4px">📝 意味: '+esc(q.meaning)+'</div>':''):'';
   el('FB-tx').innerHTML=ok
     ?(justMastered?'<span style="color:var(--gn)">✓ 正解！</span>'
       :(needMore?'<span style="color:var(--gn)">✓ 正解！あと'+(requeueMax-(Q.consec[q.id]||0))+'回正解で習得</span>'
         :'<span style="color:var(--gn)">✓ 正解！</span>'))
     :(requeueMax===0
-        ?'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca)+_eneqJa+'<span style="color:var(--tx2);font-size:11px"> （再出題なし）</span>'
-        :'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca)+_eneqJa);
+        ?'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca)+'<span style="color:var(--tx2);font-size:11px"> （再出題なし）</span>'
+        :'<span style="color:var(--rd)">✗ 不正解</span> → '+esc(Q.ca));
   el('FB-dt').textContent=Q.testMode?'':(ok?'次回: '+(q.s&&q.s.i||1)+'日後':'1日後に再復習');
   var _fbw2=el('FB-weblio');if(_fbw2){var _t2=(G.cfg.dictUrls&&G.cfg.dictUrls[q.lang||'en'])||'';_fbw2.innerHTML=_t2?'<a href="'+_t2.replace(/\{word\}/g,encodeURIComponent(q.word))+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:rgba(0,120,220,.15);border:1px solid rgba(0,120,220,.35);color:#5ab4ff;font-size:12px;font-weight:600;padding:5px 12px;border-radius:16px;text-decoration:none">🔍 辞書で調べる</a>':'';}
     el('FB').classList.add('on');
@@ -5644,7 +5496,6 @@ function settingsLoad(){
   [0,1,2,3].forEach(function(n){el('RQ-'+n).classList.toggle('on',rq===n);});
   if(el('TG-ebbing'))el('TG-ebbing').classList.toggle('on', G.cfg.ebbing!==false);
   if(el('IN-ebbing-max'))el('IN-ebbing-max').value = G.cfg.ebbingMax || 5;
-  if(el('TG-eneq'))el('TG-eneq').classList.toggle('on', !!G.cfg.eneq);
   /* リスト自動再生設定 */
   var lpm=G.cfg.listPlayMode||'foreign';
   ['foreign','both','ja'].forEach(function(m){el('LP-MODE-'+m).classList.toggle('on',lpm===m);});
@@ -5692,7 +5543,6 @@ function bind(){
   el('B-quiz-weak').addEventListener('click',function(){quizStart('weak');});
   el('B-study-list').addEventListener('click',function(){showListSelectModal('study');});
   el('B-test-list').addEventListener('click',function(){showListSelectModal('test');});
-  el('B-eneq-list').addEventListener('click',function(){showListSelectModal('eneq');});
   el('B-report').addEventListener('click',function(){showReportModal();});
   el('B-new-list').addEventListener('click',function(){go('s-add');});
   el('B-new-folder').addEventListener('click',function(){createFolder();});
@@ -5872,13 +5722,6 @@ function bind(){
   el('ROW-random').addEventListener('click',function(e){if(e.target!==el('TG-random'))el('TG-random').click();});
   el('TG-rev').addEventListener('click',function(){G.cfg.rev=!G.cfg.rev;this.classList.toggle('on',G.cfg.rev);save();});
   el('ROW-rev').addEventListener('click',function(e){if(e.target!==el('TG-rev'))el('TG-rev').click();});
-  el('TG-eneq').addEventListener('click',function(){
-    G.cfg.eneq=!this.classList.contains('on');
-    this.classList.toggle('on',G.cfg.eneq);
-    save();
-    if(G.cfg.eneq&&!G.cfg.key){toast('⚠️ 英英クイズにはAPIキーが必要です');}
-  });
-  el('ROW-eneq').addEventListener('click',function(e){if(e.target!==el('TG-eneq'))el('TG-eneq').click();});
   el('TG-speak').addEventListener('click',function(){G.cfg.speak=!this.classList.contains('on');this.classList.toggle('on',G.cfg.speak);save();});
   el('ROW-speak').addEventListener('click',function(e){if(e.target!==el('TG-speak'))el('TG-speak').click();});
   el('TG-autonext').addEventListener('click',function(){G.cfg.autonext=!this.classList.contains('on');this.classList.toggle('on',G.cfg.autonext);save();});
