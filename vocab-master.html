@@ -5368,8 +5368,11 @@ function qNext(){
   var remaining=Q.q.length-(Q.i+1);
   /* masteredIds にある（requeueMax回連続正解済み）場合は再出題しない */
   var alreadyMastered=Q.masteredIds&&Q.masteredIds[q&&q.id];
+  /* 連続正解数が設定値以上の場合も再出題しない */
+  var consecOk=Q.consec&&q?(Q.consec[q.id]||0):0;
+  var consecReached=consecOk>=requeueMax;
   /* 不正解経験あり かつ requeueMax>0 かつ 連続正解数が設定値未満なら再出題 */
-  if(q && q._hadMiss && requeueMax>0 && !alreadyMastered){
+  if(q && q._hadMiss && requeueMax>0 && !alreadyMastered && !consecReached){
     /* 残り問題がある場合は1〜3問後のランダムな位置に、ない場合は末尾に挿入 */
     var insertOffset=remaining>0 ? 1+Math.floor(Math.random()*Math.min(remaining,3)) : 1;
     Q.q.splice(Q.i+1+insertOffset,0,q);
