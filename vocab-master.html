@@ -5374,8 +5374,19 @@ function qNext(){
   /* 不正解経験あり かつ requeueMax>0 かつ 連続正解数が設定値未満なら再出題 */
   if(q && q._hadMiss && requeueMax>0 && !alreadyMastered && !consecReached){
     /* 残り問題がある場合は1〜3問後のランダムな位置に、ない場合は末尾に挿入 */
-    var insertOffset=remaining>0 ? 1+Math.floor(Math.random()*Math.min(remaining,3)) : 1;
-    Q.q.splice(Q.i+1+insertOffset,0,q);
+    /* ただし既にキューに同じ単語が存在する場合は重複追加しない */
+    var alreadyQueued=false;
+    for(var _rqi=Q.i+1;_rqi<Q.q.length;_rqi++){if(Q.q[_rqi]&&Q.q[_rqi].id===q.id){alreadyQueued=true;break;}}
+    if(!alreadyQueued){
+      var insertOffset=remaining>0 ? 1+Math.floor(Math.random()*Math.min(remaining,3)) : 1;
+      Q.q.splice(Q.i+1+insertOffset,0,q);
+    }
+  }
+  /* 習得済みになった場合、キューに残っている同単語の重複エントリを削除する */
+  if(alreadyMastered && q){
+    for(var _dqi=Q.q.length-1;_dqi>Q.i;_dqi--){
+      if(Q.q[_dqi]&&Q.q[_dqi].id===q.id){Q.q.splice(_dqi,1);}
+    }
   }
   Q.lastWasWrong=false;
 
