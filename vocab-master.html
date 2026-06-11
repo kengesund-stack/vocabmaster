@@ -915,17 +915,8 @@ schön,美しい"></textarea>
     <div class="set-sec">✏️ スペルモード（覚える）</div>
     <div class="set-group">
       <div class="set-row" id="ROW-spell">
-        <span class="set-lbl">✏️ スペル問題を混在させる</span>
+        <span class="set-lbl">✏️ 4択終了後にスペル問題を出題</span>
         <button class="toggle" id="TG-spell"></button>
-      </div>
-      <div class="set-row" style="cursor:default" id="ROW-spell-freq">
-        <span class="set-lbl">📊 スペル問題の出題率</span>
-        <div style="display:flex;gap:5px">
-          <button class="opt-btn" data-sf="15" id="SF-15" style="padding:5px 10px;font-size:12px">低 15%</button>
-          <button class="opt-btn" data-sf="30" id="SF-30" style="padding:5px 10px;font-size:12px">中 30%</button>
-          <button class="opt-btn" data-sf="50" id="SF-50" style="padding:5px 10px;font-size:12px">高 50%</button>
-          <button class="opt-btn" data-sf="100" id="SF-100" style="padding:5px 10px;font-size:12px">常時</button>
-        </div>
       </div>
       <div class="set-row" style="cursor:default" id="ROW-spell-type">
         <span class="set-lbl">🧩 出題タイプ</span>
@@ -936,7 +927,7 @@ schön,美しい"></textarea>
         </div>
       </div>
       <div class="set-row" style="cursor:default">
-        <span style="font-size:11px;color:var(--tx2);line-height:1.6">日本語の意味から英単語のスペルを答える問題です。「組み立て」は文字タイルをタップしてスペルを完成、「スペル選択」は正しい綴りを3択から選びます。逆クイズ（日→外国語）と同様に通常クイズへ混在します。※スペースを含む熟語や記号入りの語は対象外。間違いタップ3回で不正解になります。</span>
+        <span style="font-size:11px;color:var(--tx2);line-height:1.6">通常の4択クイズが終了した後、同じセッションの単語を今度はスペル問題（覚える）として追加出題します。「組み立て」は文字タイルをタップしてスペルを完成、「スペル選択」は正しい綴りを3択から選びます。※スペースを含む熟語や記号入りの語はスペル問題の対象外。組み立ては間違いタップ3回で不正解になります。テストモードでは出題されません。</span>
       </div>
     </div>
     <div class="set-sec">🧠 エビングハウス忘却曲線</div>
@@ -5228,6 +5219,30 @@ function isPhrase(word){
 }
 
 /* ══════════ ✏️ スペルモード（覚える） ══════════ */
+/* 4択クイズ終了後、同じセッションの単語をスペル問題で追加出題する */
+function qMaybeSpellPhase(){
+  if(G.cfg.spell&&!Q.spellPhase&&!Q.testMode){
+    /* スペル問題の対象になる単語のみ（熟語・記号入りは除外） */
+    var sw=Q.words.filter(canSpellWord);
+    if(sw.length>=1){
+      Q.spellPhase=true;
+      Q.phaseTotal=sw.length;
+      Q.missPhaseStart=(Q.miss||[]).length;
+      Q.q=G.cfg.random?shuffle(sw):sw.slice();
+      Q.i=0;
+      /* 習得カウント・連続正解・ミスフラグをフェーズ用にリセット
+         （Q.ok/Q.ng/Q.missは累積のまま → 結果画面・統計・復習サイクルに両方反映） */
+      Q.mastered=0;Q.masteredIds={};Q.consec={};Q.requeued={};
+      Q.q.forEach(function(w){delete w._hadMiss;});
+      el('FB').classList.remove('on');
+      toast('✏️ スペル問題 '+sw.length+'問 スタート！');
+      qRender();
+      return;
+    }
+  }
+  qResult();
+}
+
 function canSpellWord(q){
   /* 訳があり、英字のみ3〜14文字の単語のみ対象（熟語・記号入りは除外） */
   return !!(q&&q.meaning)&&/^[A-Za-z]{3,14}$/.test((q.word||'').trim());
@@ -5445,21 +5460,23 @@ function qSpellFinish(ok,dontKnow){
 
 
 function qRender(){
-  var q=Q.q[Q.i];if(!q){qResult();return;}
+  var q=Q.q[Q.i];if(!q){qMaybeSpellPhase();return;}
   if(Q.i===0&&!Q.sessionStart)Q.sessionStart=Date.now();
 
-  var totalWords=Q.words.length;
+  var totalWords=Q.spellPhase?(Q.phaseTotal||Q.words.length):Q.words.length;
   var mastered=Q.mastered||0;
   /* セグメントバー更新
    * 緑：不正解歴なしでmastered（1発正解）
    * 赤：1回でも不正解/わからない があった単語（requeue中 or mastered問わず）
    * グレー：未回答
+   * ✏️ スペルフェーズ中はフェーズ開始以降のミスのみで計算
    */
   var missIds={};
-  (Q.miss||[]).forEach(function(m){missIds[m.id]=true;});
+  var _missArr=Q.spellPhase?(Q.miss||[]).slice(Q.missPhaseStart||0):(Q.miss||[]);
+  _missArr.forEach(function(m){missIds[m.id]=true;});
   var nNg=Object.keys(missIds).length; /* 不正解/わからないがあった単語数（重複なし）*/
   var nOk=Object.keys(Q.masteredIds||{}).filter(function(id){return !missIds[id];}).length; /* 1発正解でmastered */
-  var nTot=Q.words.length;
+  var nTot=totalWords;
   var pNg=nTot?Math.round(nNg/nTot*100):0;
   var pOk=nTot?Math.round(nOk/nTot*100):0;
   var pUn=Math.max(0,100-pOk-pNg);
@@ -5467,7 +5484,10 @@ function qRender(){
   el('QZ-seg-ng').style.width=pNg+'%';
   el('QZ-seg-un').style.width=pUn+'%';
   el('QZ-cnt').textContent=mastered+'/'+totalWords;
-  el('QZ-mode-badge').style.display=Q.testMode?'inline-block':'none';
+  var _mb=el('QZ-mode-badge');
+  if(Q.testMode){_mb.textContent='📝 テスト';_mb.style.display='inline-block';}
+  else if(Q.spellPhase){_mb.textContent='✏️ スペル';_mb.style.display='inline-block';}
+  else{_mb.style.display='none';}
   /* 🧠 復習サイクルバッジ */
   var _ebB=el('QZ-eb-badge');
   if(_ebB){var _isEb=!!(Q.ebbingIds&&Q.ebbingIds[q.id]);_ebB.style.display=_isEb?'flex':'none';}
@@ -5475,8 +5495,8 @@ function qRender(){
   var rev=G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
   var l=LANGS[q.lang||'en'];
 
-  /* ✏️ スペル問題（覚える）— 設定ON時、対象単語に対して設定確率で出題 */
-  if(G.cfg.spell&&canSpellWord(q)&&Math.random()<((G.cfg.spellFreq!=null?G.cfg.spellFreq:30)/100)){
+  /* ✏️ スペルフェーズ中はスペル問題として出題 */
+  if(Q.spellPhase){
     Q.rev=false;
     qRenderSpell(q);
     return;
@@ -5679,7 +5699,7 @@ function qNext(){
   Q.lastWasWrong=false;
 
   Q.i++;
-  Q.i>=Q.q.length?qResult():qRender();
+  Q.i>=Q.q.length?qMaybeSpellPhase():qRender();
 }
 
 function qResult(){
@@ -5799,8 +5819,6 @@ function settingsLoad(){
   if(el('TG-ebbing'))el('TG-ebbing').classList.toggle('on', G.cfg.ebbing!==false);
   /* ✏️ スペルモード設定 */
   if(el('TG-spell'))el('TG-spell').classList.toggle('on',!!G.cfg.spell);
-  var _sf=G.cfg.spellFreq!=null?G.cfg.spellFreq:30;
-  [15,30,50,100].forEach(function(n){if(el('SF-'+n))el('SF-'+n).classList.toggle('on',_sf===n);});
   var _spt=G.cfg.spellType||'both';
   ['build','choice','both'].forEach(function(t){if(el('SPT-'+t))el('SPT-'+t).classList.toggle('on',_spt===t);});
   if(el('IN-ebbing-max'))el('IN-ebbing-max').value = G.cfg.ebbingMax || 5;
@@ -6036,14 +6054,6 @@ function bind(){
   if(el('TG-spell')){
     el('TG-spell').addEventListener('click',function(){G.cfg.spell=!G.cfg.spell;this.classList.toggle('on',!!G.cfg.spell);save();});
     el('ROW-spell').addEventListener('click',function(e){if(e.target!==el('TG-spell'))el('TG-spell').click();});
-    [15,30,50,100].forEach(function(n){
-      var b=el('SF-'+n);if(!b)return;
-      b.addEventListener('click',function(){
-        G.cfg.spellFreq=n;
-        [15,30,50,100].forEach(function(m){if(el('SF-'+m))el('SF-'+m).classList.toggle('on',m===n);});
-        save();
-      });
-    });
     ['build','choice','both'].forEach(function(t){
       var b=el('SPT-'+t);if(!b)return;
       b.addEventListener('click',function(){
