@@ -181,6 +181,23 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 .ch-tx { flex:1; line-height:1.3; }
 .ch-ic { font-size:15px; margin-left:auto; flex-shrink:0; min-width:18px; text-align:center; }
 .ch-dk { width:100%; padding:11px 14px; background:transparent; border:2px dashed rgba(255,255,255,.15); border-radius:13px; color:var(--tx2); font-size:13px; font-weight:500; cursor:pointer; font-family:inherit; text-align:center; margin-top:2px; -webkit-appearance:none; }
+
+/* ✏️ スペルモード（覚える） */
+.sp-boxes { display:flex; flex-wrap:wrap; justify-content:center; gap:0; margin:6px auto 18px; max-width:100%; }
+.sp-box { width:34px; height:46px; border:1.5px solid rgba(255,255,255,.35); margin-left:-1.5px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; color:var(--tx); background:var(--sf); }
+.sp-box:first-child { border-radius:8px 0 0 8px; margin-left:0; }
+.sp-box:last-child { border-radius:0 8px 8px 0; }
+.sp-box.cur { border-color:var(--ac); background:rgba(124,92,252,.12); z-index:1; }
+.sp-boxes.sm .sp-box { width:25px; height:38px; font-size:16px; }
+.sp-box.fill { color:var(--ac3); }
+.sp-tiles { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; margin-top:8px; }
+.sp-tile { width:58px; height:58px; border-radius:12px; background:linear-gradient(135deg,var(--ac),var(--ac2)); border:none; color:#fff; font-size:26px; font-weight:700; cursor:pointer; font-family:inherit; -webkit-appearance:none; box-shadow:0 4px 12px rgba(124,92,252,.35); }
+.sp-tile:active { transform:scale(.92); }
+.sp-tile.used { visibility:hidden; }
+.sp-tile.shake { animation:spShake .35s; background:linear-gradient(135deg,var(--rd),#c0304a); }
+@keyframes spShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 50%{transform:translateX(6px)} 75%{transform:translateX(-4px)} }
+.sp-miss { display:flex; align-items:center; justify-content:flex-end; gap:7px; margin-top:14px; color:var(--tx2); font-size:14px; font-weight:700; }
+.sp-miss .sp-face { width:30px; height:30px; border-radius:50%; background:var(--sf3); display:flex; align-items:center; justify-content:center; font-size:15px; }
 .ch-dk:active:not(.done) { border-color:rgba(255,255,255,.35); color:var(--tx); }
 .ch-dk.done { opacity:.5; pointer-events:none; }
 
@@ -893,6 +910,33 @@ schön,美しい"></textarea>
       </div>
       <div class="set-row" style="cursor:default">
         <span style="font-size:11px;color:var(--tx2);line-height:1.5">⚠️ 待機時間は予習カードの自動切り替えにも使われます（単語+訳の読み上げ後に次へ）</span>
+      </div>
+    </div>
+    <div class="set-sec">✏️ スペルモード（覚える）</div>
+    <div class="set-group">
+      <div class="set-row" id="ROW-spell">
+        <span class="set-lbl">✏️ スペル問題を混在させる</span>
+        <button class="toggle" id="TG-spell"></button>
+      </div>
+      <div class="set-row" style="cursor:default" id="ROW-spell-freq">
+        <span class="set-lbl">📊 スペル問題の出題率</span>
+        <div style="display:flex;gap:5px">
+          <button class="opt-btn" data-sf="15" id="SF-15" style="padding:5px 10px;font-size:12px">低 15%</button>
+          <button class="opt-btn" data-sf="30" id="SF-30" style="padding:5px 10px;font-size:12px">中 30%</button>
+          <button class="opt-btn" data-sf="50" id="SF-50" style="padding:5px 10px;font-size:12px">高 50%</button>
+          <button class="opt-btn" data-sf="100" id="SF-100" style="padding:5px 10px;font-size:12px">常時</button>
+        </div>
+      </div>
+      <div class="set-row" style="cursor:default" id="ROW-spell-type">
+        <span class="set-lbl">🧩 出題タイプ</span>
+        <div style="display:flex;gap:5px">
+          <button class="opt-btn" data-spt="build" id="SPT-build" style="padding:5px 10px;font-size:12px">組み立て</button>
+          <button class="opt-btn" data-spt="choice" id="SPT-choice" style="padding:5px 10px;font-size:12px">スペル選択</button>
+          <button class="opt-btn" data-spt="both" id="SPT-both" style="padding:5px 10px;font-size:12px">両方</button>
+        </div>
+      </div>
+      <div class="set-row" style="cursor:default">
+        <span style="font-size:11px;color:var(--tx2);line-height:1.6">日本語の意味から英単語のスペルを答える問題です。「組み立て」は文字タイルをタップしてスペルを完成、「スペル選択」は正しい綴りを3択から選びます。逆クイズ（日→外国語）と同様に通常クイズへ混在します。※スペースを含む熟語や記号入りの語は対象外。間違いタップ3回で不正解になります。</span>
       </div>
     </div>
     <div class="set-sec">🧠 エビングハウス忘却曲線</div>
@@ -5183,6 +5227,223 @@ function isPhrase(word){
   return word && word.trim().indexOf(' ')>=0;
 }
 
+/* ══════════ ✏️ スペルモード（覚える） ══════════ */
+function canSpellWord(q){
+  /* 訳があり、英字のみ3〜14文字の単語のみ対象（熟語・記号入りは除外） */
+  return !!(q&&q.meaning)&&/^[A-Za-z]{3,14}$/.test((q.word||'').trim());
+}
+
+function qRenderSpell(q){
+  var type=G.cfg.spellType||'both';
+  if(type==='both')type=Math.random()<0.5?'build':'choice';
+  Q.ca=q.word.trim();Q.done=false;
+  /* 発音・辞書はスペルのヒントになるため非表示 */
+  el('B-speak').style.display='none';
+  if(window.speechSynthesis)window.speechSynthesis.cancel();
+  var _wlk=el('QZ-weblio-link');if(_wlk)_wlk.style.display='none';
+  /* お題は日本語の意味 */
+  el('QZ-word').textContent=q.meaning||'（訳なし）';
+  if(type==='build')qRenderSpellBuild(q);else qRenderSpellChoice(q);
+  el('FB').classList.remove('on');
+  Q.qStartTime=Date.now();
+}
+
+/* ── タイプ1: 文字タイル組み立て ── */
+function qRenderSpellBuild(q){
+  el('QZ-badge').textContent='✏️ スペルを完成させよう';
+  var word=q.word.trim();
+  Q.spell={word:word,idx:0,miss:0,type:'build'};
+  var c=el('QZ-choices');
+  c.innerHTML='<div class="sp-boxes'+(word.length>10?' sm':'')+'" id="SP-boxes"></div>'+
+    '<div class="sp-tiles" id="SP-tiles"></div>'+
+    '<div class="sp-miss"><div class="sp-face">😵</div><span id="SP-miss-n">0</span><span style="font-weight:400;font-size:11px">/3</span></div>'+
+    '<button class="ch-dk" id="QZ-dontknow">❓ 分からない</button>';
+  c.querySelector('#QZ-dontknow').addEventListener('click',function(){qSpellGiveUp();});
+  spDrawBoxes();spDrawTiles();
+}
+
+function spDrawBoxes(){
+  var sp=Q.spell,bx=el('SP-boxes');if(!sp||!bx)return;
+  var h='';
+  for(var i=0;i<sp.word.length;i++){
+    var cls='sp-box'+(i<sp.idx?' fill':'')+(i===sp.idx?' cur':'');
+    h+='<div class="'+cls+'">'+(i<sp.idx?esc(sp.word[i]):'')+'</div>';
+  }
+  bx.innerHTML=h;
+}
+
+function spDrawTiles(){
+  var sp=Q.spell,tl=el('SP-tiles');if(!sp||!tl)return;
+  /* 残り文字のユニーク集合から最大4タイル（正解の次の文字を必ず含む） */
+  var rest=sp.word.slice(sp.idx).toLowerCase().split('');
+  var uniq=[];rest.forEach(function(c){if(uniq.indexOf(c)<0)uniq.push(c);});
+  var next=sp.word[sp.idx].toLowerCase();
+  var decoys=shuffle(uniq.filter(function(c){return c!==next;})).slice(0,3);
+  var tiles=shuffle([next].concat(decoys));
+  tl.innerHTML=tiles.map(function(c){return '<button class="sp-tile" data-c="'+c+'">'+esc(c)+'</button>';}).join('');
+  tl.querySelectorAll('.sp-tile').forEach(function(b){
+    b.addEventListener('click',function(){spTapTile(this);});
+  });
+}
+
+function spTapTile(btn){
+  if(Q.done)return;
+  var sp=Q.spell;if(!sp)return;
+  var c=btn.getAttribute('data-c');
+  var next=sp.word[sp.idx].toLowerCase();
+  if(c===next){
+    sp.idx++;
+    spDrawBoxes();
+    if(sp.idx>=sp.word.length){qSpellFinish(sp.miss===0);return;}
+    spDrawTiles();
+  }else{
+    sp.miss++;
+    var n=el('SP-miss-n');if(n)n.textContent=sp.miss;
+    btn.classList.remove('shake');void btn.offsetWidth;btn.classList.add('shake');
+    if(sp.miss>=3){spReveal();qSpellFinish(false);}
+  }
+}
+
+function spReveal(){
+  var sp=Q.spell;if(!sp)return;
+  sp.idx=sp.word.length;spDrawBoxes();
+  var tl=el('SP-tiles');if(tl)tl.innerHTML='';
+}
+
+function qSpellGiveUp(){
+  if(Q.done)return;
+  spReveal();
+  qSpellFinish(false,true);
+}
+
+/* ── タイプ2: 正しいスペルを3択 ── */
+function qRenderSpellChoice(q){
+  el('QZ-badge').textContent='✏️ 正しいスペルを選べ';
+  var word=q.word.trim();
+  Q.spell={word:word,type:'choice'};
+  var opts=shuffle([word].concat(spellTypos(word,2)));
+  var h='';
+  opts.forEach(function(o,i){
+    h+='<button class="ch-btn" data-w="'+o+'"><div class="ch-lt">'+(i+1)+'</div><div class="ch-tx" style="font-size:18px;letter-spacing:.04em">'+esc(o)+'</div><div class="ch-ic"></div></button>';
+  });
+  h+='<button class="ch-dk" id="QZ-dontknow">❓ 分からない</button>';
+  el('QZ-choices').innerHTML=h;
+  function markCorrect(){
+    el('QZ-choices').querySelectorAll('.ch-btn').forEach(function(x){
+      x.classList.add('done');
+      if(x.getAttribute('data-w')===word){x.classList.add('ok');x.querySelector('.ch-ic').textContent='✓';}
+    });
+  }
+  el('QZ-choices').querySelectorAll('.ch-btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      if(Q.done)return;
+      var ok=this.getAttribute('data-w')===word;
+      markCorrect();
+      if(!ok){this.classList.add('ng');this.querySelector('.ch-ic').textContent='✗';}
+      qSpellFinish(ok);
+    });
+  });
+  el('QZ-choices').querySelector('#QZ-dontknow').addEventListener('click',function(){
+    if(Q.done)return;
+    markCorrect();
+    qSpellFinish(false,true);
+  });
+}
+
+/* よくあるスペルミスの偽選択肢を生成 */
+function spellTypos(word,n){
+  var conf={l:'r',r:'l',b:'v',v:'b',m:'n',n:'m',c:'k',k:'h',s:'c',f:'t',e:'a',a:'e',i:'e',o:'u',u:'o',t:'d',d:'b',g:'q',h:'k',j:'g',p:'b',q:'g',w:'v',x:'z',y:'i',z:'s'};
+  var out=[],guard=0;
+  function variant(){
+    var ch=word.split('');
+    var op=Math.floor(Math.random()*3);
+    var i=Math.floor(Math.random()*ch.length);
+    if(op===0||ch.length<=3){ /* 似た文字に置換 */
+      var c=ch[i].toLowerCase();
+      var r=conf[c]||String.fromCharCode(97+Math.floor(Math.random()*26));
+      if(r===c)return null;
+      ch[i]=(ch[i]===ch[i].toUpperCase())?r.toUpperCase():r;
+    }else if(op===1){ /* 隣接文字の入れ替え */
+      var j=(i<ch.length-1)?i+1:i-1;
+      if(ch[i].toLowerCase()===ch[j].toLowerCase())return null;
+      var t=ch[i];ch[i]=ch[j];ch[j]=t;
+    }else{ /* 文字を重複させる */
+      ch.splice(i,0,ch[i]);
+    }
+    return ch.join('');
+  }
+  while(out.length<n&&guard++<80){
+    var v=variant();
+    if(v&&v!==word&&out.indexOf(v)<0)out.push(v);
+  }
+  while(out.length<n)out.push(word+Array(out.length+2).join('e'));
+  return out;
+}
+
+/* スペル問題の結果処理（qSelect/qDontKnowと同等のSRS・習得・統計処理） */
+function qSpellFinish(ok,dontKnow){
+  if(Q.done)return;Q.done=true;
+  var q=Q.q[Q.i];
+  var answerMs=Q.qStartTime?Date.now()-Q.qStartTime:0;
+  q._answerMs=answerMs;
+  answer(q,ok);
+  if(ok){Q.ok++;}
+  else{
+    Q.ng++;
+    var _am=Q.miss.some(function(m){return m.id===q.id;});
+    if(!_am)Q.miss.push(q);
+  }
+  if(ok&&answerMs>=5000){
+    if(!Q.slow)Q.slow=[];
+    Q.slow.push({id:q.id,word:q.word,meaning:q.meaning||'',lang:q.lang||'en',lid:q.lid,answerMs:answerMs});
+  }
+  var requeueMax=G.cfg.requeueMax!=null?G.cfg.requeueMax:1;
+  if(!Q.consec)Q.consec={};
+  if(!Q.masteredIds)Q.masteredIds={};
+  var hadMiss=!!q._hadMiss;
+  if(!ok){q._hadMiss=true;Q.consec[q.id]=0;Q.lastWasWrong=true;}
+  else{Q.consec[q.id]=(Q.consec[q.id]||0)+1;Q.lastWasWrong=false;}
+  var justMastered=ok&&(!hadMiss||Q.consec[q.id]>=requeueMax)&&!Q.masteredIds[q.id];
+  var justMasteredBySkip=!ok&&requeueMax===0&&!Q.masteredIds[q.id];
+  if(justMastered||justMasteredBySkip){Q.masteredIds[q.id]=true;Q.mastered=(Q.mastered||0)+1;}
+  var needMore=requeueMax>0&&hadMiss&&!justMastered&&ok;
+  el('FB-tx').innerHTML=ok
+    ?(needMore?'<span style="color:var(--gn)">✓ 正解！あと'+(requeueMax-(Q.consec[q.id]||0))+'回正解で習得</span>'
+      :'<span style="color:var(--gn)">✓ 正解！ '+esc(q.word)+'</span>')
+    :(dontKnow
+      ?'<span style="color:var(--ac3)">❓ 分からない</span> → <span style="color:var(--gn)">'+esc(q.word)+'</span>'
+      :(requeueMax===0
+        ?'<span style="color:var(--rd)">✗ 不正解</span> → <span style="color:var(--gn)">'+esc(q.word)+'</span><span style="color:var(--tx2);font-size:11px"> （再出題なし）</span>'
+        :'<span style="color:var(--rd)">✗ 不正解</span> → <span style="color:var(--gn)">'+esc(q.word)+'</span>'));
+  el('FB-dt').textContent=Q.testMode?'':(ok?'次回: '+(q.s&&q.s.i||1)+'日後':'1日後に再復習');
+  var _fbw=el('FB-weblio');
+  if(_fbw){
+    var _t=(G.cfg.dictUrls&&G.cfg.dictUrls[q.lang||'en'])||'';
+    _fbw.innerHTML=_t?'<a href="'+_t.replace(/\{word\}/g,encodeURIComponent(q.word))+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:rgba(0,120,220,.15);border:1px solid rgba(0,120,220,.35);color:#5ab4ff;font-size:12px;font-weight:600;padding:5px 12px;border-radius:16px;text-decoration:none">🔍 辞書で調べる</a>':'';
+  }
+  /* 回答後に正しい発音を再生（スペル確認用） */
+  if(window.speechSynthesis&&G.cfg.speak!==false)speak(q.word,q.lang||'en');
+  el('FB').classList.add('on');
+  /* 自動進行 — 正解時のみ */
+  if(ok&&G.cfg.autonext){
+    var delay=Math.round((G.cfg.autonextSec||1.5)*1000);
+    var remaining=Math.ceil(G.cfg.autonextSec||1.5);
+    el('B-next').textContent='次へ ('+remaining+'秒)';
+    var countdown=setInterval(function(){
+      remaining--;
+      if(remaining>0){el('B-next').textContent='次へ ('+remaining+'秒)';}
+      else{clearInterval(countdown);}
+    },1000);
+    Q._autoTimer=setTimeout(function(){
+      clearInterval(countdown);
+      el('B-next').textContent='次へ →';
+      if(Q.done)qNext();
+    },delay);
+  }
+}
+/* ══════════ ✏️ スペルモード ここまで ══════════ */
+
+
 function qRender(){
   var q=Q.q[Q.i];if(!q){qResult();return;}
   if(Q.i===0&&!Q.sessionStart)Q.sessionStart=Date.now();
@@ -5213,6 +5474,13 @@ function qRender(){
 
   var rev=G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
   var l=LANGS[q.lang||'en'];
+
+  /* ✏️ スペル問題（覚える）— 設定ON時、対象単語に対して設定確率で出題 */
+  if(G.cfg.spell&&canSpellWord(q)&&Math.random()<((G.cfg.spellFreq!=null?G.cfg.spellFreq:30)/100)){
+    Q.rev=false;
+    qRenderSpell(q);
+    return;
+  }
 
   el('QZ-badge').textContent=rev?(l?l.name:'外国語')+'を選べ':'日本語を選べ';
   var displayWord=rev?(q.meaning||q.word):q.word;
@@ -5529,6 +5797,12 @@ function settingsLoad(){
   var rq=G.cfg.requeueMax!=null?G.cfg.requeueMax:1;
   [0,1,2,3].forEach(function(n){el('RQ-'+n).classList.toggle('on',rq===n);});
   if(el('TG-ebbing'))el('TG-ebbing').classList.toggle('on', G.cfg.ebbing!==false);
+  /* ✏️ スペルモード設定 */
+  if(el('TG-spell'))el('TG-spell').classList.toggle('on',!!G.cfg.spell);
+  var _sf=G.cfg.spellFreq!=null?G.cfg.spellFreq:30;
+  [15,30,50,100].forEach(function(n){if(el('SF-'+n))el('SF-'+n).classList.toggle('on',_sf===n);});
+  var _spt=G.cfg.spellType||'both';
+  ['build','choice','both'].forEach(function(t){if(el('SPT-'+t))el('SPT-'+t).classList.toggle('on',_spt===t);});
   if(el('IN-ebbing-max'))el('IN-ebbing-max').value = G.cfg.ebbingMax || 5;
   /* リスト自動再生設定 */
   var lpm=G.cfg.listPlayMode||'foreign';
@@ -5758,6 +6032,27 @@ function bind(){
   el('ROW-rev').addEventListener('click',function(e){if(e.target!==el('TG-rev'))el('TG-rev').click();});
   el('TG-speak').addEventListener('click',function(){G.cfg.speak=!this.classList.contains('on');this.classList.toggle('on',G.cfg.speak);save();});
   el('ROW-speak').addEventListener('click',function(e){if(e.target!==el('TG-speak'))el('TG-speak').click();});
+  /* ✏️ スペルモード設定 */
+  if(el('TG-spell')){
+    el('TG-spell').addEventListener('click',function(){G.cfg.spell=!G.cfg.spell;this.classList.toggle('on',!!G.cfg.spell);save();});
+    el('ROW-spell').addEventListener('click',function(e){if(e.target!==el('TG-spell'))el('TG-spell').click();});
+    [15,30,50,100].forEach(function(n){
+      var b=el('SF-'+n);if(!b)return;
+      b.addEventListener('click',function(){
+        G.cfg.spellFreq=n;
+        [15,30,50,100].forEach(function(m){if(el('SF-'+m))el('SF-'+m).classList.toggle('on',m===n);});
+        save();
+      });
+    });
+    ['build','choice','both'].forEach(function(t){
+      var b=el('SPT-'+t);if(!b)return;
+      b.addEventListener('click',function(){
+        G.cfg.spellType=t;
+        ['build','choice','both'].forEach(function(u){if(el('SPT-'+u))el('SPT-'+u).classList.toggle('on',u===t);});
+        save();
+      });
+    });
+  }
   el('TG-autonext').addEventListener('click',function(){G.cfg.autonext=!this.classList.contains('on');this.classList.toggle('on',G.cfg.autonext);save();});
   el('ROW-autonext').addEventListener('click',function(e){if(e.target!==el('TG-autonext'))el('TG-autonext').click();});
   el('IN-autonext-sec').addEventListener('input',function(){
