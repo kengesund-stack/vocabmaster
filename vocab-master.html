@@ -888,6 +888,15 @@ schön,美しい"></textarea>
         <span class="set-lbl">🔊 クイズ時に自動読み上げ</span>
         <button class="toggle" id="TG-speak"></button>
       </div>
+      <div class="set-row" style="cursor:default;flex-wrap:wrap;gap:8px" id="ROW-voice">
+        <span class="set-lbl" style="width:100%">🗣️ 読み上げの声</span>
+        <div style="display:flex;gap:6px;align-items:center;width:100%;flex-wrap:wrap">
+          <select id="VOICE-lang" style="background:var(--sf3);color:var(--tx);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px 8px;font-size:12px;font-family:inherit"></select>
+          <select id="VOICE-sel" style="background:var(--sf3);color:var(--tx);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px 8px;font-size:12px;font-family:inherit;flex:1;min-width:120px;max-width:100%"></select>
+          <button class="opt-btn" id="VOICE-test" style="padding:6px 12px;font-size:12px">▶ 試聴</button>
+        </div>
+        <span style="font-size:11px;color:var(--tx2);line-height:1.6;width:100%">「自動」は端末にある最も高品質な声（拡張/Premium、Siri声など）を選びます。iOSでは「設定 → アクセシビリティ → 読み上げコンテンツ → 声」で好きな声（拡張版/プレミアム版）をダウンロードすると、自動でその声が使われるようになります。特定の声に固定したい場合はリストから選んでください。</span>
+      </div>
       <div class="set-row" id="ROW-autonext">
         <span class="set-lbl">⏭️ クイズ正解時に自動で次へ</span>
         <button class="toggle" id="TG-autonext"></button>
@@ -3720,6 +3729,104 @@ function selMoveAll(){
 /* ---------- SPEECH ---------- */
 var LANG_VOICE={en:'en-US',de:'de-DE',fr:'fr-FR',es:'es-ES',it:'it-IT',ja:'ja-JP'};
 
+/* ── 読み上げの声の選択 ──
+   端末にインストールされている声の中から最も高品質なものを自動選択する。
+   iOSで「設定→アクセシビリティ→読み上げコンテンツ→声」から
+   拡張(Enhanced)/プレミアム(Premium)声をダウンロードすると自動でそちらが使われる */
+var VOICES={list:[],loaded:false};
+function voicesRefresh(){
+  if(!window.speechSynthesis)return;
+  try{
+    var v=window.speechSynthesis.getVoices()||[];
+    if(v.length){VOICES.list=v;VOICES.loaded=true;}
+  }catch(e){}
+}
+if(window.speechSynthesis){
+  voicesRefresh();
+  window.speechSynthesis.onvoiceschanged=function(){
+    voicesRefresh();
+    try{voiceFillSelect();}catch(e){}
+  };
+}
+/* macOS/iOSのノベルティ声（ふざけた声）は避ける */
+var VOICE_NOVELTY=['albert','bahh','bells','boing','bubbles','cellos','wobble','zarvox','trinoids','whisper','organ','jester','superstar','grandma','grandpa','rocko','shelley','eddy','flo','reed','sandy','junior','ralph','fred','kathy','bad news','good news'];
+function voiceScore(v,bcp){
+  var n=(v.name||'').toLowerCase(),uri=(v.voiceURI||'').toLowerCase();
+  var lang=(v.lang||'').replace('_','-');
+  var s=0;
+  if(lang===bcp)s+=40;
+  else if(lang.slice(0,2)===bcp.slice(0,2))s+=20;
+  else return -1; /* 言語不一致 */
+  if(n.indexOf('premium')>=0||uri.indexOf('premium')>=0)s+=30;
+  else if(n.indexOf('enhanced')>=0||uri.indexOf('enhanced')>=0||n.indexOf('拡張')>=0)s+=22;
+  if(uri.indexOf('siri')>=0||n.indexOf('siri')>=0)s+=18;
+  if(n.indexOf('natural')>=0||n.indexOf('neural')>=0||n.indexOf('online')>=0)s+=15; /* Edge/Windows */
+  if(n.indexOf('google')>=0)s+=10; /* Android/Chrome */
+  if(v.default)s+=5;
+  if(v.localService)s+=2;
+  for(var i=0;i<VOICE_NOVELTY.length;i++){if(n.indexOf(VOICE_NOVELTY[i])>=0){s-=60;break;}}
+  return s;
+}
+/* langOrBcp: 'en'のような2文字コード、または'en-US'のようなBCPコード */
+function pickVoice(langOrBcp){
+  if(!window.speechSynthesis)return null;
+  if(!VOICES.loaded)voicesRefresh();
+  var key=(langOrBcp||'en').slice(0,2).toLowerCase();
+  var bcp=LANG_VOICE[key]||langOrBcp||'en-US';
+  /* 設定で手動指定されていれば最優先 */
+  var sel=(G.cfg.voiceSel||{})[key];
+  if(sel&&sel!=='auto'){
+    for(var i=0;i<VOICES.list.length;i++){
+      var vv=VOICES.list[i];
+      if(vv.voiceURI===sel||vv.name===sel)return vv;
+    }
+  }
+  /* 自動：最も高品質な声を選ぶ */
+  var best=null,bs=0;
+  for(var j=0;j<VOICES.list.length;j++){
+    var sc=voiceScore(VOICES.list[j],bcp);
+    if(sc>bs){bs=sc;best=VOICES.list[j];}
+  }
+  return best;
+}
+/* Utteranceに最適な声を適用 */
+function applyVoice(u,langOrBcp){
+  var v=pickVoice(langOrBcp);
+  if(v){u.voice=v;u.lang=v.lang;}
+}
+/* 設定画面の声セレクタを描画（言語選択に応じて声一覧を更新） */
+function voiceFillSelect(){
+  var ls=el('VOICE-lang'),vs=el('VOICE-sel');
+  if(!ls||!vs)return;
+  if(!ls.options.length){
+    var names={en:'🇬🇧 英語',de:'🇩🇪 ドイツ語',fr:'🇫🇷 フランス語',es:'🇪🇸 スペイン語',it:'🇮🇹 イタリア語',ja:'🇯🇵 日本語'};
+    Object.keys(LANG_VOICE).forEach(function(k){
+      var o=document.createElement('option');o.value=k;o.textContent=names[k]||k;ls.appendChild(o);
+    });
+    ls.value='en';
+  }
+  var k=ls.value;
+  var bcp=LANG_VOICE[k]||'en-US';
+  var cur=(G.cfg.voiceSel||{})[k]||'auto';
+  voicesRefresh();
+  vs.innerHTML='';
+  var oa=document.createElement('option');
+  oa.value='auto';
+  oa.textContent='自動（高品質を優先）';
+  vs.appendChild(oa);
+  VOICES.list
+    .filter(function(v){return ((v.lang||'').replace('_','-').slice(0,2))===bcp.slice(0,2);})
+    .sort(function(a,b){return voiceScore(b,bcp)-voiceScore(a,bcp);})
+    .forEach(function(v){
+      var o=document.createElement('option');
+      o.value=v.voiceURI||v.name;
+      o.textContent=v.name;
+      vs.appendChild(o);
+    });
+  vs.value=cur;
+  if(vs.value!==cur)vs.value='auto'; /* 保存済みの声が端末に無い場合は自動へ */
+}
+
 /* ---- 音楽ダッキング ---- */
 var DUCK_VOL=0.15; /* 読み上げ中の音楽音量 */
 var _duckActive=0; /* ネスト対応カウンター */
@@ -3749,6 +3856,7 @@ function speak(text, lang){
   if(wasActive){try{ss.cancel();}catch(e){}}
   var u=new SpeechSynthesisUtterance(text);
   u.lang=LANG_VOICE[lang||'en']||'en-US';
+  applyVoice(u,lang||'en');
   u.rate=0.9;
   u.pitch=1.0;
   var ka=null;
@@ -3806,6 +3914,7 @@ function sqNext(){
   setTimeout(function(){
     var u=new SpeechSynthesisUtterance(item.text);
     u.lang=LANG_VOICE[item.lang]||item.lang||'en-US';
+    applyVoice(u,item.lang||'en');
     u.rate=0.85;
     var fired=false;
     function done(){
@@ -3856,6 +3965,7 @@ function flRender(){
       }
       var u=new SpeechSynthesisUtterance(text);
       u.lang=lang; u.rate=0.9;
+      applyVoice(u,lang);
       u.onstart=function(){duckStart();};
       u.onend=function(){duckEnd();if(FL.token===token)next();};
       u.onerror=function(){duckEnd();if(FL.token===token)next();};
@@ -5972,6 +6082,8 @@ function settingsLoad(){
   ['build','choice','both'].forEach(function(t){if(el('SPT-'+t))el('SPT-'+t).classList.toggle('on',_spt===t);});
   var _se=G.cfg.spellSe||'soft';
   ['off','soft','click','beep'].forEach(function(s){if(el('SE-'+s))el('SE-'+s).classList.toggle('on',_se===s);});
+  /* 🗣️ 読み上げの声セレクタ */
+  try{voiceFillSelect();}catch(e){}
   if(el('IN-ebbing-max'))el('IN-ebbing-max').value = G.cfg.ebbingMax || 5;
   /* リスト自動再生設定 */
   var lpm=G.cfg.listPlayMode||'foreign';
@@ -6204,8 +6316,7 @@ function bind(){
   /* ✏️ スペルモード設定 */
   if(el('TG-spell')){
     el('TG-spell').addEventListener('click',function(){G.cfg.spell=!G.cfg.spell;this.classList.toggle('on',!!G.cfg.spell);save();});
-    el('ROW-spell').addEventListener('click',function(e){if(e.target!==el('TG-spell'))el('TG-spell').click();});
-    ['build','choice','both'].forEach(function(t){
+    el('ROW-spell').addEventListener('click',function(e){if(e.target!==el('TG-spell'))el('TG-spell').click();});    ['build','choice','both'].forEach(function(t){
       var b=el('SPT-'+t);if(!b)return;
       b.addEventListener('click',function(){
         G.cfg.spellType=t;
@@ -6222,6 +6333,20 @@ function bind(){
         /* 試聴 */
         seTap();setTimeout(seBuzz,300);
       });
+    });
+  }
+  /* 🗣️ 読み上げの声セレクタ */
+  if(el('VOICE-lang')){
+    el('VOICE-lang').addEventListener('change',function(){voiceFillSelect();});
+    el('VOICE-sel').addEventListener('change',function(){
+      if(!G.cfg.voiceSel)G.cfg.voiceSel={};
+      G.cfg.voiceSel[el('VOICE-lang').value]=this.value;
+      save();
+    });
+    el('VOICE-test').addEventListener('click',function(){
+      var k=el('VOICE-lang').value;
+      var samples={en:'vocabulary',de:'Wörterbuch',fr:'vocabulaire',es:'vocabulario',it:'vocabolario',ja:'こんにちは、単語マスターです'};
+      speak(samples[k]||'hello',k);
     });
   }
   el('TG-autonext').addEventListener('click',function(){G.cfg.autonext=!this.classList.contains('on');this.classList.toggle('on',G.cfg.autonext);save();});
