@@ -926,8 +926,17 @@ schön,美しい"></textarea>
           <button class="opt-btn" data-spt="both" id="SPT-both" style="padding:5px 10px;font-size:12px">両方</button>
         </div>
       </div>
+      <div class="set-row" style="cursor:default" id="ROW-spell-se">
+        <span class="set-lbl">🔔 効果音</span>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
+          <button class="opt-btn" data-se="off" id="SE-off" style="padding:5px 10px;font-size:12px">なし</button>
+          <button class="opt-btn" data-se="soft" id="SE-soft" style="padding:5px 10px;font-size:12px">ソフト</button>
+          <button class="opt-btn" data-se="click" id="SE-click" style="padding:5px 10px;font-size:12px">クリック</button>
+          <button class="opt-btn" data-se="beep" id="SE-beep" style="padding:5px 10px;font-size:12px">電子音</button>
+        </div>
+      </div>
       <div class="set-row" style="cursor:default">
-        <span style="font-size:11px;color:var(--tx2);line-height:1.6">通常の4択クイズが終了した後、同じセッションの単語を今度はスペル問題（覚える）として追加出題します。「組み立て」は文字タイルをタップしてスペルを完成、「スペル選択」は正しい綴りを3択から選びます。※スペースを含む熟語や記号入りの語はスペル問題の対象外。組み立ては間違いタップ3回で不正解になります。テストモードでは出題されません。</span>
+        <span style="font-size:11px;color:var(--tx2);line-height:1.6">通常の4択クイズが終了した後、同じセッションの単語を今度はスペル問題（覚える）として追加出題します。「組み立て」は文字タイルをタップしてスペルを完成、「スペル選択」は正しい綴りを3択から選びます。どちらもお手つき3回までは見逃して正解扱い、4回目で不正解になります。組み立てでは文字を置くと小さな音、間違えるとブブー音が鳴ります（効果音で変更・無音化できます）。※スペースを含む熟語や記号入りの語はスペル問題の対象外。テストモードでは出題されません。</span>
       </div>
     </div>
     <div class="set-sec">🧠 エビングハウス忘却曲線</div>
@@ -3734,15 +3743,28 @@ function duckEnd(){
 
 function speak(text, lang){
   if(!window.speechSynthesis)return;
-  window.speechSynthesis.cancel();
+  var ss=window.speechSynthesis;
+  /* 直前まで再生中だった場合のみキャンセル（不要なcancelは途切れの原因になる） */
+  var wasActive=ss.speaking||ss.pending;
+  if(wasActive){try{ss.cancel();}catch(e){}}
   var u=new SpeechSynthesisUtterance(text);
   u.lang=LANG_VOICE[lang||'en']||'en-US';
   u.rate=0.9;
   u.pitch=1.0;
-  u.onstart=function(){duckStart();};
-  u.onend=function(){duckEnd();};
-  u.onerror=function(){duckEnd();};
-  setTimeout(function(){window.speechSynthesis.speak(u);},100);
+  var ka=null;
+  u.onstart=function(){
+    duckStart();
+    /* Chrome系で再生が途中停止するバグ対策：定期的にresume */
+    ka=setInterval(function(){try{if(ss.speaking&&!ss.paused)ss.resume();}catch(e){}},3000);
+  };
+  function _fin(){duckEnd();if(ka){clearInterval(ka);ka=null;}}
+  u.onend=_fin;
+  u.onerror=_fin;
+  /* cancel直後にspeakすると頭が切れる端末があるため、状況に応じて待機 */
+  setTimeout(function(){
+    try{if(ss.paused)ss.resume();}catch(e){}
+    ss.speak(u);
+  },wasActive?180:60);
 }
 
 /* ---------- FLASHCARD ---------- */
@@ -5263,17 +5285,63 @@ function qRenderSpell(q){
   Q.qStartTime=Date.now();
 }
 
+/* ── 効果音（WebAudio・素材不要） ── */
+var SE={ctx:null};
+function seCtx(){
+  if(SE.ctx)return SE.ctx;
+  var AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC)return null;
+  try{SE.ctx=new AC();}catch(e){return null;}
+  return SE.ctx;
+}
+function seTone(freq,dur,type,vol,delay){
+  var c=seCtx();if(!c)return;
+  try{
+    if(c.state==='suspended')c.resume();
+    var t=c.currentTime+(delay||0);
+    var o=c.createOscillator(),g=c.createGain();
+    o.type=type||'sine';o.frequency.value=freq;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol||0.12,t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g);g.connect(c.destination);
+    o.start(t);o.stop(t+dur+0.03);
+  }catch(e){}
+}
+/* 文字を置いたときの小さな音 */
+function seTap(){
+  var m=G.cfg.spellSe||'soft';if(m==='off')return;
+  if(m==='soft')seTone(880,0.07,'sine',0.10);
+  else if(m==='click')seTone(1600,0.03,'triangle',0.16);
+  else if(m==='beep')seTone(1200,0.06,'square',0.06);
+}
+/* 間違えたときの小さめのブブー音 */
+function seBuzz(){
+  var m=G.cfg.spellSe||'soft';if(m==='off')return;
+  if(m==='soft'){seTone(185,0.12,'sine',0.16);seTone(140,0.13,'sine',0.16,0.11);}
+  else if(m==='click'){seTone(220,0.10,'sawtooth',0.10);seTone(175,0.12,'sawtooth',0.10,0.09);}
+  else if(m==='beep'){seTone(150,0.22,'square',0.06);}
+}
+/* 完成・正解の小さなチャイム */
+function seDone(){
+  var m=G.cfg.spellSe||'soft';if(m==='off')return;
+  if(m==='soft'){seTone(660,0.08,'sine',0.09);seTone(990,0.13,'sine',0.09,0.09);}
+  else if(m==='click'){seTone(1000,0.05,'triangle',0.11);seTone(1500,0.08,'triangle',0.11,0.06);}
+  else if(m==='beep'){seTone(880,0.07,'square',0.05);seTone(1320,0.10,'square',0.05,0.08);}
+}
+
 /* ── タイプ1: 文字タイル組み立て ── */
 function qRenderSpellBuild(q){
   el('QZ-badge').textContent='✏️ スペルを完成させよう';
   var word=q.word.trim();
-  Q.spell={word:word,idx:0,miss:0,type:'build'};
+  Q.spell={word:word,idx:0,miss:0,type:'build',tiles:null};
   var c=el('QZ-choices');
   c.innerHTML='<div class="sp-boxes'+(word.length>10?' sm':'')+'" id="SP-boxes"></div>'+
     '<div class="sp-tiles" id="SP-tiles"></div>'+
     '<div class="sp-miss"><div class="sp-face">😵</div><span id="SP-miss-n">0</span><span style="font-weight:400;font-size:11px">/3</span></div>'+
     '<button class="ch-dk" id="QZ-dontknow">❓ 分からない</button>';
   c.querySelector('#QZ-dontknow').addEventListener('click',function(){qSpellGiveUp();});
+  spInitTiles();
   spDrawBoxes();spDrawTiles();
 }
 
@@ -5287,15 +5355,34 @@ function spDrawBoxes(){
   bx.innerHTML=h;
 }
 
-function spDrawTiles(){
-  var sp=Q.spell,tl=el('SP-tiles');if(!sp||!tl)return;
-  /* 残り文字のユニーク集合から最大4タイル（正解の次の文字を必ず含む） */
-  var rest=sp.word.slice(sp.idx).toLowerCase().split('');
-  var uniq=[];rest.forEach(function(c){if(uniq.indexOf(c)<0)uniq.push(c);});
+/* タイルは最初に位置を決めたら動かさない（固定スロット方式）。
+   使ったタイルはその場で非表示になり、次に必要な文字が場に無いときだけ
+   空いたスロットへ補充する */
+function spInitTiles(){
+  var sp=Q.spell;if(!sp)return;
+  var rest=sp.word.toLowerCase().split('');
+  var uniq=[];rest.forEach(function(ch){if(uniq.indexOf(ch)<0)uniq.push(ch);});
+  var next=sp.word[0].toLowerCase();
+  var decoys=shuffle(uniq.filter(function(ch){return ch!==next;})).slice(0,3);
+  sp.tiles=shuffle([next].concat(decoys)); /* 以後この並び順は固定 */
+}
+
+function spEnsureNextTile(freedSlot){
+  /* 次に必要な文字が場に無ければ、空いたスロットに補充（他のタイルは動かさない） */
+  var sp=Q.spell;if(!sp||sp.idx>=sp.word.length)return;
   var next=sp.word[sp.idx].toLowerCase();
-  var decoys=shuffle(uniq.filter(function(c){return c!==next;})).slice(0,3);
-  var tiles=shuffle([next].concat(decoys));
-  tl.innerHTML=tiles.map(function(c){return '<button class="sp-tile" data-c="'+c+'">'+esc(c)+'</button>';}).join('');
+  for(var i=0;i<sp.tiles.length;i++){if(sp.tiles[i]===next)return;}
+  var slot=(freedSlot!=null&&sp.tiles[freedSlot]==null)?freedSlot:-1;
+  if(slot<0){for(var j=0;j<sp.tiles.length;j++){if(sp.tiles[j]==null){slot=j;break;}}}
+  if(slot<0)slot=0;
+  sp.tiles[slot]=next;
+}
+
+function spDrawTiles(){
+  var sp=Q.spell,tl=el('SP-tiles');if(!sp||!tl||!sp.tiles)return;
+  tl.innerHTML=sp.tiles.map(function(ch,i){
+    return '<button class="sp-tile'+(ch==null?' used':'')+'" data-i="'+i+'">'+(ch==null?'':esc(ch))+'</button>';
+  }).join('');
   tl.querySelectorAll('.sp-tile').forEach(function(b){
     b.addEventListener('click',function(){spTapTile(this);});
   });
@@ -5304,18 +5391,30 @@ function spDrawTiles(){
 function spTapTile(btn){
   if(Q.done)return;
   var sp=Q.spell;if(!sp)return;
-  var c=btn.getAttribute('data-c');
+  var slot=parseInt(btn.getAttribute('data-i'));
+  var c=sp.tiles[slot];
+  if(c==null)return; /* 使用済みスロット */
   var next=sp.word[sp.idx].toLowerCase();
   if(c===next){
+    seTap();
+    sp.tiles[slot]=null; /* その場で消える（他タイルは動かない） */
     sp.idx++;
     spDrawBoxes();
-    if(sp.idx>=sp.word.length){qSpellFinish(sp.miss===0);return;}
+    if(sp.idx>=sp.word.length){
+      /* 3回までのミスは見逃して正解扱い */
+      seDone();
+      qSpellFinish(true);
+      return;
+    }
+    spEnsureNextTile(slot);
     spDrawTiles();
   }else{
     sp.miss++;
-    var n=el('SP-miss-n');if(n)n.textContent=sp.miss;
+    seBuzz();
+    var n=el('SP-miss-n');if(n)n.textContent=Math.min(sp.miss,3);
     btn.classList.remove('shake');void btn.offsetWidth;btn.classList.add('shake');
-    if(sp.miss>=3){spReveal();qSpellFinish(false);}
+    /* 4回目のミスで不正解 */
+    if(sp.miss>3){spReveal();qSpellFinish(false);}
   }
 }
 
@@ -5335,12 +5434,13 @@ function qSpellGiveUp(){
 function qRenderSpellChoice(q){
   el('QZ-badge').textContent='✏️ 正しいスペルを選べ';
   var word=q.word.trim();
-  Q.spell={word:word,type:'choice'};
+  Q.spell={word:word,type:'choice',miss:0};
   var opts=shuffle([word].concat(spellTypos(word,2)));
   var h='';
   opts.forEach(function(o,i){
     h+='<button class="ch-btn" data-w="'+o+'"><div class="ch-lt">'+(i+1)+'</div><div class="ch-tx" style="font-size:18px;letter-spacing:.04em">'+esc(o)+'</div><div class="ch-ic"></div></button>';
   });
+  h+='<div class="sp-miss"><div class="sp-face">😵</div><span id="SP-miss-n">0</span><span style="font-weight:400;font-size:11px">/3</span></div>';
   h+='<button class="ch-dk" id="QZ-dontknow">❓ 分からない</button>';
   el('QZ-choices').innerHTML=h;
   function markCorrect(){
@@ -5352,10 +5452,22 @@ function qRenderSpellChoice(q){
   el('QZ-choices').querySelectorAll('.ch-btn').forEach(function(b){
     b.addEventListener('click',function(){
       if(Q.done)return;
+      if(this.classList.contains('done'))return; /* 既に外した選択肢 */
       var ok=this.getAttribute('data-w')===word;
-      markCorrect();
-      if(!ok){this.classList.add('ng');this.querySelector('.ch-ic').textContent='✗';}
-      qSpellFinish(ok);
+      if(ok){
+        seDone();
+        markCorrect();
+        /* 3回までのミスは見逃して正解扱い */
+        qSpellFinish(true);
+      }else{
+        /* 間違えた選択肢だけ赤くして再挑戦させる（見逃し方式） */
+        Q.spell.miss++;
+        seBuzz();
+        var n=el('SP-miss-n');if(n)n.textContent=Math.min(Q.spell.miss,3);
+        this.classList.add('done','ng');
+        this.querySelector('.ch-ic').textContent='✗';
+        if(Q.spell.miss>3){markCorrect();qSpellFinish(false);}
+      }
     });
   });
   el('QZ-choices').querySelector('#QZ-dontknow').addEventListener('click',function(){
@@ -5422,9 +5534,12 @@ function qSpellFinish(ok,dontKnow){
   var justMasteredBySkip=!ok&&requeueMax===0&&!Q.masteredIds[q.id];
   if(justMastered||justMasteredBySkip){Q.masteredIds[q.id]=true;Q.mastered=(Q.mastered||0)+1;}
   var needMore=requeueMax>0&&hadMiss&&!justMastered&&ok;
+  var _missN=(Q.spell&&Q.spell.miss)||0;
   el('FB-tx').innerHTML=ok
     ?(needMore?'<span style="color:var(--gn)">✓ 正解！あと'+(requeueMax-(Q.consec[q.id]||0))+'回正解で習得</span>'
-      :'<span style="color:var(--gn)">✓ 正解！ '+esc(q.word)+'</span>')
+      :(_missN>0
+        ?'<span style="color:var(--gn)">✓ 正解！ '+esc(q.word)+'</span> <span style="color:var(--tx2);font-size:11px">（お手つき'+_missN+'回は見逃し）</span>'
+        :'<span style="color:var(--gn)">✓ 正解！ '+esc(q.word)+'</span>'))
     :(dontKnow
       ?'<span style="color:var(--ac3)">❓ 分からない</span> → <span style="color:var(--gn)">'+esc(q.word)+'</span>'
       :(requeueMax===0
@@ -5821,6 +5936,8 @@ function settingsLoad(){
   if(el('TG-spell'))el('TG-spell').classList.toggle('on',!!G.cfg.spell);
   var _spt=G.cfg.spellType||'both';
   ['build','choice','both'].forEach(function(t){if(el('SPT-'+t))el('SPT-'+t).classList.toggle('on',_spt===t);});
+  var _se=G.cfg.spellSe||'soft';
+  ['off','soft','click','beep'].forEach(function(s){if(el('SE-'+s))el('SE-'+s).classList.toggle('on',_se===s);});
   if(el('IN-ebbing-max'))el('IN-ebbing-max').value = G.cfg.ebbingMax || 5;
   /* リスト自動再生設定 */
   var lpm=G.cfg.listPlayMode||'foreign';
@@ -6060,6 +6177,16 @@ function bind(){
         G.cfg.spellType=t;
         ['build','choice','both'].forEach(function(u){if(el('SPT-'+u))el('SPT-'+u).classList.toggle('on',u===t);});
         save();
+      });
+    });
+    ['off','soft','click','beep'].forEach(function(s){
+      var b=el('SE-'+s);if(!b)return;
+      b.addEventListener('click',function(){
+        G.cfg.spellSe=s;
+        ['off','soft','click','beep'].forEach(function(u){if(el('SE-'+u))el('SE-'+u).classList.toggle('on',u===s);});
+        save();
+        /* 試聴 */
+        seTap();setTimeout(seBuzz,300);
       });
     });
   }
