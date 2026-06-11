@@ -936,7 +936,7 @@ schön,美しい"></textarea>
         </div>
       </div>
       <div class="set-row" style="cursor:default">
-        <span style="font-size:11px;color:var(--tx2);line-height:1.6">通常の4択クイズが終了した後、同じセッションの単語を今度はスペル問題（覚える）として追加出題します。「組み立て」は文字タイルをタップしてスペルを完成、「スペル選択」は正しい綴りを3択から選びます。どちらもお手つき3回までは見逃して正解扱い、4回目で不正解になります。組み立てでは文字を置くと小さな音、間違えるとブブー音が鳴ります（効果音で変更・無音化できます）。※スペースを含む熟語や記号入りの語はスペル問題の対象外。テストモードでは出題されません。</span>
+        <span style="font-size:11px;color:var(--tx2);line-height:1.6">通常の4択クイズが終了した後、同じセッションの単語をスペル問題（覚える）として追加出題します。「両方」を選ぶと、組み立て問題を4択と同数 → スペル選択問題を4択と同数、の順で2ラウンド出題します。どちらもお手つき3回までは見逃して正解扱い、4回目で不正解になります。組み立てでは文字を置くと小さな音、間違えるとブブー音が鳴ります（効果音で変更・無音化できます）。※スペースを含む熟語や記号入りの語はスペル問題の対象外。テストモードでは出題されません。</span>
       </div>
     </div>
     <div class="set-sec">🧠 エビングハウス忘却曲線</div>
@@ -5243,21 +5243,32 @@ function isPhrase(word){
 /* ══════════ ✏️ スペルモード（覚える） ══════════ */
 /* 4択クイズ終了後、同じセッションの単語をスペル問題で追加出題する */
 function qMaybeSpellPhase(){
-  if(G.cfg.spell&&!Q.spellPhase&&!Q.testMode){
+  if(G.cfg.spell&&!Q.testMode){
+    /* 出題タイプ設定からステージ構成を決める
+       「両方」= 組み立てN問 → スペル選択N問 の2ステージ（各々4択と同数） */
+    if(!Q.spellStages){
+      var t=G.cfg.spellType||'both';
+      Q.spellStages=(t==='both')?['build','choice']:[t];
+      Q.spellStageIdx=-1;
+    }
     /* スペル問題の対象になる単語のみ（熟語・記号入りは除外） */
     var sw=Q.words.filter(canSpellWord);
-    if(sw.length>=1){
+    if(sw.length>=1&&Q.spellStageIdx<Q.spellStages.length-1){
+      Q.spellStageIdx++;
       Q.spellPhase=true;
+      Q.spellMode=Q.spellStages[Q.spellStageIdx];
       Q.phaseTotal=sw.length;
       Q.missPhaseStart=(Q.miss||[]).length;
       Q.q=G.cfg.random?shuffle(sw):sw.slice();
       Q.i=0;
-      /* 習得カウント・連続正解・ミスフラグをフェーズ用にリセット
-         （Q.ok/Q.ng/Q.missは累積のまま → 結果画面・統計・復習サイクルに両方反映） */
+      /* 習得カウント・連続正解・ミスフラグをステージ用にリセット
+         （Q.ok/Q.ng/Q.missは累積のまま → 結果画面・統計・復習サイクルに全部反映） */
       Q.mastered=0;Q.masteredIds={};Q.consec={};Q.requeued={};
       Q.q.forEach(function(w){delete w._hadMiss;});
       el('FB').classList.remove('on');
-      toast('✏️ スペル問題 '+sw.length+'問 スタート！');
+      toast(Q.spellMode==='build'
+        ?'✏️ 組み立て問題 '+sw.length+'問 スタート！'
+        :'✏️ スペル選択問題 '+sw.length+'問 スタート！');
       qRender();
       return;
     }
@@ -5271,8 +5282,9 @@ function canSpellWord(q){
 }
 
 function qRenderSpell(q){
-  var type=G.cfg.spellType||'both';
-  if(type==='both')type=Math.random()<0.5?'build':'choice';
+  /* タイプはステージで決まる（組み立てステージ→build、選択ステージ→choice） */
+  var type=Q.spellMode||G.cfg.spellType||'both';
+  if(type==='both')type=Math.random()<0.5?'build':'choice'; /* フォールバック */
   Q.ca=q.word.trim();Q.done=false;
   /* 発音・辞書はスペルのヒントになるため非表示 */
   el('B-speak').style.display='none';
@@ -5623,7 +5635,7 @@ function qRender(){
   el('QZ-cnt').textContent=mastered+'/'+totalWords;
   var _mb=el('QZ-mode-badge');
   if(Q.testMode){_mb.textContent='📝 テスト';_mb.style.display='inline-block';}
-  else if(Q.spellPhase){_mb.textContent='✏️ スペル';_mb.style.display='inline-block';}
+  else if(Q.spellPhase){_mb.textContent=Q.spellMode==='choice'?'✏️ スペル選択':'✏️ 組み立て';_mb.style.display='inline-block';}
   else{_mb.style.display='none';}
   /* 🧠 復習サイクルバッジ */
   var _ebB=el('QZ-eb-badge');
