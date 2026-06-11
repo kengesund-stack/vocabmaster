@@ -183,12 +183,15 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 .ch-dk { width:100%; padding:11px 14px; background:transparent; border:2px dashed rgba(255,255,255,.15); border-radius:13px; color:var(--tx2); font-size:13px; font-weight:500; cursor:pointer; font-family:inherit; text-align:center; margin-top:2px; -webkit-appearance:none; }
 
 /* ✏️ スペルモード（覚える） */
-.sp-boxes { display:flex; flex-wrap:wrap; justify-content:center; gap:0; margin:6px auto 18px; max-width:100%; }
+.sp-boxes { display:flex; flex-wrap:wrap; justify-content:center; gap:8px 16px; margin:6px auto 18px; max-width:100%; }
+.sp-grp { display:flex; } /* 熟語の1単語分。折り返しは単語の切れ目で起きる */
+.sp-sep { width:18px; height:46px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; color:var(--tx2); } /* ハイフン・アポストロフィ用 */
 .sp-box { width:34px; height:46px; border:1.5px solid rgba(255,255,255,.35); margin-left:-1.5px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; color:var(--tx); background:var(--sf); }
 .sp-box:first-child { border-radius:8px 0 0 8px; margin-left:0; }
 .sp-box:last-child { border-radius:0 8px 8px 0; }
 .sp-box.cur { border-color:var(--ac); background:rgba(124,92,252,.12); z-index:1; }
 .sp-boxes.sm .sp-box { width:25px; height:38px; font-size:16px; }
+.sp-boxes.sm .sp-sep { width:13px; height:38px; font-size:15px; }
 .sp-box.fill { color:var(--ac3); }
 .sp-tiles { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; margin-top:8px; }
 .sp-tile { width:58px; height:58px; border-radius:12px; background:linear-gradient(135deg,var(--ac),var(--ac2)); border:none; color:#fff; font-size:26px; font-weight:700; cursor:pointer; font-family:inherit; -webkit-appearance:none; box-shadow:0 4px 12px rgba(124,92,252,.35); }
@@ -950,7 +953,7 @@ schön,美しい"></textarea>
         </div>
       </div>
       <div class="set-row" style="cursor:default">
-        <span style="font-size:11px;color:var(--tx2);line-height:1.6">通常の4択クイズが終了した後、同じセッションの単語をスペル問題（覚える）として追加出題します。「両方」を選ぶと、組み立て問題を4択と同数 → スペル選択問題を4択と同数、の順で2ラウンド出題します。どちらもお手つき3回までは見逃して正解扱い、4回目で不正解になります。組み立てでは文字を置くと小さな音、間違えるとブブー音が鳴ります（効果音で変更・無音化できます）。※スペースを含む熟語や記号入りの語はスペル問題の対象外。テストモードでは出題されません。</span>
+        <span style="font-size:11px;color:var(--tx2);line-height:1.6">通常の4択クイズが終了した後、同じセッションの単語をスペル問題（覚える）として追加出題します。「両方」を選ぶと、組み立て問題を4択と同数 → スペル選択問題を4択と同数、の順で2ラウンド出題します。どちらもお手つき3回までは見逃して正解扱い、4回目で不正解になります。組み立てでは文字を置くと小さな音、間違えるとブブー音が鳴ります（効果音で変更・無音化できます）。「give up」のような熟語も出題され、スペースやハイフンは自動で埋まります（アルファベット20文字までの語句が対象）。テストモードでは出題されません。</span>
       </div>
     </div>
     <div class="set-sec">🧠 エビングハウス忘却曲線</div>
@@ -5461,8 +5464,21 @@ function qMaybeSpellPhase(){
 }
 
 function canSpellWord(q){
-  /* 訳があり、英字のみ3〜14文字の単語のみ対象（熟語・記号入りは除外） */
-  return !!(q&&q.meaning)&&/^[A-Za-z]{3,14}$/.test((q.word||'').trim());
+  /* 訳があり、英字・スペース・ハイフン・アポストロフィで構成される語/熟語が対象。
+     アルファベットは3〜20文字、全体26文字まで（スペース等の区切りは自動入力） */
+  var w=(q&&q.word||'').trim();
+  if(!q||!q.meaning)return false;
+  if(w.length<3||w.length>26)return false;
+  if(!/^[A-Za-z][A-Za-z' -]*[A-Za-z]$/.test(w))return false;
+  var letters=w.replace(/[^A-Za-z]/g,'').length;
+  return letters>=3&&letters<=20;
+}
+/* スペル組み立てで「入力する文字」かどうか（スペース等の区切りは自動で埋まる） */
+function spIsLetter(ch){return /[A-Za-z]/.test(ch);}
+/* 現在位置が区切り文字なら自動的に読み飛ばす */
+function spSkipSep(){
+  var sp=Q.spell;if(!sp)return;
+  while(sp.idx<sp.word.length&&!spIsLetter(sp.word[sp.idx]))sp.idx++;
 }
 
 function qRenderSpell(q){
@@ -5532,7 +5548,7 @@ function qRenderSpellBuild(q){
   var word=q.word.trim();
   Q.spell={word:word,idx:0,miss:0,type:'build',tiles:null};
   var c=el('QZ-choices');
-  c.innerHTML='<div class="sp-boxes'+(word.length>10?' sm':'')+'" id="SP-boxes"></div>'+
+  c.innerHTML='<div class="sp-boxes'+(Math.max.apply(null,word.split(/[^A-Za-z]+/).map(function(w){return w.length;}))>10||word.replace(/[^A-Za-z]/g,'').length>14?' sm':'')+'" id="SP-boxes"></div>'+
     '<div class="sp-tiles" id="SP-tiles"></div>'+
     '<div class="sp-miss"><div class="sp-face">😵</div><span id="SP-miss-n">0</span><span style="font-weight:400;font-size:11px">/3</span></div>'+
     '<button class="ch-dk" id="QZ-dontknow">❓ 分からない</button>';
@@ -5543,11 +5559,25 @@ function qRenderSpellBuild(q){
 
 function spDrawBoxes(){
   var sp=Q.spell,bx=el('SP-boxes');if(!sp||!bx)return;
-  var h='';
+  /* 単語ごとにグループ化して描画（折り返しは単語の切れ目で起きる）。
+     スペースはグループ間の間隔、ハイフン/アポストロフィは小さな区切りセルとして
+     自動的に表示される（入力不要） */
+  var h='',grp='';
   for(var i=0;i<sp.word.length;i++){
-    var cls='sp-box'+(i<sp.idx?' fill':'')+(i===sp.idx?' cur':'');
-    h+='<div class="'+cls+'">'+(i<sp.idx?esc(sp.word[i]):'')+'</div>';
+    var ch=sp.word[i];
+    if(ch===' '){
+      if(grp){h+='<div class="sp-grp">'+grp+'</div>';grp='';}
+      continue;
+    }
+    if(spIsLetter(ch)){
+      var cls='sp-box'+(i<sp.idx?' fill':'')+(i===sp.idx?' cur':'');
+      grp+='<div class="'+cls+'">'+(i<sp.idx?esc(ch):'')+'</div>';
+    }else{
+      /* ハイフン・アポストロフィは常時表示の区切りセル */
+      grp+='<div class="sp-sep">'+esc(ch)+'</div>';
+    }
   }
+  if(grp)h+='<div class="sp-grp">'+grp+'</div>';
   bx.innerHTML=h;
 }
 
@@ -5558,12 +5588,13 @@ function spDrawBoxes(){
    次に必要な文字は必ず場にあることを保証する。 */
 function spInitTiles(){
   var sp=Q.spell;if(!sp)return;
-  /* 山札：単語の全文字（小文字・重複込み） */
-  sp.pool=sp.word.toLowerCase().split('');
-  var slots=Math.min(4,sp.word.length);
+  /* 山札：アルファベットのみ（小文字・重複込み）。スペース等は山札に入れない */
+  sp.pool=sp.word.toLowerCase().replace(/[^a-z]/g,'').split('');
+  var slots=Math.min(4,sp.pool.length);
   var dealt=[];
-  /* 最初の1文字目は必ず場に出す */
-  var next=sp.word[0].toLowerCase();
+  /* 開始位置の区切りを読み飛ばし、最初の1文字目は必ず場に出す */
+  sp.idx=sp.idx||0;spSkipSep();
+  var next=sp.word[sp.idx].toLowerCase();
   sp.pool.splice(sp.pool.indexOf(next),1);
   dealt.push(next);
   /* 残りのスロットは山札からランダムに配る */
@@ -5617,6 +5648,7 @@ function spTapTile(btn){
     seTap();
     sp.tiles[slot]=null;
     sp.idx++;
+    spSkipSep(); /* スペース・ハイフン等は自動で埋める */
     spDrawBoxes();
     if(sp.idx>=sp.word.length){
       /* 3回までのミスは見逃して正解扱い */
@@ -5698,18 +5730,22 @@ function qRenderSpellChoice(q){
 /* よくあるスペルミスの偽選択肢を生成 */
 function spellTypos(word,n){
   var conf={l:'r',r:'l',b:'v',v:'b',m:'n',n:'m',c:'k',k:'h',s:'c',f:'t',e:'a',a:'e',i:'e',o:'u',u:'o',t:'d',d:'b',g:'q',h:'k',j:'g',p:'b',q:'g',w:'v',x:'z',y:'i',z:'s'};
+  /* 操作対象はアルファベットの位置のみ（スペース等の区切りは触らない） */
+  var letterIdx=[];
+  for(var li=0;li<word.length;li++){if(spIsLetter(word[li]))letterIdx.push(li);}
   var out=[],guard=0;
   function variant(){
     var ch=word.split('');
     var op=Math.floor(Math.random()*3);
-    var i=Math.floor(Math.random()*ch.length);
-    if(op===0||ch.length<=3){ /* 似た文字に置換 */
+    var i=letterIdx[Math.floor(Math.random()*letterIdx.length)];
+    if(op===0||letterIdx.length<=3){ /* 似た文字に置換 */
       var c=ch[i].toLowerCase();
       var r=conf[c]||String.fromCharCode(97+Math.floor(Math.random()*26));
       if(r===c)return null;
       ch[i]=(ch[i]===ch[i].toUpperCase())?r.toUpperCase():r;
-    }else if(op===1){ /* 隣接文字の入れ替え */
+    }else if(op===1){ /* 隣接文字の入れ替え（両方アルファベットの場合のみ） */
       var j=(i<ch.length-1)?i+1:i-1;
+      if(!spIsLetter(ch[j]))return null;
       if(ch[i].toLowerCase()===ch[j].toLowerCase())return null;
       var t=ch[i];ch[i]=ch[j];ch[j]=t;
     }else{ /* 文字を重複させる */
