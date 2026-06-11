@@ -5355,27 +5355,49 @@ function spDrawBoxes(){
   bx.innerHTML=h;
 }
 
-/* タイルは最初に位置を決めたら動かさない（固定スロット方式）。
-   使ったタイルはその場で非表示になり、次に必要な文字が場に無いときだけ
-   空いたスロットへ補充する */
+/* タイルは「山札」方式（本家と同じ挙動）。
+   山札 = 単語の全文字（重複込み）。場には常に最大4枚。
+   タイルを使うと、その空いたスロットに山札から新しい1枚が補充される。
+   山札が尽きたらスロットは空きのまま（終盤は歯抜けになる）。
+   次に必要な文字は必ず場にあることを保証する。 */
 function spInitTiles(){
   var sp=Q.spell;if(!sp)return;
-  var rest=sp.word.toLowerCase().split('');
-  var uniq=[];rest.forEach(function(ch){if(uniq.indexOf(ch)<0)uniq.push(ch);});
+  /* 山札：単語の全文字（小文字・重複込み） */
+  sp.pool=sp.word.toLowerCase().split('');
+  var slots=Math.min(4,sp.word.length);
+  var dealt=[];
+  /* 最初の1文字目は必ず場に出す */
   var next=sp.word[0].toLowerCase();
-  var decoys=shuffle(uniq.filter(function(ch){return ch!==next;})).slice(0,3);
-  sp.tiles=shuffle([next].concat(decoys)); /* 以後この並び順は固定 */
+  sp.pool.splice(sp.pool.indexOf(next),1);
+  dealt.push(next);
+  /* 残りのスロットは山札からランダムに配る */
+  while(dealt.length<slots&&sp.pool.length){
+    var k=Math.floor(Math.random()*sp.pool.length);
+    dealt.push(sp.pool.splice(k,1)[0]);
+  }
+  sp.tiles=shuffle(dealt); /* 並び順はここで確定、以後固定 */
 }
 
-function spEnsureNextTile(freedSlot){
-  /* 次に必要な文字が場に無ければ、空いたスロットに補充（他のタイルは動かさない） */
-  var sp=Q.spell;if(!sp||sp.idx>=sp.word.length)return;
+/* 使ったスロットに山札から1枚補充する */
+function spRefill(slot){
+  var sp=Q.spell;if(!sp)return;
+  if(sp.idx>=sp.word.length)return;
   var next=sp.word[sp.idx].toLowerCase();
-  for(var i=0;i<sp.tiles.length;i++){if(sp.tiles[i]===next)return;}
-  var slot=(freedSlot!=null&&sp.tiles[freedSlot]==null)?freedSlot:-1;
-  if(slot<0){for(var j=0;j<sp.tiles.length;j++){if(sp.tiles[j]==null){slot=j;break;}}}
-  if(slot<0)slot=0;
-  sp.tiles[slot]=next;
+  var onBoard=sp.tiles.some(function(ch){return ch===next;});
+  if(!onBoard){
+    /* 次に必要な文字が場に無い → 山札から必ずその文字を補充
+       （場に無ければ山札に必ず残っている） */
+    var pi=sp.pool.indexOf(next);
+    if(pi>=0){sp.tiles[slot]=sp.pool.splice(pi,1)[0];return;}
+    sp.tiles[slot]=next; /* 念のためのフォールバック */
+    return;
+  }
+  if(sp.pool.length){
+    /* 山札からランダムに1枚補充 */
+    var k=Math.floor(Math.random()*sp.pool.length);
+    sp.tiles[slot]=sp.pool.splice(k,1)[0];
+  }
+  /* 山札が空ならスロットは空きのまま（歯抜け） */
 }
 
 function spDrawTiles(){
@@ -5393,11 +5415,11 @@ function spTapTile(btn){
   var sp=Q.spell;if(!sp)return;
   var slot=parseInt(btn.getAttribute('data-i'));
   var c=sp.tiles[slot];
-  if(c==null)return; /* 使用済みスロット */
+  if(c==null)return; /* 空きスロット */
   var next=sp.word[sp.idx].toLowerCase();
   if(c===next){
     seTap();
-    sp.tiles[slot]=null; /* その場で消える（他タイルは動かない） */
+    sp.tiles[slot]=null;
     sp.idx++;
     spDrawBoxes();
     if(sp.idx>=sp.word.length){
@@ -5406,7 +5428,7 @@ function spTapTile(btn){
       qSpellFinish(true);
       return;
     }
-    spEnsureNextTile(slot);
+    spRefill(slot); /* 使ったその場所に新しいタイルが入る */
     spDrawTiles();
   }else{
     sp.miss++;
