@@ -948,7 +948,7 @@ schön,美しい"></textarea>
         <span style="font-size:11px;color:var(--tx2);line-height:1.5">⚠️ 待機時間は予習カードの自動切り替えにも使われます（単語+訳の読み上げ後に次へ）</span>
       </div>
     </div>
-    <div class="set-sec">📶 段階別学習（おすすめ）</div>
+    <div class="set-sec">📶 段階別学習（オプション・既定OFF）</div>
     <div class="set-group">
       <div class="set-row" id="ROW-stages">
         <span class="set-lbl">📶 段階別学習モード</span>
@@ -965,7 +965,7 @@ schön,美しい"></textarea>
       <div class="set-row" style="cursor:default">
         <span style="font-size:11px;color:var(--tx2);line-height:1.6">単語ごとに習得段階を記録し、復習のたびに段階に応じた形式で出題します:<br>
         <b>4択(再認) → スペル選択 → タイル組み立て → ⌨️タイピング(完全想起) → ⚡英→日クイック(維持・制限時間付き)</b><br>
-        正解で1段階昇格、不正解で1段階降格します。初回は今までの復習間隔から段階を自動判定するので、学習済みの単語が最初からやり直しになることはありません。タイピングはヒントを使うと正解でも段階維持、1文字ミスは1回だけ打ち直せます。維持段階(⚡)は時間切れ・不正解でタイピングに戻して再強化します。記憶研究（検索練習・望ましい困難・分散学習）に沿った推奨モードです。<br>※ONの間、下の「スペルモード一括出題」は使われません。テストモードには影響しません。</span>
+        正解で1段階昇格、不正解で1段階降格します。初回は今までの復習間隔から段階を自動判定するので、学習済みの単語が最初からやり直しになることはありません。タイピングはヒントを使うと正解でも段階維持、1文字ミスは1回だけ打ち直せます。維持段階(⚡)は時間切れ・不正解でタイピングに戻して再強化します。記憶研究（検索練習・望ましい困難・分散学習）に沿ったモードです。OFFの間、アプリは従来どおり動作します。<br>※ONの間、下の「スペルモード一括出題」は使われません。テストモードには影響しません。</span>
       </div>
     </div>
     <div class="set-sec">✏️ スペルモード（覚える）</div>
@@ -5491,7 +5491,7 @@ function qStageOf(q){
 }
 /* 回答結果に応じて段階を更新（1セッションにつき1単語1回まで） */
 function qStagePromote(q,ok){
-  if(G.cfg.stages===false||Q.testMode||Q.spellPhase)return;
+  if(G.cfg.stages!==true||Q.testMode||Q.spellPhase)return;
   var tok=Q.sessionStart||1;
   if(q._stgTok===tok)return;
   q._stgTok=tok;
@@ -5625,7 +5625,7 @@ function qQuickStart(){
 
 function qMaybeSpellPhase(){
   /* 📶 段階別学習モード中は一括スペルラウンドは行わない（段階制で個別出題されるため） */
-  if(G.cfg.spell&&!Q.testMode&&G.cfg.stages===false){
+  if(G.cfg.spell&&!Q.testMode&&G.cfg.stages!==true){
     /* 出題タイプ設定からステージ構成を決める
        「両方」= 組み立てN問 → スペル選択N問 の2ステージ（各々4択と同数） */
     if(!Q.spellStages){
@@ -6069,7 +6069,7 @@ function qRender(){
   }
 
   /* 📶 段階別学習モード：単語の習得段階に応じて出題形式を決める */
-  if(G.cfg.stages!==false&&!Q.testMode){
+  if(G.cfg.stages===true&&!Q.testMode){
     var _stg=qStageOf(q);
     Q.curStage=_stg;
     if(_stg===2){Q.rev=false;qRenderSpell(q,'choice');return;} /* スペル選択 */
@@ -6402,7 +6402,7 @@ function settingsLoad(){
   [0,1,2,3].forEach(function(n){el('RQ-'+n).classList.toggle('on',rq===n);});
   if(el('TG-ebbing'))el('TG-ebbing').classList.toggle('on', G.cfg.ebbing!==false);
   /* 📶 段階別学習モード設定 */
-  if(el('TG-stages'))el('TG-stages').classList.toggle('on',G.cfg.stages!==false);
+  if(el('TG-stages'))el('TG-stages').classList.toggle('on',G.cfg.stages===true);
   var _qs=G.cfg.quickSec||5;
   [3,5,7].forEach(function(n){if(el('QS-'+n))el('QS-'+n).classList.toggle('on',_qs===n);});
   /* ✏️ スペルモード設定 */
@@ -6646,7 +6646,7 @@ function bind(){
   /* 📶 段階別学習モード */
   if(el('TG-stages')){
     el('TG-stages').addEventListener('click',function(){
-      var on=!(G.cfg.stages!==false); /* 反転 */
+      var on=!(G.cfg.stages===true); /* 反転 */
       G.cfg.stages=on;
       this.classList.toggle('on',on);
       save();
