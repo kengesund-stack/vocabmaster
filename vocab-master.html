@@ -964,8 +964,8 @@ schön,美しい"></textarea>
       </div>
       <div class="set-row" style="cursor:default">
         <span style="font-size:11px;color:var(--tx2);line-height:1.6">単語ごとに習得段階を記録し、復習のたびに段階に応じた形式で出題します:<br>
-        <b>📖提示 → 4択（再認）→ スペル選択 → タイル組み立て → ⌨️タイピング（完全想起）→ ⚡英→日クイック（維持・制限時間付き）</b><br>
-        正解で1段階昇格、不正解で1段階降格します。新出単語はまずフラッシュカード形式で提示してから同じセッション内で4択テストします。タイピングはヒントを使うと正解でも段階維持、1文字ミスは1回だけ打ち直せます。維持段階（⚡）は時間切れ・不正解でタイピングに戻して再強化します。記憶研究（検索練習・望ましい困難・分散学習）に沿った推奨モードです。<br>※ONの間、下の「スペルモード一括出題」は使われません。テストモードには影響しません。</span>
+        <b>4択(再認) → スペル選択 → タイル組み立て → ⌨️タイピング(完全想起) → ⚡英→日クイック(維持・制限時間付き)</b><br>
+        正解で1段階昇格、不正解で1段階降格します。初回は今までの復習間隔から段階を自動判定するので、学習済みの単語が最初からやり直しになることはありません。タイピングはヒントを使うと正解でも段階維持、1文字ミスは1回だけ打ち直せます。維持段階(⚡)は時間切れ・不正解でタイピングに戻して再強化します。記憶研究（検索練習・望ましい困難・分散学習）に沿った推奨モードです。<br>※ONの間、下の「スペルモード一括出題」は使われません。テストモードには影響しません。</span>
       </div>
     </div>
     <div class="set-sec">✏️ スペルモード（覚える）</div>
@@ -5476,8 +5476,16 @@ function isPhrase(word){
    綴り問題の対象外の語(長すぎる等)は 1↔5 を行き来する */
 var STAGE_NAMES=['📖提示','4択','スペル選択','組み立て','タイピング','⚡維持'];
 function qStageOf(q){
-  var s=(typeof q.stg==='number')?q.stg:0;
-  if(s<0)s=0;if(s>5)s=5;
+  var s;
+  if(typeof q.stg==='number'){
+    s=q.stg;
+  }else{
+    /* 段階記録のない単語は、既存の復習間隔（SRS）から初期段階を推定する。
+       学習済みの単語が4択からやり直しにならないように */
+    var iv=(q.s&&q.s.i)||0;
+    s=iv>=21?4:iv>=7?3:iv>=2?2:1;
+  }
+  if(s<1)s=1;if(s>5)s=5; /* 提示段階(0)は廃止：予習フローが既にあるため */
   if(!canSpellWord(q)&&s>=2&&s<=4)s=5; /* 綴り段階を持てない語はスキップ */
   return s;
 }
@@ -5488,9 +5496,7 @@ function qStagePromote(q,ok){
   if(q._stgTok===tok)return;
   q._stgTok=tok;
   var s=qStageOf(q),ns=s,msg='';
-  if(s===0){
-    ns=1; /* 提示を見たら4択へ */
-  }else if(ok){
+  if(ok){
     if(s===5){ns=5;} /* 維持段階：時間内正解なら維持（間隔はSRSが延長） */
     else if(s===4&&Q.spell&&Q.spell.type==='type'&&Q.spell.hints>0){
       ns=4;msg='📶 ヒント使用のため段階維持';
@@ -5512,37 +5518,6 @@ function qStagePromote(q,ok){
     },80);
   }
   save();
-}
-
-/* ── 段階0: 新出単語の提示カード ── */
-function qRenderIntro(q){
-  Q.done=true; /* 回答対象ではない */
-  Q.ca=q.word;
-  el('QZ-badge').textContent='📖 新しい単語';
-  el('QZ-word').textContent=q.word;
-  /* 辞書リンク表示 */
-  var _wlk=el('QZ-weblio-link');
-  if(_wlk){var _t=(G.cfg.dictUrls&&G.cfg.dictUrls[q.lang||'en'])||'';if(_t){_wlk.href=_t.replace(/\{word\}/g,encodeURIComponent(q.word));_wlk.style.display='inline-block';}else{_wlk.style.display='none';}}
-  /* 発音（符号化のため自動再生） */
-  var spk=el('B-speak');
-  if(window.speechSynthesis){
-    spk.style.display='inline-block';
-    spk.onclick=function(){speak(q.word,q.lang||'en');};
-    if(G.cfg.speak!==false)speak(q.word,q.lang||'en');
-  }else{spk.style.display='none';}
-  el('QZ-choices').innerHTML=
-    '<div class="intro-meaning">'+esc(q.meaning||'（訳なし）')+'</div>'+
-    '<button class="tp-btn tp-main" id="QZ-intro-ok" style="width:100%">✓ 覚えた — このあとクイズに出ます</button>';
-  el('QZ-choices').querySelector('#QZ-intro-ok').addEventListener('click',function(){
-    qStagePromote(q,true); /* 段階0→1 */
-    /* 少し後ろに再挿入して、同じセッション内で4択テストする（提示→テスト） */
-    var pos=Math.min(Q.q.length,Q.i+2+Math.floor(Math.random()*3));
-    Q.q.splice(pos,0,q);
-    Q.i++;
-    Q.i>=Q.q.length?qMaybeSpellPhase():qRender();
-  });
-  el('FB').classList.remove('on');
-  Q.qStartTime=Date.now();
 }
 
 /* ── 段階4: タイピング完全想起 ── */
@@ -6097,7 +6072,6 @@ function qRender(){
   if(G.cfg.stages!==false&&!Q.testMode){
     var _stg=qStageOf(q);
     Q.curStage=_stg;
-    if(_stg===0){qRenderIntro(q);return;}          /* 提示 */
     if(_stg===2){Q.rev=false;qRenderSpell(q,'choice');return;} /* スペル選択 */
     if(_stg===3){Q.rev=false;qRenderSpell(q,'build');return;}  /* 組み立て */
     if(_stg===4){Q.rev=false;qRenderType(q);return;}           /* タイピング */
