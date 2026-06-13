@@ -954,18 +954,39 @@ schön,美しい"></textarea>
         <span class="set-lbl">📶 段階別学習モード</span>
         <button class="toggle" id="TG-stages"></button>
       </div>
+      <div class="set-row" style="cursor:default">
+        <span style="font-size:11px;color:var(--tx2);line-height:1.6;width:100%">ONにすると、4択→スペル選択→組み立て→タイピング→維持クイックの順でフェーズごとに全単語を出題します。各フェーズの出題数は4択と同じ。下のスペルモード一括出題は使われません。テストモードには影響しません。</span>
+      </div>
+      <div class="set-row" style="cursor:default">
+        <span class="set-lbl" style="font-size:12px;font-weight:700;color:var(--tx)">各フェーズのON/OFF</span>
+      </div>
+      <div class="set-row" id="ROW-ph-choice4">
+        <span class="set-lbl">📝 4択（再認）</span>
+        <button class="toggle" id="TG-ph-choice4"></button>
+      </div>
+      <div class="set-row" id="ROW-ph-spellsel">
+        <span class="set-lbl">✏️ スペル選択</span>
+        <button class="toggle" id="TG-ph-spellsel"></button>
+      </div>
+      <div class="set-row" id="ROW-ph-build">
+        <span class="set-lbl">🧩 組み立て</span>
+        <button class="toggle" id="TG-ph-build"></button>
+      </div>
+      <div class="set-row" id="ROW-ph-type">
+        <span class="set-lbl">⌨️ タイピング（完全想起）</span>
+        <button class="toggle" id="TG-ph-type"></button>
+      </div>
+      <div class="set-row" id="ROW-ph-quick">
+        <span class="set-lbl">⚡ 維持クイック（英→日制限時間）</span>
+        <button class="toggle" id="TG-ph-quick"></button>
+      </div>
       <div class="set-row" style="cursor:default" id="ROW-quick">
-        <span class="set-lbl">⚡ クイック制限時間</span>
+        <span class="set-lbl">⏱️ クイックの制限時間</span>
         <div style="display:flex;gap:5px">
           <button class="opt-btn" data-qs="3" id="QS-3" style="padding:5px 10px;font-size:12px">3秒</button>
           <button class="opt-btn" data-qs="5" id="QS-5" style="padding:5px 10px;font-size:12px">5秒</button>
           <button class="opt-btn" data-qs="7" id="QS-7" style="padding:5px 10px;font-size:12px">7秒</button>
         </div>
-      </div>
-      <div class="set-row" style="cursor:default">
-        <span style="font-size:11px;color:var(--tx2);line-height:1.6">単語ごとに習得段階を記録し、復習のたびに段階に応じた形式で出題します:<br>
-        <b>4択(再認) → スペル選択 → タイル組み立て → ⌨️タイピング(完全想起) → ⚡英→日クイック(維持・制限時間付き)</b><br>
-        正解で1段階昇格、不正解で1段階降格します。初回は今までの復習間隔から段階を自動判定するので、学習済みの単語が最初からやり直しになることはありません。タイピングはヒントを使うと正解でも段階維持、1文字ミスは1回だけ打ち直せます。維持段階(⚡)は時間切れ・不正解でタイピングに戻して再強化します。記憶研究（検索練習・望ましい困難・分散学習）に沿ったモードです。OFFの間、アプリは従来どおり動作します。<br>※ONの間、下の「スペルモード一括出題」は使われません。テストモードには影響しません。</span>
       </div>
     </div>
     <div class="set-sec">✏️ スペルモード（覚える）</div>
@@ -5542,12 +5563,14 @@ function qRenderType(q){
   el('QZ-badge').textContent='⌨️ 英単語をタイプ（手がかりなし）';
   var word=q.word.trim();
   Q.ca=word;Q.done=false;
-  Q.spell={word:word,type:'type',miss:0,hints:0,retried:false};
+  Q.spell={word:word,type:'type',tries:0,hints:0};
   el('QZ-word').textContent=q.meaning||'（訳なし）';
   el('B-speak').style.display='none';
   if(window.speechSynthesis)window.speechSynthesis.cancel();
   var _wlk=el('QZ-weblio-link');if(_wlk)_wlk.style.display='none';
+  var MAX=3;
   el('QZ-choices').innerHTML=
+    '<div style="text-align:right;font-size:12px;color:var(--tx2);margin-bottom:6px">残り入力 <span id="TP-left">'+MAX+'</span>回</div>'+
     '<input class="tp-input" id="TP-in" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="type here...">'+
     '<div class="tp-hint" id="TP-hint"></div>'+
     '<div class="tp-row">'+
@@ -5556,26 +5579,34 @@ function qRenderType(q){
     '</div>'+
     '<button class="ch-dk" id="QZ-dontknow">❓ 分からない</button>';
   var IN=el('TP-in');
+  function updateLeft(){var lf=el('TP-left');if(lf)lf.textContent=Math.max(0,MAX-Q.spell.tries);}
   function judge(){
     if(Q.done)return;
     var v=tpNorm(IN.value);
     if(!v)return;
     var ans=tpNorm(word);
-    var d=levDist(v,ans);
-    if(d===0){
+    Q.spell.tries++;
+    updateLeft();
+    if(v===ans){
+      /* 正解 */
       IN.className='tp-input ok';IN.disabled=true;
       seDone();
+      el('TP-hint').textContent='';
       qSpellFinish(true);
-    }else if(d===1&&!Q.spell.retried){
-      /* 1文字違いは「惜しい」として1回だけ再入力チャンス（タイポと記憶エラーの区別） */
-      Q.spell.retried=true;
+    }else if(Q.spell.tries<MAX){
+      /* 不正解だが残り試行あり → 差分を見せて再入力 */
       seBuzz();
       IN.className='tp-input ng';
-      el('TP-hint').innerHTML='⚠️ 惜しい！1文字違い → <span style="font-family:ui-monospace,monospace">'+tpDiffMark(v,ans)+'</span>';
-      setTimeout(function(){IN.className='tp-input';IN.focus();},420);
+      var _dl=levDist(v,ans);
+      el('TP-hint').innerHTML=
+        (_dl===1?'⚠️ 惜しい！あと'+(MAX-Q.spell.tries)+'回: ':'❌ 不正解。あと'+(MAX-Q.spell.tries)+'回: ')+
+        '<span style="font-family:ui-monospace,monospace">'+tpDiffMark(v,ans)+'</span>';
+      setTimeout(function(){IN.className='tp-input';IN.select();IN.focus();},420);
     }else{
+      /* 3回全部不正解 */
       IN.className='tp-input ng';IN.disabled=true;
       seBuzz();
+      el('TP-hint').textContent='';
       qSpellFinish(false);
     }
   }
@@ -5615,7 +5646,9 @@ function qQuickStart(){
     if(rest<=0){
       qQuickStop();
       if(!Q.done){
-        qDontKnow(); /* 不正解と同じSRS処理＋正解ハイライト */
+        var _qq=Q.q[Q.i];
+        if(_qq&&stagesOn()){if(!Q._quickFail)Q._quickFail=[];if(!Q._quickFail.some(function(x){return x.id===_qq.id;}))Q._quickFail.push(_qq);}
+        qDontKnow();
         el('FB-tx').innerHTML='<span style="color:var(--or)">⏰ 時間切れ</span> → <span style="color:var(--gn)">'+esc(Q.ca)+'</span>';
       }
     }
@@ -5623,17 +5656,78 @@ function qQuickStart(){
 }
 /* ══════════ 📶 段階別学習モード ここまで ══════════ */
 
+/* ══════════ 📶 段階別学習モード（1セッション完結型） ══════════
+   フェーズ順: choice4 → spellsel → build → type → quick
+   各フェーズで words と同数を出題。設定でフェーズごとにON/OFFできる。
+   type: 3回まで入力可、3回以内に正解→正解扱い、3回全不正解→不正解扱い
+   quick: 制限時間バー付き英→日4択。時間切れ/不正解→type降格（次のフェーズで再出題）
+   デフォルトOFF。設定でONにすると旧スペル一括ラウンドは無効化。            */
+
+var PHASE_DEFS=[
+  {id:'choice4', badge:'① 4択',         enabled:function(){return (G.cfg.stgPhases||{}).choice4 !==false;}, spell:false},
+  {id:'spellsel',badge:'② スペル選択',  enabled:function(){return (G.cfg.stgPhases||{}).spellsel!==false;}, spell:true},
+  {id:'build',   badge:'③ 組み立て',    enabled:function(){return (G.cfg.stgPhases||{}).build   !==false;}, spell:true},
+  {id:'type',    badge:'④ タイピング',  enabled:function(){return (G.cfg.stgPhases||{}).type    !==false;}, spell:false},
+  {id:'quick',   badge:'⑤ 維持クイック',enabled:function(){return (G.cfg.stgPhases||{}).quick   !==false;}, spell:false},
+];
+
+function stagesOn(){return G.cfg.stages===true&&!Q.testMode;}
+
+/* フェーズを開始する共通処理 */
+function qStartPhase(phaseId,words){
+  Q.phaseId=phaseId;
+  Q.phaseTotal=words.length;
+  Q.missPhaseStart=(Q.miss||[]).length;
+  Q.q=G.cfg.random?shuffle(words.slice()):words.slice();
+  Q.i=0;
+  Q.mastered=0;Q.masteredIds={};Q.consec={};Q.requeued={};
+  Q.q.forEach(function(w){delete w._hadMiss;});
+  el('FB').classList.remove('on');
+  var pd=PHASE_DEFS.filter(function(p){return p.id===phaseId;})[0];
+  toast((pd?pd.badge:'フェーズ')+' — '+words.length+'問 スタート！');
+  qRender();
+}
+
+/* 次の有効フェーズへ進む（なければ結果画面へ） */
+function qNextPhase(){
+  /* 現フェーズのインデックスを探す */
+  var cur=Q.phaseId||'';
+  var ids=PHASE_DEFS.map(function(p){return p.id;});
+  var curIdx=ids.indexOf(cur); /* -1なら4択の前（=最初） */
+
+  for(var i=curIdx+1;i<PHASE_DEFS.length;i++){
+    var pd=PHASE_DEFS[i];
+    if(!pd.enabled())continue;
+    /* スペル系フェーズは対象語のみ、それ以外は全単語 */
+    var words=pd.spell?Q.words.filter(canSpellWord):Q.words.slice();
+    /* typeフェーズ: quickで降格した単語を先頭に追加 */
+    if(pd.id==='type'&&Q._quickFail&&Q._quickFail.length){
+      var qfIds=words.map(function(w){return w.id;});
+      var extra=Q._quickFail.filter(function(qw){return qfIds.indexOf(qw.id)<0;});
+      words=extra.concat(words);
+      Q._quickFail=[];
+    }
+    if(!words.length)continue;
+    qStartPhase(pd.id,words);
+    return;
+  }
+  /* 全フェーズ完了 */
+  Q.phaseId=null;
+  qResult();
+}
+/* ══════════ 📶 段階別学習モード ここまで ══════════ */
+
 function qMaybeSpellPhase(){
-  /* 📶 段階別学習モード中は一括スペルラウンドは行わない（段階制で個別出題されるため） */
-  if(G.cfg.spell&&!Q.testMode&&G.cfg.stages!==true){
-    /* 出題タイプ設定からステージ構成を決める
-       「両方」= 組み立てN問 → スペル選択N問 の2ステージ（各々4択と同数） */
+  if(stagesOn()){
+    qNextPhase();return;
+  }
+  /* 旧スペル一括ラウンド（段階別OFFの場合のみ） */
+  if(G.cfg.spell&&!Q.testMode&&!stagesOn()){
     if(!Q.spellStages){
       var t=G.cfg.spellType||'both';
       Q.spellStages=(t==='both')?['build','choice']:[t];
       Q.spellStageIdx=-1;
     }
-    /* スペル問題の対象になる単語のみ（熟語・記号入りは除外） */
     var sw=Q.words.filter(canSpellWord);
     if(sw.length>=1&&Q.spellStageIdx<Q.spellStages.length-1){
       Q.spellStageIdx++;
@@ -5643,16 +5737,11 @@ function qMaybeSpellPhase(){
       Q.missPhaseStart=(Q.miss||[]).length;
       Q.q=G.cfg.random?shuffle(sw):sw.slice();
       Q.i=0;
-      /* 習得カウント・連続正解・ミスフラグをステージ用にリセット
-         （Q.ok/Q.ng/Q.missは累積のまま → 結果画面・統計・復習サイクルに全部反映） */
       Q.mastered=0;Q.masteredIds={};Q.consec={};Q.requeued={};
       Q.q.forEach(function(w){delete w._hadMiss;});
       el('FB').classList.remove('on');
-      toast(Q.spellMode==='build'
-        ?'✏️ 組み立て問題 '+sw.length+'問 スタート！'
-        :'✏️ スペル選択問題 '+sw.length+'問 スタート！');
-      qRender();
-      return;
+      toast(Q.spellMode==='build'?'✏️ 組み立て問題 '+sw.length+'問 スタート！':'✏️ スペル選択問題 '+sw.length+'問 スタート！');
+      qRender();return;
     }
   }
   qResult();
@@ -6051,6 +6140,10 @@ function qRender(){
   el('QZ-cnt').textContent=mastered+'/'+totalWords;
   var _mb=el('QZ-mode-badge');
   if(Q.testMode){_mb.textContent='📝 テスト';_mb.style.display='inline-block';}
+  else if(Q.phaseId&&G.cfg.stages===true){
+    var _pd=PHASE_DEFS.filter(function(p){return p.id===Q.phaseId;})[0];
+    _mb.textContent=_pd?_pd.badge:Q.phaseId;_mb.style.display='inline-block';
+  }
   else if(Q.spellPhase){_mb.textContent=Q.spellMode==='choice'?'✏️ スペル選択':'✏️ 組み立て';_mb.style.display='inline-block';}
   else{_mb.style.display='none';}
   /* 🧠 復習サイクルバッジ */
@@ -6068,14 +6161,14 @@ function qRender(){
     return;
   }
 
-  /* 📶 段階別学習モード：単語の習得段階に応じて出題形式を決める */
-  if(G.cfg.stages===true&&!Q.testMode){
-    var _stg=qStageOf(q);
-    Q.curStage=_stg;
-    if(_stg===2){Q.rev=false;qRenderSpell(q,'choice');return;} /* スペル選択 */
-    if(_stg===3){Q.rev=false;qRenderSpell(q,'build');return;}  /* 組み立て */
-    if(_stg===4){Q.rev=false;qRenderType(q);return;}           /* タイピング */
-    /* 段階1・5 → 通常の英→日4択へ（逆クイズ混在は無効化。段階5は後でタイマー開始） */
+  /* 📶 段階別学習モードON: phaseIdに応じて出題形式を切り替え */
+  if(stagesOn()&&Q.phaseId){
+    var _pid=Q.phaseId;
+    Q.curStage=_pid;
+    if(_pid==='spellsel'){Q.rev=false;qRenderSpell(q,'choice');return;}
+    if(_pid==='build')   {Q.rev=false;qRenderSpell(q,'build');return;}
+    if(_pid==='type')    {Q.rev=false;qRenderType(q);return;}
+    /* choice4 / quick → 下の4択描画へ（revなし、quickはタイマーを末尾で起動） */
     rev=false;Q.rev=false;
   }
 
@@ -6146,8 +6239,8 @@ function qRender(){
   el('QZ-choices').innerHTML=h;
   el('QZ-choices').querySelectorAll('.ch-btn').forEach(function(b){b.addEventListener('click',function(){qSelect(parseInt(this.getAttribute('data-i')));});});
   el('QZ-choices').querySelector('#QZ-dontknow').addEventListener('click',function(){qDontKnow();});
-  /* ⚡ 段階5はクイックレスポンス（制限時間付き） */
-  if(Q.curStage===5)qQuickStart();
+  /* ⚡ quickフェーズはクイックレスポンス（制限時間付き） */
+  if(Q.curStage==='quick')qQuickStart();
   el('FB').classList.remove('on');
   Q.qStartTime=Date.now();
 }
@@ -6167,6 +6260,11 @@ function qDontKnow(){
   answer(q,false);
   qQuickStop();
   qStagePromote(q,false); /* 📶 段階の降格 */
+  /* ⚡ quickフェーズで不正解→typeフェーズへ降格リストに追加 */
+  if(stagesOn()&&Q.curStage==='quick'){
+    if(!Q._quickFail)Q._quickFail=[];
+    if(!Q._quickFail.some(function(x){return x.id===q.id;}))Q._quickFail.push(q);
+  }
   Q.ng++;
   /* hadMissフラグ → requeueMax回連続正解が必要になる */
   if(!Q.consec)Q.consec={};
@@ -6403,6 +6501,11 @@ function settingsLoad(){
   if(el('TG-ebbing'))el('TG-ebbing').classList.toggle('on', G.cfg.ebbing!==false);
   /* 📶 段階別学習モード設定 */
   if(el('TG-stages'))el('TG-stages').classList.toggle('on',G.cfg.stages===true);
+  var _phCfg=G.cfg.stgPhases||{};
+  PHASE_DEFS.forEach(function(p){
+    var b=el('TG-ph-'+p.id);
+    if(b)b.classList.toggle('on',_phCfg[p.id]!==false);
+  });
   var _qs=G.cfg.quickSec||5;
   [3,5,7].forEach(function(n){if(el('QS-'+n))el('QS-'+n).classList.toggle('on',_qs===n);});
   /* ✏️ スペルモード設定 */
@@ -6646,12 +6749,25 @@ function bind(){
   /* 📶 段階別学習モード */
   if(el('TG-stages')){
     el('TG-stages').addEventListener('click',function(){
-      var on=!(G.cfg.stages===true); /* 反転 */
+      var on=!(G.cfg.stages===true);
       G.cfg.stages=on;
       this.classList.toggle('on',on);
       save();
     });
     el('ROW-stages').addEventListener('click',function(e){if(e.target!==el('TG-stages'))el('TG-stages').click();});
+    /* フェーズ個別ON/OFF */
+    PHASE_DEFS.forEach(function(p){
+      var b=el('TG-ph-'+p.id),r=el('ROW-ph-'+p.id);
+      if(!b)return;
+      b.addEventListener('click',function(){
+        if(!G.cfg.stgPhases)G.cfg.stgPhases={};
+        var cur=G.cfg.stgPhases[p.id]!==false;
+        G.cfg.stgPhases[p.id]=!cur;
+        b.classList.toggle('on',!cur);
+        save();
+      });
+      if(r)r.addEventListener('click',function(e){if(e.target!==b)b.click();});
+    });
     [3,5,7].forEach(function(n){
       var b=el('QS-'+n);if(!b)return;
       b.addEventListener('click',function(){
