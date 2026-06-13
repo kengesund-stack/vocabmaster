@@ -3375,7 +3375,7 @@ function listMenu(lid){
     if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
     var eids=lmInjectEbbing(r.pool);
     r.pool.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{},ebbingIds:eids};
+    qInit(r.pool,{testMode:false,quizMode:'study',ebbingIds:eids});
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     go('s-quiz');qRender();
   });
@@ -3385,7 +3385,7 @@ function listMenu(lid){
     if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
     var eids=lmInjectEbbing(r.pool);
     r.pool.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{},ebbingIds:eids};
+    qInit(r.pool,{testMode:false,quizMode:'study',ebbingIds:eids});
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     go('s-quiz');qRender();
   });
@@ -3413,7 +3413,7 @@ function listMenu(lid){
     /* 復習サイクルクイズはebbingMax制限なし・全件出題 */
     var qs=G.cfg.random?shuffle(cycleWords.slice()):cycleWords.slice();
     qs.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-    Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'due',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{},ebbingIds:ebbingIds2};
+    qInit(qs,{testMode:false,quizMode:'due',ebbingIds:ebbingIds2});
     go('s-quiz');qRender();
   });
 
@@ -3425,9 +3425,7 @@ function listMenu(lid){
     /* filterFnを渡して復習注入も同種類のみに限定 */
     var eids=lmInjectEbbing(r.pool, filterFn);
     r.pool.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-    Q={words:r.pool,q:r.pool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',
-       testMode:false,quizMode:'study',sessionStart:Date.now(),
-       consec:{},mastered:0,masteredIds:{},ebbingIds:eids};
+    qInit(r.pool,{testMode:false,quizMode:'study',ebbingIds:eids});
     Q._pendingCursor={lid:lid, next:r.nextCursor};
     go('s-quiz');qRender();
   }
@@ -4200,7 +4198,7 @@ function flLaunchAutoQuiz(){
   var qpool=G.cfg.random ? shuffle(pool) : pool;
   var pending=Q._pendingCursor;
   qpool.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-  Q={words:qpool,q:qpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{}};
+  qInit(qpool,{testMode:false,quizMode:'study'});
   if(pending)Q._pendingCursor=pending;
   go('s-quiz');qRender();
 }
@@ -4242,7 +4240,7 @@ function flBindButtons(){
     var qpool=G.cfg.random ? shuffle(pool) : pool;
     var pending=Q._pendingCursor;
     qpool.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-    Q={words:qpool,q:qpool.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'study',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{}};
+    qInit(qpool,{testMode:false,quizMode:'study'});
     if(pending)Q._pendingCursor=pending;
     go('s-quiz');qRender();
   });
@@ -5474,17 +5472,34 @@ function quizStart(mode,lid){
   }
 
   if(mainWs.length<2){toast('クイズには最低2単語必要です');return;}
-  /* セッション間で _hadMiss フラグが残らないようクリア */
   mainWs.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-  var _qp={words:mainWs,q:mainWs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:mode,sessionStart:Date.now(),
-     consec:{},mastered:0,masteredIds:{},ebbingIds:ebbingIds};
-  Q=_qp;
+  qInit(mainWs,{testMode:false,quizMode:mode,ebbingIds:ebbingIds});
   go('s-quiz');qRender();
 }
 
 function isPhrase(word){
   /* スペースを含む場合は熟語とみなす */
   return word && word.trim().indexOf(' ')>=0;
+}
+
+/* ── クイズ初期化の共通関数 ──
+   段階別学習ONの場合はQ.q=[]にしてqNextPhaseで最初のフェーズを開始する。
+   OFFの場合は従来通りQ.q=wordsで全単語を4択として出題する */
+function qInit(words, opts){
+  opts=opts||{};
+  var isStages=G.cfg.stages===true&&!opts.testMode;
+  Q={
+    words:words,
+    q:isStages?[]:words.slice(), /* 段階別ONは空→qNextPhaseが管理 */
+    i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',
+    testMode:!!opts.testMode,
+    quizMode:opts.quizMode||'study',
+    sessionStart:Date.now(),
+    consec:{},mastered:0,masteredIds:{},
+    ebbingIds:opts.ebbingIds||{},
+    phaseId:isStages?'__init__':null, /* __init__は「フェーズ前」の印 */
+    _quickFail:[]
+  };
 }
 
 /* ══════════ ✏️ スペルモード（覚える） ══════════ */
@@ -5693,7 +5708,7 @@ function qNextPhase(){
   /* 現フェーズのインデックスを探す */
   var cur=Q.phaseId||'';
   var ids=PHASE_DEFS.map(function(p){return p.id;});
-  var curIdx=ids.indexOf(cur); /* -1なら4択の前（=最初） */
+  var curIdx=(cur==='__init__'||!cur)?-1:ids.indexOf(cur);
 
   for(var i=curIdx+1;i<PHASE_DEFS.length;i++){
     var pd=PHASE_DEFS[i];
@@ -6114,7 +6129,12 @@ function qSpellFinish(ok,dontKnow){
 
 
 function qRender(){
-  var q=Q.q[Q.i];if(!q){qMaybeSpellPhase();return;}
+  var q=Q.q[Q.i];
+  if(!q){
+    /* 段階別ONでphaseId==__initまたはフェーズ完了 → 次のフェーズへ */
+    if(stagesOn()){qNextPhase();return;}
+    qMaybeSpellPhase();return;
+  }
   if(Q.i===0&&!Q.sessionStart)Q.sessionStart=Date.now();
 
   var totalWords=Q.spellPhase?(Q.phaseTotal||Q.words.length):Q.words.length;
@@ -7369,7 +7389,7 @@ window.onload=function(){
       var ebbingIds2={};
       qs.forEach(function(w){if(G.ebbing&&G.ebbing[w.id])ebbingIds2[w.id]=true;});
       qs.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-      Q={words:qs,q:qs.slice(),i:0,ok:0,ng:0,done:false,miss:[],slow:[],ci:0,ca:'',testMode:false,quizMode:'due',sessionStart:Date.now(),consec:{},mastered:0,masteredIds:{},ebbingIds:ebbingIds2};
+      qInit(qs,{testMode:false,quizMode:'due',ebbingIds:ebbingIds2});
       go('s-quiz');qRender();
     };
 
