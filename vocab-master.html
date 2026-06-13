@@ -1192,7 +1192,7 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5,homeLangFilter:'en',listPlayMode:'foreign',listPlaySec:2,listPlayRepeat:false,dictUrls:{en:'https://ejje.weblio.jp/content/{word}',de:'https://www.duden.de/rechtschreibung/{word}',fr:'https://fjjf.weblio.jp/content/{word}',es:'',it:''}},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{stages:true,stgPhases:{},quickSec:5,size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5,homeLangFilter:'en',listPlayMode:'foreign',listPlaySec:2,listPlayRepeat:false,dictUrls:{en:'https://ejje.weblio.jp/content/{word}',de:'https://www.duden.de/rechtschreibung/{word}',fr:'https://fjjf.weblio.jp/content/{word}',es:'',it:''}},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 /* 起動時にlocalStorageとembedded-dataを同期 */
 (function(){try{sSet(G);}catch(e){}})();
@@ -1203,6 +1203,9 @@ if(G.cfg.homeLangFilter===undefined) G.cfg.homeLangFilter='en';
 if(G.cfg.listPlayMode===undefined) G.cfg.listPlayMode='foreign';
 if(G.cfg.listPlaySec===undefined) G.cfg.listPlaySec=2;
 if(G.cfg.listPlayRepeat===undefined) G.cfg.listPlayRepeat=false;
+if(G.cfg.stages===undefined)G.cfg.stages=true;
+if(!G.cfg.stgPhases)G.cfg.stgPhases={};
+if(!G.cfg.quickSec)G.cfg.quickSec=5;
 if(!G.cfg.dictUrls) G.cfg.dictUrls={en:'https://ejje.weblio.jp/content/{word}',de:'https://www.duden.de/rechtschreibung/{word}',fr:'https://fjjf.weblio.jp/content/{word}',es:'',it:''};
 if(!G.cfg.dictUrls.en) G.cfg.dictUrls.en='https://ejje.weblio.jp/content/{word}';
 if(!G.cfg.dictUrls.de) G.cfg.dictUrls.de='https://www.duden.de/rechtschreibung/{word}';
@@ -3375,9 +3378,14 @@ function listMenu(lid){
     if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
     var eids=lmInjectEbbing(r.pool);
     r.pool.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-    qInit(r.pool,{testMode:false,quizMode:'study',ebbingIds:eids});
-    Q._pendingCursor={lid:lid, next:r.nextCursor};
-    go('s-quiz');qRender();
+    if(stagesOn(false)){
+      flashStart(G.cfg.random?shuffle(r.pool.slice()):r.pool.slice(),'study',lid,{ebbingIds:eids});
+      Q._pendingCursor={lid:lid, next:r.nextCursor};
+    }else{
+      qInit(r.pool,{testMode:false,quizMode:'study',ebbingIds:eids});
+      Q._pendingCursor={lid:lid, next:r.nextCursor};
+      go('s-quiz');qRender();
+    }
   });
   el('LM-quiz-reset').addEventListener('click',function(){
     el('modal-bg').classList.remove('on');
@@ -3385,9 +3393,14 @@ function listMenu(lid){
     if(r.pool.length<2){toast('クイズには最低2単語必要です');return;}
     var eids=lmInjectEbbing(r.pool);
     r.pool.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-    qInit(r.pool,{testMode:false,quizMode:'study',ebbingIds:eids});
-    Q._pendingCursor={lid:lid, next:r.nextCursor};
-    go('s-quiz');qRender();
+    if(stagesOn(false)){
+      flashStart(G.cfg.random?shuffle(r.pool.slice()):r.pool.slice(),'study',lid,{ebbingIds:eids});
+      Q._pendingCursor={lid:lid, next:r.nextCursor};
+    }else{
+      qInit(r.pool,{testMode:false,quizMode:'study',ebbingIds:eids});
+      Q._pendingCursor={lid:lid, next:r.nextCursor};
+      go('s-quiz');qRender();
+    }
   });
   el('LM-due').addEventListener('click',function(){
     el('modal-bg').classList.remove('on');
@@ -3413,8 +3426,12 @@ function listMenu(lid){
     /* 復習サイクルクイズはebbingMax制限なし・全件出題 */
     var qs=G.cfg.random?shuffle(cycleWords.slice()):cycleWords.slice();
     qs.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-    qInit(qs,{testMode:false,quizMode:'due',ebbingIds:ebbingIds2});
-    go('s-quiz');qRender();
+    if(stagesOn(false)){
+      flashStart(G.cfg.random?shuffle(qs.slice()):qs.slice(),'due',null,{ebbingIds:ebbingIds2});
+    }else{
+      qInit(qs,{testMode:false,quizMode:'due',ebbingIds:ebbingIds2});
+      go('s-quiz');qRender();
+    }
   });
 
   /* ── 単語のみ・熟語のみクイズ共通処理 ── */
@@ -3425,9 +3442,14 @@ function listMenu(lid){
     /* filterFnを渡して復習注入も同種類のみに限定 */
     var eids=lmInjectEbbing(r.pool, filterFn);
     r.pool.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-    qInit(r.pool,{testMode:false,quizMode:'study',ebbingIds:eids});
-    Q._pendingCursor={lid:lid, next:r.nextCursor};
-    go('s-quiz');qRender();
+    if(stagesOn(false)){
+      flashStart(G.cfg.random?shuffle(r.pool.slice()):r.pool.slice(),'study',lid,{ebbingIds:eids});
+      Q._pendingCursor={lid:lid, next:r.nextCursor};
+    }else{
+      qInit(r.pool,{testMode:false,quizMode:'study',ebbingIds:eids});
+      Q._pendingCursor={lid:lid, next:r.nextCursor};
+      go('s-quiz');qRender();
+    }
   }
   el('LM-words-only').addEventListener('click',function(){
     startFilteredQuiz(function(w){return !isPhrase(w.word);},'単語');
@@ -5473,9 +5495,8 @@ function quizStart(mode,lid){
 
   if(mainWs.length<2){toast('クイズには最低2単語必要です');return;}
   mainWs.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-  /* 段階別ONのdue/all/weak/listモードでは予習→クイズの流れを使う
-     ただしtestMode・弱点クイズは除外 */
-  if(stagesOn()&&mode!=='test'){
+  /* 段階別ONのdue/all/weak/listモードでは予習→クイズの流れを使う */
+  if(stagesOn(false)&&mode!=='test'){
     flashStart(G.cfg.random?shuffle(mainWs.slice()):mainWs.slice(), mode, null, {ebbingIds:ebbingIds});
     return;
   }
@@ -5526,7 +5547,10 @@ var PHASE_DEFS=[
   {id:'quick',   badge:'⑤ 維持クイック',enabled:function(){return (G.cfg.stgPhases||{}).quick   !==false;}, spell:false},
 ];
 
-function stagesOn(){return G.cfg.stages===true&&!Q.testMode;}
+function stagesOn(testMode){
+  /* testModeを引数で受け取る版（Qが未初期化の状況でも正しく動作する） */
+  return G.cfg.stages===true&&!testMode;
+}
 
 /* フェーズを開始する共通処理 */
 function qStartPhase(phaseId,words){
@@ -5574,7 +5598,7 @@ function qNextPhase(){
 
 function qMaybeSpellPhase(){
   /* 段階別学習ONならqNextPhaseに委譲 */
-  if(stagesOn()){qNextPhase();return;}
+  if(stagesOn(Q.testMode)){qNextPhase();return;}
   /* 段階別OFF: 旧スペル一括ラウンド */
   if(G.cfg.spell&&!Q.testMode){
     if(!Q.spellStages){
@@ -5971,7 +5995,7 @@ function qRender(){
   var q=Q.q[Q.i];
   if(!q){
     /* 段階別ONでphaseId==__initまたはフェーズ完了 → 次のフェーズへ */
-    if(stagesOn()){qNextPhase();return;}
+    if(stagesOn(Q.testMode)){qNextPhase();return;}
     qMaybeSpellPhase();return;
   }
   if(Q.i===0&&!Q.sessionStart)Q.sessionStart=Date.now();
@@ -6103,7 +6127,7 @@ function qDontKnow(){
   answer(q,false);
   qQuickStop();
   /* ⚡ quickフェーズで不正解→typeフェーズへ降格リストに追加 */
-  if(stagesOn()&&Q.curStage==='quick'){
+  if(stagesOn(Q.testMode)&&Q.curStage==='quick'){
     if(!Q._quickFail)Q._quickFail=[];
     if(!Q._quickFail.some(function(x){return x.id===q.id;}))Q._quickFail.push(q);
   }
@@ -7210,6 +7234,11 @@ window.onload=function(){
       var ebbingIds2={};
       qs.forEach(function(w){if(G.ebbing&&G.ebbing[w.id])ebbingIds2[w.id]=true;});
       qs.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
+      /* 段階別ONなら予習→クイズの流れを使う */
+      if(stagesOn(false)){
+        flashStart(G.cfg.random?shuffle(qs.slice()):qs.slice(),'due',null,{ebbingIds:ebbingIds2});
+        return;
+      }
       qInit(qs,{testMode:false,quizMode:'due',ebbingIds:ebbingIds2});
       go('s-quiz');qRender();
     };
