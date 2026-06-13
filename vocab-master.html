@@ -5559,6 +5559,7 @@ function qStartPhase(phaseId,words){
   Q.missPhaseStart=(Q.miss||[]).length;
   Q.q=G.cfg.random?shuffle(words.slice()):words.slice();
   Q.i=0;
+  Q.done=false;
   Q.mastered=0;Q.masteredIds={};Q.consec={};Q.requeued={};
   Q.q.forEach(function(w){delete w._hadMiss;});
   el('FB').classList.remove('on');
@@ -6246,7 +6247,16 @@ function qNext(){
   Q.lastWasWrong=false;
 
   Q.i++;
-  Q.i>=Q.q.length?qMaybeSpellPhase():qRender();
+  if(Q.i>=Q.q.length){
+    /* フェーズ管理中なら次のフェーズへ、そうでなければスペルラウンドへ */
+    if(Q.phaseId!==null&&Q.phaseId!==undefined&&stagesOn(Q.testMode)){
+      qNextPhase();
+    }else{
+      qMaybeSpellPhase();
+    }
+  }else{
+    qRender();
+  }
 }
 
 function qResult(){
