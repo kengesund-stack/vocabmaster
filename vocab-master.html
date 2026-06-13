@@ -5597,8 +5597,8 @@ function qNextPhase(){
 /* ══════════ 📶 段階別学習モード ここまで ══════════ */
 
 function qMaybeSpellPhase(){
-  /* 段階別学習ONならqNextPhaseに委譲 */
-  if(stagesOn(Q.testMode)){qNextPhase();return;}
+  /* 段階別フェーズ管理中（phaseIdあり）ならqNextPhaseに委譲 */
+  if(Q.phaseId!==null&&Q.phaseId!==undefined&&stagesOn(Q.testMode)){qNextPhase();return;}
   /* 段階別OFF: 旧スペル一括ラウンド */
   if(G.cfg.spell&&!Q.testMode){
     if(!Q.spellStages){
@@ -5994,8 +5994,8 @@ function qSpellFinish(ok,dontKnow){
 function qRender(){
   var q=Q.q[Q.i];
   if(!q){
-    /* 段階別ONでphaseId==__initまたはフェーズ完了 → 次のフェーズへ */
-    if(stagesOn(Q.testMode)){qNextPhase();return;}
+    /* phaseIdが設定されている（段階別フェーズ管理中）→ 次のフェーズへ */
+    if(Q.phaseId!==null&&Q.phaseId!==undefined&&stagesOn(Q.testMode)){qNextPhase();return;}
     qMaybeSpellPhase();return;
   }
   if(Q.i===0&&!Q.sessionStart)Q.sessionStart=Date.now();
