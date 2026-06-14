@@ -7389,8 +7389,8 @@ window.onload=function(){
       var ebbingIds2={};
       qs.forEach(function(w){if(G.ebbing&&G.ebbing[w.id])ebbingIds2[w.id]=true;});
       qs.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-      qInit(qs,{testMode:false,quizMode:'due',ebbingIds:ebbingIds2});
-      go('s-quiz');qRender();
+      /* 今日の復習と同じ流れ: flashStart経由で予習から始める */
+      flashStart(G.cfg.random?shuffle(qs.slice()):qs.slice(),'due',null,{ebbingIds:ebbingIds2});
     };
 
     /* 「後で」ボタン */
@@ -7404,6 +7404,93 @@ window.onload=function(){
     };
   }, 400);
 };
+
+/* ── キーボードショートカット ──────────────────────────
+   input/textarea にフォーカスがあるときは何もしない。
+   予習画面 (s-flash):
+     ← / ArrowLeft  : 前のカード
+     → / ArrowRight : 次のカード
+     スペース       : 訳を表示（FL-meaningが空なら）
+     Enter          : ⚡ このままクイズへ
+   クイズ画面 (s-quiz):
+     A/B/C/D        : 4択を選択
+     ?              : 分からない
+     Enter / スペース: フィードバック中なら次へ
+   ───────────────────────────────────────────────── */
+document.addEventListener('keydown',function(e){
+  /* input/textarea/contenteditable にフォーカス中は無視 */
+  var tag=(document.activeElement&&document.activeElement.tagName)||'';
+  if(tag==='INPUT'||tag==='TEXTAREA'||document.activeElement.isContentEditable)return;
+
+  var key=e.key;
+
+  /* ── 予習画面 ── */
+  if(el('s-flash')&&el('s-flash').classList.contains('on')){
+    if(key==='ArrowLeft'||key==='ArrowLeft'){flPrev();e.preventDefault();return;}
+    if(key==='ArrowRight'){flNext();e.preventDefault();return;}
+    if(key===' '||key==='Spacebar'){
+      /* 訳が未表示なら表示、表示済みなら次のカードへ */
+      var meaning=el('FL-meaning');
+      if(meaning&&!meaning.textContent.trim()){
+        meaning.textContent=(FL.words[FL.i]&&FL.words[FL.i].meaning)||'';
+      }else{
+        flNext();
+      }
+      e.preventDefault();return;
+    }
+    if(key==='Enter'){
+      var btn=el('FL-to-quiz');
+      if(btn)btn.click();
+      e.preventDefault();return;
+    }
+    return;
+  }
+
+  /* ── クイズ画面 ── */
+  if(el('s-quiz')&&el('s-quiz').classList.contains('on')){
+    /* フィードバック表示中: Enter/スペースで次へ */
+    var fb=el('FB');
+    if(fb&&fb.classList.contains('on')){
+      if(key==='Enter'||key===' '||key==='Spacebar'){
+        var bnext=el('B-next');
+        if(bnext)bnext.click();
+        e.preventDefault();
+      }
+      return;
+    }
+    /* 4択: A/B/C/D で選択、? で分からない */
+    var k=key.toUpperCase();
+    if(k==='A'||k==='B'||k==='C'||k==='D'){
+      var idx={'A':0,'B':1,'C':2,'D':3}[k];
+      var btn2=el('QZ-choices')&&el('QZ-choices').querySelector('[data-i="'+idx+'"]');
+      if(btn2){btn2.click();e.preventDefault();}
+      return;
+    }
+    if(key==='?'||key==='/'){
+      var dk=el('QZ-dontknow');
+      if(dk){dk.click();e.preventDefault();}
+      return;
+    }
+    /* スペル組み立て（タイル）: 次に必要な文字キーを押したとき対応タイルをクリック */
+    if(/^[a-zA-Z]$/.test(key)&&Q&&Q.spell&&!Q.done){
+      var sp=Q.spell;
+      if(sp.idx<sp.word.length){
+        var need=sp.word[sp.idx].toLowerCase();
+        if(key.toLowerCase()===need){
+          /* 同じ文字のタイルを探してクリック */
+          var tiles=el('SP-tiles')&&el('SP-tiles').querySelectorAll('.sp-tile');
+          if(tiles){
+            for(var ti=0;ti<tiles.length;ti++){
+              if(!tiles[ti].classList.contains('used')&&tiles[ti].textContent.toLowerCase()===need){
+                tiles[ti].click();e.preventDefault();break;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+});
 </script>
 
 
