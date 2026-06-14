@@ -5473,8 +5473,8 @@ function quizStart(mode,lid){
 
   if(mainWs.length<2){toast('クイズには最低2単語必要です');return;}
   mainWs.forEach(function(w){delete w._hadMiss;delete w._answerMs;});
-  qInit(mainWs,{testMode:false,quizMode:mode,ebbingIds:ebbingIds});
-  go('s-quiz');qRender();
+  /* 予習→クイズと同じ流れ: flashStartに渡して予習から始める */
+  flashStart(mainWs, mode, null);
 }
 
 function isPhrase(word){
