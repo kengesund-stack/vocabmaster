@@ -426,6 +426,10 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
       <div class="due-txt"><h3>今日の復習</h3><p>忘却曲線に基づく最適タイミング</p><p style="font-size:10px;opacity:.75;margin-top:2px">🧠 不正解単語は全インターバル完走で正解に昇格</p></div>
       <div class="due-n" id="H-due">4</div>
     </button>
+    <button class="due-btn" id="B-quiz-fresh" style="background:linear-gradient(135deg,var(--gn),#3a9b6e);display:none">
+      <div class="due-txt"><h3>🟢 新出の復習</h3><p>覚えたての単熟語を定着させる</p><p style="font-size:10px;opacity:.75;margin-top:2px">✨ ミスなく覚えた単語を科学的間隔で復習</p></div>
+      <div class="due-n" id="H-fresh">0</div>
+    </button>
     <div class="act-grid">
       <button class="act-card" id="B-go-add"><span class="act-ic">➕</span><div class="act-title">単語を追加</div><div class="act-sub">テキスト・ファイル・AI</div></button>
       <button class="act-card" id="B-quiz-all"><span class="act-ic">⚡</span><div class="act-title">全単語クイズ</div><div class="act-sub">4択形式で練習</div></button>
@@ -1252,6 +1256,10 @@ function lvl(w){var s=w.s;if(!s)return 0;if(s.i>=60)return 5;if(s.i>=30)return 4
 function due(w){if(!w.s||!w.s.d)return true;return new Date(w.s.d)<=new Date();}
 function answer(w,ok){
   if(Q.testMode)return;
+  /* 🟢 新出復習トラッキング: セッション中に一度でもミスした単語IDを記録する。
+     既存ロジックには影響しない純粋な追記。qResultでミスなし完走を判定するために使う。 */
+  if(!Q._sessMissIds)Q._sessMissIds={};
+  if(!ok&&w&&w.id)Q._sessMissIds[w.id]=true;
   if(!w.s)w.s={i:1,e:EASE0,d:null,k:0,l:0};
   var s=w.s;
   if(!G.ebbing)G.ebbing={};
@@ -1301,10 +1309,88 @@ function answer(w,ok){
     G.ebbing[w.id]={wordId:w.id,word:w.word,meaning:w.meaning||'',lang:w.lang||'en',nextIdx:0,nextDate:_d0r.toISOString(),createdAt:_ca};
     save();
   }
+  /* ── 🟢 新出トラックの進行（G.freshに登録済みの単語のみ。既存G.ebbing処理とは独立） ── */
+  if(G.fresh && G.fresh[w.id]){
+    var FI=[3,7,16,35];
+    var _fnow=new Date();
+    var _fr=G.fresh[w.id];
+    var _foverdue=new Date(_fr.nextDate)<=_fnow;
+    if(ok){
+      /* 期限切れの新出単語に正解 → 次ステージへ。全完走で定着（削除） */
+      if(_foverdue){
+        var _fni=(_fr.nextIdx||0)+1;
+        if(_fni>=FI.length){
+          delete G.fresh[w.id]; /* 定着済み */
+        }else{
+          var _fdn=new Date(_fnow); _fdn.setDate(_fdn.getDate()+FI[_fni]);
+          _fr.nextIdx=_fni; _fr.nextDate=_fdn.toISOString();
+        }
+        save();
+      }
+    }else{
+      /* 新出単語を間違えた → 新出トラックから外し「間違えた復習」(G.ebbing)へ移す。
+         G.ebbingへの登録は上の不正解処理で既に行われているため、ここではfreshを削除するだけ。 */
+      delete G.fresh[w.id];
+      save();
+    }
+  }
   s.i=Math.max(1,Math.min(s.i,365));
   var dt=new Date();dt.setDate(dt.getDate()+s.i);s.d=dt.toISOString();w.lr=new Date().toISOString();save();
 }
 function getDue(){return G.words.filter(due);}
+
+/* ── 🟢 新出復習トラック（定着系） ──
+   段階別学習を「全フェーズ通して一度もミスせず完走」した単語を新出として登録する。
+   間違えた復習(G.ebbing)とは別系統。間隔は科学的根拠に基づく拡張間隔。
+   - 連続正解で次ステージへ。途中で間違えたら新出トラックから外れ、間違えた復習(G.ebbing)へ移る。
+   - 全ステージ完走で「定着済み」として削除。
+   復習インターバル(日数): 3, 7, 16, 35 */
+var FRESH_INTERVALS = [3, 7, 16, 35];
+
+/* セッション終了時に呼ばれる。段階別学習で全フェーズ通してミスなしだった単語を登録する。
+   既存ロジックには影響しない。条件を満たさなければ何もしない。 */
+function freshRegisterFromSession(){
+  /* 段階別学習でない、またはテストモードなら対象外 */
+  if(!Q||Q.testMode)return;
+  if(G.cfg.stages!==true)return; /* 段階別学習がONのセッションのみ */
+  if(!G.fresh)G.fresh={};
+  if(!G.ebbing)G.ebbing={};
+  var missed = Q._sessMissIds || {};
+  var words = Q.words || [];
+  var now = new Date();
+  var changed = false;
+  words.forEach(function(w){
+    if(!w || !w.id) return;
+    /* このセッションでミスした単語は新出登録しない */
+    if(missed[w.id]) return;
+    /* すでに間違えた復習(G.ebbing)中の単語は対象外（間違えた履歴がある） */
+    if(G.ebbing[w.id]) return;
+    /* 既に新出登録済みなら二重登録しない */
+    if(G.fresh[w.id]) return;
+    /* 過去に不正解歴がある単語(s.l>0)は新出ではない */
+    if(w.s && (w.s.l||0) > 0) return;
+    /* 登録: ステージ0、次回復習日は3日後 */
+    var d0 = new Date(now); d0.setDate(d0.getDate() + FRESH_INTERVALS[0]);
+    G.fresh[w.id] = {
+      wordId: w.id, word: w.word, meaning: w.meaning||'', lang: w.lang||'en',
+      nextIdx: 0, nextDate: d0.toISOString(), createdAt: now.toISOString()
+    };
+    changed = true;
+  });
+  if(changed) save();
+}
+
+/* 新出復習の期限切れ単語を返す */
+function getFreshDue(){
+  if(!G.fresh)return [];
+  var now = new Date();
+  var ids = Object.keys(G.fresh).filter(function(id){
+    var r = G.fresh[id];
+    return r && new Date(r.nextDate) <= now;
+  });
+  return G.words.filter(function(w){return w.id && ids.indexOf(String(w.id))>=0 || ids.indexOf(w.id)>=0;});
+}
+
 /* ── エビングハウス忘却曲線 ── */
 /* 間違い/わからなかった単語に復習スケジュールを設定する */
 /* 復習インターバル (日数): 1, 3, 7, 14, 30 */
@@ -1527,6 +1613,17 @@ function homeRefresh(){
   var homeLangFilter=G.cfg.homeLangFilter||'all';
   var ebDueCount=getEbbingOverdue().filter(function(w){return homeLangFilter==='all'||(w.lang||'en')===homeLangFilter;}).length;
   el('H-due').textContent=ebDueCount;
+  /* 🟢 新出の復習カウント：期限切れの新出単語のみ。0件ならボタン非表示 */
+  var freshDue=getFreshDue().filter(function(w){return homeLangFilter==='all'||(w.lang||'en')===homeLangFilter;});
+  var freshBtn=el('B-quiz-fresh');
+  if(freshBtn){
+    if(freshDue.length>0){
+      el('H-fresh').textContent=freshDue.length;
+      freshBtn.style.display='flex';
+    }else{
+      freshBtn.style.display='none';
+    }
+  }
   /* 忘却曲線バッジは不要になったので非表示 */
   var ebBadge=el('H-eb-badge');
   if(ebBadge){ebBadge.style.display='none';}
@@ -5435,6 +5532,11 @@ function quizStart(mode,lid){
     pool=getEbbingOverdue().filter(langMatch);
     if(!pool.length){toast('復習サイクルの単語がありません');return;}
   }
+  else if(mode==='fresh'){
+    /* 🟢 新出の復習：ミスなく覚えた単語（G.fresh登録済み）の期限切れのみ */
+    pool=getFreshDue().filter(langMatch);
+    if(!pool.length){toast('新出復習の単語がありません');return;}
+  }
   else if(mode==='all')pool=G.words.filter(langMatch);
   else if(mode==='weak'){pool=getWeak().filter(langMatch);if(!pool.length){toast('間違えた単語がありません');return;}}
   else if(mode==='list')pool=G.words.filter(function(w){return w.lid===lid;});
@@ -6406,6 +6508,8 @@ function qNext(){
 
 function qResult(){
   el('FB').classList.remove('on');
+  /* 🟢 新出復習: 段階別学習を全フェーズ通してミスなく完走した単語を登録 */
+  try{ freshRegisterFromSession(); }catch(e){}
   var tot=Q.ok+Q.ng,acc=tot?Math.round(Q.ok/tot*100):0;
   el('R-ok').textContent=Q.ok;el('R-ng').textContent=Q.ng;el('R-ac').textContent=acc+'%';
   var em='📚',tl='もう少しです！';
@@ -6578,6 +6682,7 @@ function bind(){
   el('B-help').addEventListener('click',function(){openHelp();});
 
   el('B-quiz-due').addEventListener('click',function(){quizStart('due');});
+  if(el('B-quiz-fresh'))el('B-quiz-fresh').addEventListener('click',function(){quizStart('fresh');});
   el('B-go-add').addEventListener('click',function(){go('s-add');});
   el('B-quiz-all').addEventListener('click',function(){quizStart('all');});
   el('B-go-list').addEventListener('click',function(){go('s-list');});
