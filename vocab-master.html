@@ -839,6 +839,7 @@ schön,美しい"></textarea>
   <div class="qz-body">
     <div class="qz-card">
       <div id="QZ-eb-badge" style="display:none;font-size:11px;font-weight:700;padding:3px 14px;border-radius:20px;background:linear-gradient(90deg,rgba(124,92,252,.3),rgba(92,248,252,.18));border:1px solid rgba(124,92,252,.55);color:var(--ac);letter-spacing:.05em;margin-bottom:4px;align-self:center">🧠 復習サイクル</div>
+      <div id="QZ-rep-badge" style="display:none;font-size:11px;font-weight:700;padding:3px 14px;border-radius:20px;letter-spacing:.05em;margin-bottom:6px;align-self:center"></div>
       <div class="qz-badge" id="QZ-badge">日本語を選べ</div>
       <div class="qz-word" id="QZ-word">word</div>
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap">
@@ -6420,6 +6421,33 @@ function qRender(){
   /* 🧠 復習サイクルバッジ */
   var _ebB=el('QZ-eb-badge');
   if(_ebB){var _isEb=!!(Q.ebbingIds&&Q.ebbingIds[q.id]);_ebB.style.display=_isEb?'flex':'none';}
+  /* 🆕 新規 / 🔁 復習N回目 バッジ（単熟語ごとの出題回数を表示）
+     N = これまでに回答した回数（正解数 s.k ＋ 不正解数 s.l）。
+     一度も回答していない（lrが無くNが0）→ 新規出題。
+     それ以外 → 今回の出題は「復習N回目」。 */
+  var _repB=el('QZ-rep-badge');
+  if(_repB){
+    if(Q.testMode){
+      _repB.style.display='none';
+    } else {
+      var _qs=q.s||{};
+      var _priorAns=(_qs.k||0)+(_qs.l||0);
+      var _everAsked=_priorAns>0 || !!q.lr;
+      if(!_everAsked){
+        _repB.textContent='🆕 新規出題';
+        _repB.style.background='rgba(76,255,145,.14)';
+        _repB.style.border='1px solid rgba(76,255,145,.5)';
+        _repB.style.color='var(--gn)';
+      } else {
+        var _n=_priorAns>0?_priorAns:1;
+        _repB.textContent='🔁 復習'+_n+'回目';
+        _repB.style.background='rgba(255,156,76,.14)';
+        _repB.style.border='1px solid rgba(255,156,76,.5)';
+        _repB.style.color='var(--or)';
+      }
+      _repB.style.display='inline-block';
+    }
+  }
 
   var rev=G.cfg.rev&&Math.random()<0.3;Q.rev=rev;
   var l=LANGS[q.lang||'en'];
