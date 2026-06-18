@@ -804,6 +804,7 @@ schön,美しい"></textarea>
   </div>
   <div class="fl-body">
     <div class="fl-card" id="FL-card">
+      <div id="FL-rep-badge" style="display:none;font-size:11px;font-weight:700;padding:3px 14px;border-radius:20px;letter-spacing:.05em"></div>
       <div class="fl-lang" id="FL-lang">英語</div>
       <div class="fl-word" id="FL-word">word</div>
       <div class="fl-meaning" id="FL-meaning"></div>
@@ -4319,6 +4320,7 @@ function flRender(){
   el('FL-cnt').textContent=cur+'/'+tot;
   var l=LANGS[w.lang||'en'];
   el('FL-lang').textContent=l?l.flag+' '+l.name:'';
+  repBadgeApply(el('FL-rep-badge'), w);
   var card=el('FL-card');
   card.classList.add('flip');
 
@@ -6380,6 +6382,28 @@ function qSpellFinish(ok,dontKnow){
 /* ══════════ ✏️ スペルモード ここまで ══════════ */
 
 
+/* 単熟語ごとの出題回数バッジを指定要素に反映する共通関数。
+   w: 単語オブジェクト。これまでの回答回数 N=(s.k+s.l)。
+   N===0かつ未回答(lrなし) → 🆕 新規出題。それ以外 → 🔁 復習N回目。 */
+function repBadgeApply(elm, w){
+  if(!elm)return;
+  var s=(w&&w.s)||{};
+  var prior=(s.k||0)+(s.l||0);
+  var everAsked=prior>0 || !!(w&&w.lr);
+  if(!everAsked){
+    elm.textContent='🆕 新規出題';
+    elm.style.background='rgba(76,255,145,.14)';
+    elm.style.border='1px solid rgba(76,255,145,.5)';
+    elm.style.color='var(--gn)';
+  } else {
+    var n=prior>0?prior:1;
+    elm.textContent='🔁 復習'+n+'回目';
+    elm.style.background='rgba(255,156,76,.14)';
+    elm.style.border='1px solid rgba(255,156,76,.5)';
+    elm.style.color='var(--or)';
+  }
+  elm.style.display='inline-block';
+}
 function qRender(){
   var q=Q.q[Q.i];
   if(!q){
@@ -6430,22 +6454,7 @@ function qRender(){
     if(Q.testMode){
       _repB.style.display='none';
     } else {
-      var _qs=q.s||{};
-      var _priorAns=(_qs.k||0)+(_qs.l||0);
-      var _everAsked=_priorAns>0 || !!q.lr;
-      if(!_everAsked){
-        _repB.textContent='🆕 新規出題';
-        _repB.style.background='rgba(76,255,145,.14)';
-        _repB.style.border='1px solid rgba(76,255,145,.5)';
-        _repB.style.color='var(--gn)';
-      } else {
-        var _n=_priorAns>0?_priorAns:1;
-        _repB.textContent='🔁 復習'+_n+'回目';
-        _repB.style.background='rgba(255,156,76,.14)';
-        _repB.style.border='1px solid rgba(255,156,76,.5)';
-        _repB.style.color='var(--or)';
-      }
-      _repB.style.display='inline-block';
+      repBadgeApply(_repB, q);
     }
   }
 
