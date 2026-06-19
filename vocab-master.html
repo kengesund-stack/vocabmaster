@@ -902,13 +902,20 @@ schön,美しい"></textarea>
         <input type="color" id="IN-theme-tx" value="#f0f0f8" style="width:46px;height:34px;border:1px solid rgba(128,128,128,.4);border-radius:8px;background:none;padding:2px;cursor:pointer">
         <span id="LBL-theme-tx" style="font-size:12px;color:var(--tx2);font-family:monospace;min-width:64px">#f0f0f8</span>
       </div>
+      <div class="set-row" style="cursor:default;gap:10px">
+        <span class="set-lbl">🟦 訳語の文字色</span>
+        <input type="color" id="IN-theme-acc" value="#5cf8fc" style="width:46px;height:34px;border:1px solid rgba(128,128,128,.4);border-radius:8px;background:none;padding:2px;cursor:pointer">
+        <span id="LBL-theme-acc" style="font-size:12px;color:var(--tx2);font-family:monospace;min-width:54px">自動</span>
+        <button class="btn-sec" id="B-theme-acc-auto" style="margin:0;padding:6px 10px;font-size:11px;width:auto;flex-shrink:0">🔄 自動</button>
+      </div>
       <div class="set-row" style="cursor:default;flex-direction:column;align-items:stretch;gap:8px">
         <div id="THEME-preview" style="border-radius:12px;padding:14px;border:1px solid rgba(128,128,128,.25)">
           <div id="THEME-preview-tx" style="font-size:14px;font-weight:600">背景色と文字色のプレビュー</div>
+          <div id="THEME-preview-acc" style="font-size:18px;font-weight:700;margin-top:4px">訳語サンプル（陳腐化）</div>
           <div id="THEME-preview-card" style="margin-top:8px;border-radius:9px;padding:10px;font-size:12px">カード（リスト・統計など）の表示例</div>
         </div>
         <button class="btn-sec" id="B-theme-reset" style="margin-top:0">↩️ 既定（ミッドナイト）に戻す</button>
-        <span style="font-size:11px;color:var(--tx2);line-height:1.5">背景色と文字色は自由に選べます。カードの色や補助の文字色は背景の明るさに合わせて自動で調整されます。見やすさのため、背景と文字は十分に明暗の差があるものをおすすめします。</span>
+        <span style="font-size:11px;color:var(--tx2);line-height:1.5">背景色・文字色・訳語の文字色をそれぞれ選べます。訳語の文字色を「自動」にすると、背景の明るさに合わせて読みやすい色に自動調整します。カードの色や補助文字色も背景に合わせて自動調整されます。</span>
       </div>
     </div>
     <div class="set-sec">AI 設定</div>
@@ -1224,7 +1231,7 @@ var LANGS={
   it:{name:'イタリア語',flag:'🇮🇹',cls:'lang-it'}
 };
 
-function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5,homeLangFilter:'en',listPlayMode:'foreign',listPlaySec:2,listPlayRepeat:false,themeBg:'#0a0a0f',themeTx:'#f0f0f8',dictUrls:{en:'https://ejje.weblio.jp/content/{word}',de:'https://www.duden.de/rechtschreibung/{word}',fr:'https://fjjf.weblio.jp/content/{word}',es:'',it:''}},stats:{streak:0,lastDay:''}};}
+function mkDB(){return{words:[],lists:[],folders:[],logs:[],cfg:{size:20,random:true,rev:false,speak:true,autonext:false,autonextSec:1.5,flashSec:2,flashAuto:false,spkMode:'both',duckVol:15,key:'',requeueMax:1,ebbing:true,ebbingMax:5,homeLangFilter:'en',listPlayMode:'foreign',listPlaySec:2,listPlayRepeat:false,themeBg:'#0a0a0f',themeTx:'#f0f0f8',themeAcc:'auto',dictUrls:{en:'https://ejje.weblio.jp/content/{word}',de:'https://www.duden.de/rechtschreibung/{word}',fr:'https://fjjf.weblio.jp/content/{word}',es:'',it:''}},stats:{streak:0,lastDay:''}};}
 var G=sGet()||mkDB();
 /* 起動時にlocalStorageとembedded-dataを同期 */
 (function(){try{sSet(G);}catch(e){}})();
@@ -1237,6 +1244,7 @@ if(G.cfg.listPlaySec===undefined) G.cfg.listPlaySec=2;
 if(G.cfg.listPlayRepeat===undefined) G.cfg.listPlayRepeat=false;
 if(G.cfg.themeBg===undefined) G.cfg.themeBg='#0a0a0f';
 if(G.cfg.themeTx===undefined) G.cfg.themeTx='#f0f0f8';
+if(G.cfg.themeAcc===undefined) G.cfg.themeAcc='auto';
 if(!G.cfg.dictUrls) G.cfg.dictUrls={en:'https://ejje.weblio.jp/content/{word}',de:'https://www.duden.de/rechtschreibung/{word}',fr:'https://fjjf.weblio.jp/content/{word}',es:'',it:''};
 if(!G.cfg.dictUrls.en) G.cfg.dictUrls.en='https://ejje.weblio.jp/content/{word}';
 if(!G.cfg.dictUrls.de) G.cfg.dictUrls.de='https://www.duden.de/rechtschreibung/{word}';
@@ -1294,6 +1302,20 @@ function applyTheme(){
   rootStyle.setProperty('--tx2', _rgb2hex(tx2.r,tx2.g,tx2.b));
   /* 罫線・薄い装飾は背景の明暗で反転（暗背景=白系の薄線, 明背景=黒系の薄線） */
   rootStyle.setProperty('--line', bgLight?'rgba(0,0,0,.10)':'rgba(255,255,255,.07)');
+  /* 訳語などのアクセント文字色 --ac3。
+     'auto'のときは背景の明暗に応じて読みやすい色を自動算出。
+     明るい背景では既定のシアンが薄くて見えにくいので、濃いめのティールにする。
+     ユーザーが色を指定している場合はそれを優先。 */
+  var accCfg=(G.cfg&&G.cfg.themeAcc)||'auto';
+  var accHex;
+  if(accCfg && accCfg!=='auto'){
+    accHex=accCfg;
+  } else if(bgLight){
+    accHex='#0883a8'; /* 明るい背景向けの濃いティール（白地でも読みやすい） */
+  } else {
+    accHex='#5cf8fc'; /* 既定のシアン（暗い背景向け） */
+  }
+  rootStyle.setProperty('--ac3', accHex);
 }
 /* テーマプリセット（背景, 文字） */
 var THEME_PRESETS=[
@@ -1310,10 +1332,16 @@ var THEME_PRESETS=[
 ];
 
 /* 設定画面：テーマプレビューとコントロールを現在値で更新 */
+function _resolveAcc(bgLight){
+  var accCfg=(G.cfg&&G.cfg.themeAcc)||'auto';
+  if(accCfg && accCfg!=='auto') return accCfg;
+  return bgLight?'#0883a8':'#5cf8fc';
+}
 function themeControlsSync(){
   var bg=(G.cfg&&G.cfg.themeBg)||'#0a0a0f';
   var tx=(G.cfg&&G.cfg.themeTx)||'#f0f0f8';
-  var inBg=el('IN-theme-bg'), inTx=el('IN-theme-tx');
+  var accCfg=(G.cfg&&G.cfg.themeAcc)||'auto';
+  var inBg=el('IN-theme-bg'), inTx=el('IN-theme-tx'), inAcc=el('IN-theme-acc');
   if(inBg)inBg.value=bg;
   if(inTx)inTx.value=tx;
   if(el('LBL-theme-bg'))el('LBL-theme-bg').textContent=bg;
@@ -1324,10 +1352,14 @@ function themeControlsSync(){
   var toward=bgLight?{r:0,g:0,b:0}:{r:255,g:255,b:255};
   var sf=_mix(bgRgb,toward,0.10);
   var tx2=_mix(_hex2rgb(tx)||{r:240,g:240,b:248},bgRgb,0.42);
+  var accResolved=_resolveAcc(bgLight);
+  if(inAcc)inAcc.value=accResolved;
+  if(el('LBL-theme-acc'))el('LBL-theme-acc').textContent=(accCfg==='auto')?'自動':accCfg;
   var pv=el('THEME-preview');
   if(pv){
     pv.style.background=bg;
     el('THEME-preview-tx').style.color=tx;
+    if(el('THEME-preview-acc'))el('THEME-preview-acc').style.color=accResolved;
     var card=el('THEME-preview-card');
     card.style.background=_rgb2hex(sf.r,sf.g,sf.b);
     card.style.color=_rgb2hex(tx2.r,tx2.g,tx2.b);
@@ -1344,7 +1376,7 @@ function themeControlsSync(){
 }
 /* テーマを設定して保存・反映 */
 function setTheme(bg,tx){
-  G.cfg.themeBg=bg; G.cfg.themeTx=tx;
+  G.cfg.themeBg=bg; G.cfg.themeTx=tx; G.cfg.themeAcc='auto';
   applyTheme(); save(); themeControlsSync();
 }
 /* 設定画面初回表示時にプリセットボタンを生成 */
@@ -6878,6 +6910,19 @@ function bind(){
       themeControlsSync();
     });
     el('IN-theme-tx').addEventListener('change',function(){save();});
+  }
+  if(el('IN-theme-acc')){
+    el('IN-theme-acc').addEventListener('input',function(){
+      G.cfg.themeAcc=this.value; applyTheme();
+      themeControlsSync();
+    });
+    el('IN-theme-acc').addEventListener('change',function(){save();});
+  }
+  if(el('B-theme-acc-auto')){
+    el('B-theme-acc-auto').addEventListener('click',function(){
+      G.cfg.themeAcc='auto'; applyTheme(); save(); themeControlsSync();
+      toast('訳語の文字色を自動に戻しました');
+    });
   }
   if(el('B-theme-reset')){
     el('B-theme-reset').addEventListener('click',function(){
