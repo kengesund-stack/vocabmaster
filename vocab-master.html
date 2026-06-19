@@ -194,8 +194,8 @@ html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); colo
 .sp-boxes.sm .sp-box { width:25px; height:38px; font-size:16px; }
 .sp-boxes.sm .sp-sep { width:13px; height:38px; font-size:15px; }
 .sp-box.fill { color:var(--ac3); }
-.sp-tiles { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; margin-top:8px; }
-.sp-tile { width:58px; height:58px; border-radius:12px; background:linear-gradient(135deg,var(--ac),var(--ac2)); border:none; color:#fff; font-size:26px; font-weight:700; cursor:pointer; font-family:inherit; -webkit-appearance:none; box-shadow:0 4px 12px rgba(124,92,252,.35); }
+.sp-tiles { display:flex; flex-wrap:wrap; justify-content:center; gap:14px; margin-top:8px; }
+.sp-tile { width:62px; height:62px; border-radius:12px; background:linear-gradient(135deg,var(--ac),var(--ac2)); border:none; color:#fff; font-size:26px; font-weight:700; cursor:pointer; font-family:inherit; -webkit-appearance:none; box-shadow:0 4px 12px rgba(124,92,252,.35); touch-action:manipulation; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; }
 .sp-tile:active { transform:scale(.92); }
 .sp-tile.used { visibility:hidden; }
 .sp-tile.shake { animation:spShake .35s; background:linear-gradient(135deg,var(--rd),#c0304a); }
@@ -6218,7 +6218,21 @@ function spDrawTiles(){
     return '<button class="sp-tile'+(ch==null?' used':'')+'" data-i="'+i+'">'+(ch==null?'':esc(ch))+'</button>';
   }).join('');
   tl.querySelectorAll('.sp-tile').forEach(function(b){
-    b.addEventListener('click',function(){spTapTile(this);});
+    /* タップ反応を良くするため pointerdown で即時に処理する。
+       click だとモバイルで約300msの遅延や、再描画でボタンが差し替わる間に
+       タップが無視されることがある。pointerdown が使えない環境では click にフォールバック。 */
+    var handled=false;
+    function fire(e){
+      if(handled)return; handled=true;
+      if(e&&e.preventDefault)e.preventDefault();
+      spTapTile(b);
+    }
+    if(window.PointerEvent){
+      b.addEventListener('pointerdown',fire);
+    }else{
+      b.addEventListener('touchstart',fire,{passive:false});
+      b.addEventListener('click',fire);
+    }
   });
 }
 
