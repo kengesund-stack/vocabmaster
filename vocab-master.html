@@ -5852,6 +5852,9 @@ function levDist(a,b){
   return m[a.length][b.length];
 }
 function tpNorm(s){return (s||'').trim().toLowerCase().replace(/\s+/g,' ');}
+/* 判定用：アルファベット(a-z)以外（スペース・記号 [] 〜 - 等）をすべて無視して比較する。
+   これにより、ユーザーは記号やスペースを入力しなくても、英字が合っていれば正解になる。 */
+function tpAlpha(s){return (s||'').toLowerCase().replace(/[^a-z]/g,'');}
 function tpDiffMark(input,ans){
   var h='';
   for(var i=0;i<Math.max(input.length,ans.length);i++){
@@ -5872,7 +5875,7 @@ function qRenderType(q){
   var MAX=3;
   el('QZ-choices').innerHTML=
     '<div style="text-align:right;font-size:12px;color:var(--tx2);margin-bottom:6px">残り入力 <span id="TP-left">'+MAX+'</span>回</div>'+
-    '<input class="tp-input" id="TP-in" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="type here...">'+
+    '<input class="tp-input" id="TP-in" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="英字だけでOK（記号・空白は不要）">'+
     '<div class="tp-hint" id="TP-hint"></div>'+
     '<div class="tp-row">'+
       '<button class="tp-btn tp-sub" id="TP-hintbtn">💡 ヒント</button>'+
@@ -5886,10 +5889,11 @@ function qRenderType(q){
     var v=tpNorm(IN.value);
     if(!v)return;
     var ans=tpNorm(word);
+    var va=tpAlpha(IN.value), ansA=tpAlpha(word); /* 記号・スペースを無視した比較用 */
     Q.spell.tries++;
     updateLeft();
-    if(v===ans){
-      /* 正解 */
+    if(va===ansA){
+      /* 正解（英字が一致すれば、記号やスペースの有無は問わない） */
       IN.className='tp-input ok';IN.disabled=true;
       seDone();
       el('TP-hint').textContent='';
@@ -5898,7 +5902,7 @@ function qRenderType(q){
       /* 不正解だが残り試行あり → 差分を見せて再入力 */
       seBuzz();
       IN.className='tp-input ng';
-      var _dl=levDist(v,ans);
+      var _dl=levDist(va,ansA);
       el('TP-hint').innerHTML=
         (_dl===1?'⚠️ 惜しい！あと'+(MAX-Q.spell.tries)+'回: ':'❌ 不正解。あと'+(MAX-Q.spell.tries)+'回: ')+
         '<span style="font-family:ui-monospace,monospace">'+tpDiffMark(v,ans)+'</span>';
